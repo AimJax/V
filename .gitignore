@@ -1,0 +1,41 @@
+# Python environments and generated files
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Installed third-party applications
+/apps/
+
+# AI models and runtime resources
+/models/
+/cache/
+/tmp/
+/data/
+/logs/
+/recordings/
+
+# Private configuration and credentials
+.env
+.env.*
+!.env.example
+/config/local.toml
+/config/secrets.toml
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

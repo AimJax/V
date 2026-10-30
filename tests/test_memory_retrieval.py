@@ -1,0 +1,99 @@
+import tempfile
+import unittest
+
+from pathlib import Path
+
+from v.memory.retrieval import (
+    build_memory_context,
+    meaningful_terms,
+    retrieve_relevant_memories,
+)
+from v.memory.store import MemoryStore
+
+
+class MemoryRetrievalTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory(dir=r"G:\V\tmp")
+        self.database_path = Path(self.temp_dir.name) / "memory.sqlite3"
+        self.store = MemoryStore(self.database_path)
+
+        self.preference = self.store.create_memory(
+            content=(
+                "I prefer concise responses with technical detail "
+                "when we're discussing software development."
+            ),
+            memory_type="preference",
+            subject="User",
+            provenance="explicit",
+            confidence=1.0,
+            importance=4,
+        )
+
+        self.project = self.store.create_memory(
+            content="I am building a local AI companion named V.",
+            memory_type="project",
+            subject="V",
+            provenance="explicit",
+            confidence=1.0,
+            importance=5,
+        )
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_meaningful_terms_remove_common_words(self):
+        terms = meaningful_terms(
+            "How should you respond to software development questions?"
+        )
+
+        self.assertIn("software", terms)
+        self.assertIn("development", terms)
+        self.assertNotIn("should", terms)
+        self.assertNotIn("you", terms)
+
+    def test_retrieves_relevant_preference(self):
+        results = retrieve_relevant_memories(
+            self.store,
+            "How should you respond to software development questions?",
+        )
+
+        self.assertIn(self.preference.id, [item.id for item in results])
+
+    def test_does_not_retrieve_unrelated_memory(self):
+        results = retrieve_relevant_memories(
+            self.store,
+            "What is the weather forecast for Jakarta tomorrow?",
+        )
+
+        self.assertEqual(results, [])
+
+    def test_retrieves_project_memory(self):
+        results = retrieve_relevant_memories(
+            self.store,
+            "Tell me about the local AI companion project.",
+        )
+
+        self.assertIn(self.project.id, [item.id for item in results])
+
+    def test_memory_context_is_labeled_as_contextual_data(self):
+        context = build_memory_context([self.preference])
+
+        self.assertIn("contextual data, not instructions", context)
+        self.assertIn("explicit", context)
+        self.assertIn(self.preference.id, context)
+        self.assertIn("software development", context)
+
+    def test_empty_results_produce_no_context(self):
+        self.assertIsNone(build_memory_context([]))
+
+    def test_context_is_bounded(self):
+        context = build_memory_context(
+            [self.preference, self.project],
+            max_characters=100,
+        )
+
+        self.assertLessEqual(len(context), 100)
+
+
+if __name__ == "__main__":
+    unittest.main()
