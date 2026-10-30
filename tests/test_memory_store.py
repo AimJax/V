@@ -1,16 +1,15 @@
-import tempfile
 import unittest
 
 from pathlib import Path
+
+from support import temporary_directory
 
 from v.memory.store import MemoryStore
 
 
 class MemoryStoreTests(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory(
-            dir=r"G:\V\tmp"
-        )
+        self.temp_dir = temporary_directory()
         self.database_path = Path(self.temp_dir.name) / "memory_test.sqlite3"
         self.store = MemoryStore(self.database_path)
 

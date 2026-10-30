@@ -1,7 +1,8 @@
-import tempfile
 import unittest
 
 from pathlib import Path
+
+from support import temporary_directory
 
 from v.memory.embedding_store import EmbeddingStore
 from v.memory.hybrid_retrieval import (
@@ -51,7 +52,7 @@ class FakeEmbeddingProvider:
 
 class HybridRetrievalTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory(dir=r"G:\V\tmp")
+        self.temp_dir = temporary_directory()
         database = Path(self.temp_dir.name) / "memory.sqlite3"
 
         self.memories = MemoryStore(database)

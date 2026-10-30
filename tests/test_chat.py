@@ -1,7 +1,8 @@
-import tempfile
 import unittest
 
 from pathlib import Path
+
+from support import temporary_directory
 
 from v.chat import (
     _build_messages,
@@ -46,7 +47,7 @@ class ChatTests(unittest.TestCase):
             trim_history(messages, 1)
 
     def test_memory_context_is_injected_into_system_message(self):
-        with tempfile.TemporaryDirectory(dir=r"G:\V\tmp") as temp:
+        with temporary_directory() as temp:
             store = ConversationStore(
                 Path(temp) / "conversations.sqlite3"
             )
@@ -66,7 +67,7 @@ class ChatTests(unittest.TestCase):
         self.assertIn("Relevant user preference.", messages[0].content)
 
     def test_no_memory_context_preserves_personality(self):
-        with tempfile.TemporaryDirectory(dir=r"G:\V\tmp") as temp:
+        with temporary_directory() as temp:
             store = ConversationStore(
                 Path(temp) / "conversations.sqlite3"
             )

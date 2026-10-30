@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import math
 
-from urllib.parse import urlsplit
 
 import httpx
+
+from v.core.network import validate_local_http_url
 
 from v.providers.errors import (
     ProviderAPIError,
@@ -25,28 +26,18 @@ class LMStudioEmbeddingProvider:
         timeout_seconds: float = 60.0,
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        parsed = urlsplit(base_url.rstrip("/"))
-
-        if (
-            parsed.scheme != "http"
-            or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
-            or parsed.username is not None
-            or parsed.password is not None
-            or parsed.query
-            or parsed.fragment
-        ):
-            raise ValueError("Embedding API must use a localhost HTTP endpoint.")
 
         if not model or not model.strip():
             raise ValueError("An embedding model identifier is required.")
 
-        self.base_url = base_url.rstrip("/")
+        self.base_url = validate_local_http_url(base_url)
         self.model = model.strip()
         self._owns_client = client is None
 
         self._client = client or httpx.AsyncClient(
             timeout=httpx.Timeout(timeout_seconds),
             headers={"Accept": "application/json"},
+            trust_env=False,
         )
 
     async def _embed(

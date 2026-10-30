@@ -35,8 +35,7 @@ def main() -> int:
             return asyncio.run(run_chat())
 
         if args.command == "doctor":
-            run_diagnostics()
-            return 0
+            return run_diagnostics()
 
         parser.print_help()
         return 0

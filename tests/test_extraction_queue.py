@@ -1,14 +1,15 @@
-import tempfile
 import unittest
 
 from pathlib import Path
+
+from support import temporary_directory
 
 from v.memory.queue import ExtractionQueue
 
 
 class ExtractionQueueTests(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory(dir=r"G:\V\tmp")
+        self.temp_dir = temporary_directory()
         self.database_path = Path(self.temp_dir.name) / "queue.sqlite3"
         self.queue = ExtractionQueue(self.database_path)
 
@@ -33,6 +34,28 @@ class ExtractionQueueTests(unittest.TestCase):
 
         self.assertEqual(self.queue.count("completed"), 1)
         self.assertEqual(self.queue.list_pending(), [])
+
+    def test_list_failed_includes_retry_diagnostics(self):
+        self.queue.enqueue("conversation-1", 11)
+        self.queue.fail(
+            11,
+            "Local inference server unavailable.",
+            max_attempts=1,
+        )
+
+        failed = self.queue.list_failed()
+
+        self.assertEqual(len(failed), 1)
+        self.assertEqual(failed[0]["source_message_id"], 11)
+        self.assertEqual(failed[0]["attempts"], 1)
+        self.assertEqual(
+            failed[0]["last_error"],
+            "Local inference server unavailable.",
+        )
+
+    def test_list_failed_validates_limit(self):
+        with self.assertRaises(ValueError):
+            self.queue.list_failed(limit=0)
 
     def test_failed_job_can_be_retried(self):
         self.queue.enqueue("conversation-1", 10)

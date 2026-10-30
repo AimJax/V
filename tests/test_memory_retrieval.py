@@ -1,7 +1,8 @@
-import tempfile
 import unittest
 
 from pathlib import Path
+
+from support import temporary_directory
 
 from v.memory.retrieval import (
     build_memory_context,
@@ -13,7 +14,7 @@ from v.memory.store import MemoryStore
 
 class MemoryRetrievalTests(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory(dir=r"G:\V\tmp")
+        self.temp_dir = temporary_directory()
         self.database_path = Path(self.temp_dir.name) / "memory.sqlite3"
         self.store = MemoryStore(self.database_path)
 

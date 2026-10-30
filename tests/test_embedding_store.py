@@ -1,7 +1,8 @@
-import tempfile
 import unittest
 
 from pathlib import Path
+
+from support import temporary_directory
 
 from v.memory.embedding_store import EmbeddingStore
 from v.memory.store import MemoryStore
@@ -9,7 +10,7 @@ from v.memory.store import MemoryStore
 
 class EmbeddingStoreTests(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory(dir=r"G:\V\tmp")
+        self.temp_dir = temporary_directory()
         self.database = Path(self.temp_dir.name) / "memory.sqlite3"
 
         self.memory_store = MemoryStore(self.database)

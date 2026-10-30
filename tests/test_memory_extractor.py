@@ -1,8 +1,9 @@
 import json
-import tempfile
 import unittest
 
 from pathlib import Path
+
+from support import temporary_directory
 
 from v.conversations.store import ConversationStore
 from v.memory.extractor import MemoryExtractor
@@ -30,7 +31,7 @@ class FakeProvider:
 
 class MemoryExtractorTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory(dir=r"G:\V\tmp")
+        self.temp_dir = temporary_directory()
         root = Path(self.temp_dir.name)
 
         self.conversations = ConversationStore(

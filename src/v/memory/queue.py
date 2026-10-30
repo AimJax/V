@@ -105,6 +105,26 @@ class ExtractionQueue:
 
         return [dict(row) for row in rows]
 
+    def list_failed(self, limit: int = 5) -> list[dict]:
+        """Return recent failed jobs with their retry diagnostics."""
+        if limit < 1:
+            raise ValueError("Queue limit must be positive.")
+
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT source_message_id, conversation_id,
+                       attempts, last_error, created_at, updated_at
+                FROM memory_extraction_jobs
+                WHERE status = 'failed'
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+
+        return [dict(row) for row in rows]
+
     def complete(self, message_id: int) -> None:
         with closing(self._connect()) as connection:
             with connection:

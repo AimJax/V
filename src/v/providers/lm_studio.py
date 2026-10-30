@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator, Sequence
-from urllib.parse import urlsplit
 
 import httpx
+
+from v.core.network import validate_local_http_url
 
 from v.providers.base import ChatMessage, ChatResult
 from v.providers.errors import (
@@ -27,36 +28,16 @@ class LMStudioProvider:
         timeout_seconds: float = 120.0,
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        self.base_url = base_url.rstrip("/")
+        self.base_url = validate_local_http_url(base_url)
         self.model = model
         self.timeout_seconds = timeout_seconds
-
-        self._validate_local_url(self.base_url)
 
         self._owns_client = client is None
         self._client = client or httpx.AsyncClient(
             timeout=httpx.Timeout(timeout_seconds),
             headers={"Accept": "application/json"},
+            trust_env=False,
         )
-
-    @staticmethod
-    def _validate_local_url(url: str) -> None:
-        parsed = urlsplit(url)
-
-        allowed_hosts = {"127.0.0.1", "localhost", "::1"}
-
-        if (
-            parsed.scheme != "http"
-            or parsed.hostname not in allowed_hosts
-            or parsed.username is not None
-            or parsed.password is not None
-            or parsed.query
-            or parsed.fragment
-        ):
-            raise ValueError(
-                "LM Studio must use a local HTTP endpoint "
-                "(localhost, 127.0.0.1, or ::1)."
-            )
 
     def _messages_payload(
         self,

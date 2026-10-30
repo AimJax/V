@@ -384,10 +384,39 @@ async def run_chat() -> int:
                     print(f"  Completed jobs: {extraction_queue.count('completed')}")
                     print(f"  Failed jobs: {extraction_queue.count('failed')}")
 
-                    if memory_worker and memory_worker.running:
-                        print("  Background worker: active")
+                    if memory_worker is None:
+                        print("  Background worker: disabled")
                     else:
-                        print("  Background worker: idle")
+                        state = "active" if memory_worker.running else "idle"
+                        print(f"  Background worker: {state}")
+
+                        if memory_worker.last_error:
+                            print(
+                                "  Last worker error: "
+                                f"{memory_worker.last_error[:300]}"
+                            )
+
+                        report = memory_worker.last_report
+                        if report is not None:
+                            print(
+                                "  Last extraction cycle: "
+                                f"{report.jobs_completed} completed, "
+                                f"{report.jobs_failed} failed, "
+                                f"{report.memories_created} memories saved, "
+                                f"{report.candidates_skipped} candidates skipped"
+                            )
+
+                    failed_jobs = extraction_queue.list_failed(limit=3)
+                    if failed_jobs:
+                        print("  Recent failed extraction jobs:")
+                        for job in failed_jobs:
+                            detail = (
+                                job["last_error"] or "No error detail recorded."
+                            )[:240]
+                            print(
+                                f"    Message {job['source_message_id']} "
+                                f"(attempts: {job['attempts']}): {detail}"
+                            )
 
                     if retriever is not None and retriever.last_fallback_reason:
                         print("  Semantic retrieval: fallback mode")
