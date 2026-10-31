@@ -24,6 +24,7 @@ from v.desktop.settings_store import save_local_desktop_settings
 from v.providers.base import ChatMessage
 from v.providers.errors import ProviderError, ProviderProtocolError
 from v.providers.lm_studio import LMStudioProvider
+from v.voice.service import LocalVoiceService
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +37,8 @@ class DesktopSnapshot:
     model: str
     network_mode: str
     semantic_memory_enabled: bool
+    voice_enabled: bool = False
+    speak_replies: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +47,16 @@ class DesktopTurnResult:
 
     response: str
     snapshot: DesktopSnapshot
+
+
+@dataclass(frozen=True, slots=True)
+class DesktopVoiceTurnResult:
+    """A transcription, local assistant turn, and optional speech response."""
+
+    transcription: str
+    turn: DesktopTurnResult
+    audio_wav: bytes | None = None
+    speech_error: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +96,7 @@ class DesktopService:
         self.extraction_queue: ExtractionQueue | None = None
         self.memory_worker: MemoryWorker | None = None
         self.retriever: HybridMemoryRetriever | None = None
+        self.voice_service: LocalVoiceService | None = None
         self.conversation: Conversation | None = None
         self.model = ""
         self.available_models: list[str] = []
@@ -232,6 +246,8 @@ class DesktopService:
             model=self.model,
             network_mode=self.network_mode,
             semantic_memory_enabled=self.retriever is not None,
+            voice_enabled=bool(self.settings.get("voice", {}).get("enabled", False)),
+            speak_replies=bool(self.settings.get("voice", {}).get("speak_replies", False)),
         )
 
     def new_conversation(self) -> DesktopSnapshot:
@@ -356,6 +372,50 @@ class DesktopService:
             snapshot=self.snapshot(),
         )
 
+
+    def _get_voice_service(self) -> LocalVoiceService:
+        voice_settings = self.settings.get("voice", {})
+        if not voice_settings.get("enabled", False):
+            raise RuntimeError(
+                "Voice interaction is disabled. Enable it in V Settings and restart."
+            )
+        if self.voice_service is None:
+            self.voice_service = LocalVoiceService(self.settings)
+        return self.voice_service
+
+    async def transcribe_voice(self, wav_data: bytes) -> str:
+        """Transcribe one user-recorded WAV through the loopback Whisper server."""
+        service = self._get_voice_service()
+        result = await service.transcribe(wav_data)
+        if not result.text:
+            raise ValueError("No speech was recognized. Try speaking closer to the microphone.")
+        return result.text
+
+    async def send_voice_message(
+        self,
+        wav_data: bytes,
+        on_token: Callable[[str], None],
+    ) -> DesktopVoiceTurnResult:
+        """Transcribe locally, run the normal chat turn, and optionally synthesize speech."""
+        transcription = await self.transcribe_voice(wav_data)
+        turn = await self.send_message(transcription, on_token)
+
+        audio_wav: bytes | None = None
+        speech_error: str | None = None
+        if self.settings.get("voice", {}).get("speak_replies", False):
+            service = self._get_voice_service()
+            try:
+                audio_wav = await service.synthesize(turn.response)
+            except Exception as error:
+                # TTS failure must not discard a completed text response.
+                speech_error = str(error)
+
+        return DesktopVoiceTurnResult(
+            transcription=transcription,
+            turn=turn,
+            audio_wav=audio_wav,
+            speech_error=speech_error,
+        )
 
     def settings_snapshot(self) -> DesktopSettingsSnapshot:
         """Return current merged settings without exposing unrelated config."""
@@ -531,6 +591,10 @@ class DesktopService:
 
     async def close(self) -> None:
         """Stop background extraction and close local HTTP clients."""
+        if self.voice_service is not None:
+            await self.voice_service.close()
+            self.voice_service = None
+
         if self.memory_worker is not None:
             await self.memory_worker.close()
             self.memory_worker = None
