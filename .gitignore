@@ -29,6 +29,9 @@ dist/
 /config/local.toml
 /config/secrets.toml
 
+# Private memory exports and backups
+/backups/
+
 # Local databases
 *.db
 *.sqlite
