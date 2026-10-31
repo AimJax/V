@@ -8,6 +8,11 @@ The first desktop interface is a native Qt Widgets application built with the of
 - The async inference, conversation persistence, semantic retrieval, and memory extraction runtime runs in a dedicated QThread with its own asyncio event loop.
 - Chat uses the configured LM Studio model and the same local conversation and memory databases as the CLI.
 - Conversation history is restored from SQLite and can be switched from the recent-session list.
+- The Memory Manager searches and filters records by content, memory type, and provenance.
+- Memory content, subject, type, key, confidence, importance, and supporting evidence can be corrected while original source references are retained.
+- Permanent memory deletion requires confirmation and explicitly notes that conversation-history and backup copies are separate.
+- Memory JSON export and merge-only import are available from the manager, with plaintext and overwrite warnings.
+- Memory database operations are routed through the runtime thread rather than the Qt GUI thread.
 - The desktop service does not start cloud inference, telemetry, or external error reporting.
 - The CLI remains available independently of the optional desktop dependency.
 
