@@ -25,6 +25,7 @@ from v.desktop.settings_dialog import SettingsDialog
 from v.desktop.memory_manager import MemoryManagerDialog
 from v.desktop.thread import DesktopRuntimeThread
 from v.providers.base import ChatMessage
+from v.voice.recorder import PushToTalkRecorder
 
 
 STYLESHEET = """
@@ -202,6 +203,12 @@ class DesktopWindow(QMainWindow):
         self._last_snapshot: DesktopSnapshot | None = None
         self.memory_manager_dialog: MemoryManagerDialog | None = None
         self.settings_dialog: SettingsDialog | None = None
+        self._voice_recorder: PushToTalkRecorder | None = None
+        self._speech_player = None
+        self._voice_user_bubble: MessageBubble | None = None
+        self._voice_pending = False
+        self._voice_enabled = False
+        self._speak_replies = False
 
         self.setWindowTitle("V — Local AI Companion")
         self.resize(1280, 820)
@@ -233,6 +240,7 @@ class DesktopWindow(QMainWindow):
         self.runtime.startup_failed.connect(self._on_startup_failed)
         self.runtime.token_received.connect(self._on_token)
         self.runtime.turn_completed.connect(self._on_turn_completed)
+        self.runtime.voice_turn_completed.connect(self._on_voice_turn_completed)
         self.runtime.operation_failed.connect(self._on_operation_failed)
         self.runtime.session_changed.connect(self._on_session_changed)
 
@@ -353,7 +361,17 @@ class DesktopWindow(QMainWindow):
         self.send_button.setEnabled(False)
         self.send_button.clicked.connect(self._send_message)
 
+        self.voice_button = QPushButton("Hold to talk")
+        self.voice_button.setFixedHeight(48)
+        self.voice_button.setEnabled(False)
+        self.voice_button.setToolTip(
+            "Press and hold to record locally. Release to transcribe and send."
+        )
+        self.voice_button.pressed.connect(self._start_voice_recording)
+        self.voice_button.released.connect(self._stop_voice_recording)
+
         composer_row.addWidget(self.message_input, 1)
+        composer_row.addWidget(self.voice_button)
         composer_row.addWidget(self.send_button)
         layout.addLayout(composer_row)
 
@@ -449,11 +467,145 @@ class DesktopWindow(QMainWindow):
         self.memory_manager_button.setEnabled(True)
         self.settings_button.setEnabled(True)
         self.conversation_list.setEnabled(True)
+        self._configure_voice(snapshot)
         self.message_input.setEnabled(True)
         self.send_button.setEnabled(True)
         self.statusBar().showMessage(
             "Connected to the configured local inference server."
         )
+
+    def _configure_voice(self, snapshot: DesktopSnapshot) -> None:
+        """Prepare a recorder object without touching audio hardware."""
+        if self._voice_recorder is not None:
+            if self._voice_recorder.is_recording:
+                self._voice_recorder.cancel()
+            self._voice_recorder.deleteLater()
+            self._voice_recorder = None
+
+        voice = snapshot.voice_settings
+        self._voice_enabled = bool(snapshot.voice_enabled)
+        self._speak_replies = bool(snapshot.speak_replies)
+
+        self._voice_recorder = PushToTalkRecorder(
+            device_id=str(voice.get("input_device_id", "") or ""),
+            max_seconds=int(voice.get("max_utterance_seconds", 30)),
+            minimum_speech_ms=int(
+                voice.get("vad_min_speech_duration_ms", 250)
+            ),
+            parent=self,
+        )
+        self._voice_recorder.recording_started.connect(
+            self._on_voice_recording_started
+        )
+        self._voice_recorder.recording_finished.connect(
+            self._on_voice_recording_finished
+        )
+        self._voice_recorder.recording_failed.connect(
+            self._on_voice_recording_failed
+        )
+
+        self.voice_button.setEnabled(self._voice_enabled and not self._busy)
+        self.voice_button.setText(
+            "Hold to talk" if self._voice_enabled else "Voice disabled"
+        )
+        if self._voice_enabled:
+            self.statusBar().showMessage(
+                "Local push-to-talk is enabled. The microphone is inactive until you press the voice button."
+            )
+
+    def _start_voice_recording(self) -> None:
+        if not self._ready or self._busy:
+            return
+        if not self._voice_enabled or self._voice_recorder is None:
+            self.statusBar().showMessage(
+                "Enable voice interaction in Settings and restart V."
+            )
+            return
+
+        try:
+            self._voice_recorder.start()
+        except Exception as error:
+            self.voice_button.setText("Hold to talk")
+            self.statusBar().showMessage(
+                f"Could not start local microphone capture: {error}"
+            )
+
+    def _stop_voice_recording(self) -> None:
+        if self._voice_recorder is not None and self._voice_recorder.is_recording:
+            self._voice_recorder.stop()
+
+    def _on_voice_recording_started(self) -> None:
+        self.voice_button.setText("Listening… release to send")
+        self.statusBar().showMessage(
+            "MICROPHONE ACTIVE — audio is being held in memory locally."
+        )
+
+    def _on_voice_recording_finished(self, wav_data: bytes) -> None:
+        self.voice_button.setText("Hold to talk")
+        if not self._ready or self._busy:
+            return
+
+        self._voice_pending = True
+        self._voice_user_bubble = self._append_bubble(
+            "You",
+            "Transcribing locally…",
+        )
+        self._assistant_bubble = self._append_bubble("V")
+        self._assistant_text = ""
+        self._set_busy(True)
+        self.statusBar().showMessage(
+            "Transcribing locally, then generating a response…"
+        )
+        self.runtime.send_voice_turn(wav_data)
+
+    def _on_voice_recording_failed(self, message: str) -> None:
+        self.voice_button.setText("Hold to talk")
+        self.statusBar().showMessage(f"Voice input failed: {message}")
+
+    def _on_voice_turn_completed(self, result) -> None:
+        self._voice_pending = False
+        if self._voice_user_bubble is not None:
+            self._voice_user_bubble.set_content(result.transcription)
+        self._voice_user_bubble = None
+
+        if self._assistant_bubble is not None:
+            self._assistant_bubble.set_content(result.turn.response)
+
+        self._apply_session_list(result.turn.snapshot)
+        self._set_busy(False)
+
+        if result.audio_wav:
+            try:
+                from v.voice.playback import SpeechPlayback
+
+                if self._speech_player is None:
+                    output_id = str(
+                        result.turn.snapshot.voice_settings.get(
+                            "output_device_id",
+                            "",
+                        ) or ""
+                    )
+                    self._speech_player = SpeechPlayback(
+                        device_id=output_id,
+                        parent=self,
+                    )
+                    self._speech_player.playback_failed.connect(
+                        lambda message: self.statusBar().showMessage(
+                            f"Text response completed; speech playback failed: {message}"
+                        )
+                    )
+                self._speech_player.play(result.audio_wav)
+                self.statusBar().showMessage("Playing local Kokoro speech output…")
+            except Exception as error:
+                self.statusBar().showMessage(
+                    f"Text response completed; speech playback failed: {error}"
+                )
+        elif result.speech_error:
+            self.statusBar().showMessage(
+                f"Text response completed; local speech synthesis failed: {result.speech_error}"
+            )
+        else:
+            self.statusBar().showMessage("Voice turn completed.")
 
     def _on_ready(self, snapshot: DesktopSnapshot) -> None:
         self._apply_snapshot(snapshot)
@@ -588,6 +740,11 @@ class DesktopWindow(QMainWindow):
         del blocker
 
     def _on_operation_failed(self, message: str) -> None:
+        if self._voice_pending and self._voice_user_bubble is not None:
+            self._voice_user_bubble.set_content(f"Voice input failed: {message}")
+            self._voice_user_bubble = None
+            self._voice_pending = False
+
         if self._assistant_bubble is not None and not self._assistant_text:
             self._assistant_bubble.set_content(
                 f"Generation failed: {message}"
@@ -603,9 +760,17 @@ class DesktopWindow(QMainWindow):
         self.new_chat_button.setEnabled(self._ready and not busy)
         self.memory_manager_button.setEnabled(self._ready and not busy)
         self.settings_button.setEnabled(self._ready and not busy)
+        self.voice_button.setEnabled(
+            self._ready and self._voice_enabled and not busy
+        )
         self.conversation_list.setEnabled(self._ready and not busy)
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        if self._voice_recorder is not None and self._voice_recorder.is_recording:
+            self._voice_recorder.cancel()
+        if self._speech_player is not None:
+            self._speech_player.close()
+
         if self.runtime.isRunning():
             self.runtime.request_shutdown()
             if not self.runtime.wait(5000):
