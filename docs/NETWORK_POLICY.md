@@ -16,29 +16,34 @@ The LM Studio HTTP clients do not use environment-configured proxies.
 
 ## External access
 
-External requests are denied when either condition is true:
+External requests are denied when \`privacy.offline_mode = true\`.
+Web search and webpage retrieval are separately enabled through their
+configuration sections and are disabled by default.
 
-- \`privacy.offline_mode = true\`
-- \`web_search.enabled = false\`
+Search requests are restricted to exact hostnames in
+\`web_search.allowed_hosts\`. Retrieval can access public HTTPS hostnames
+because search results and user-requested pages may reside on different sites.
 
-External requests also remain denied when web search is enabled. The current
-implementation deliberately fails closed until V has a hardened outbound
-transport. Enabling the setting alone does not authorize or send requests.
+All external HTTP traffic must use \`SecureWebClient\`. It provides:
 
-Before external networking is implemented, the transport must provide:
+- HTTPS only, port 443 only, and no URL credentials.
+- IDNA hostname validation and rejection of local/special-use hostnames.
+- DNS resolution through a dedicated resolver.
+- Rejection of private, loopback, link-local, multicast, reserved,
+  unspecified, scoped, and otherwise non-global IP addresses.
+- Validation of every DNS answer; mixed public/private answers are rejected.
+- Connection to the validated numeric DNS results while retaining the
+  requested hostname for TLS certificate verification and SNI.
+- A fresh connector for each request, with DNS caching and connection reuse
+  disabled, preventing later DNS lookups from silently changing the target.
+- Environment proxies disabled.
+- Automatic redirects disabled. Each redirect destination is reauthorized
+  and resolved again.
+- Strict timeouts and a 2 MiB default response-body limit, enforced while
+  reading decompressed response bytes.
+- GET-only access, no persistent cookies, and a restricted request header set.
 
-- An explicit allowlist for configured search-provider endpoints.
-- Safe DNS resolution and rejection of loopback, private, link-local,
-  multicast, reserved, and otherwise non-public destination addresses.
-- Connection pinning to the validated address to prevent DNS rebinding.
-- TLS hostname verification against the requested hostname.
-- Redirect following disabled by default; every redirect must be separately
-  authorized and revalidated.
-- Strict connection/read timeouts and response-size limits.
-- No environment proxy inheritance.
-
-Every future external HTTP client must enforce the policy and use that
-transport. Do not add a direct HTTP client that bypasses these controls.
+Do not introduce direct external HTTP clients outside this transport.
 
 ## Private-data boundary
 
@@ -49,8 +54,23 @@ private memory records, local file contents, or webcam images.
 Retrieved web pages are untrusted content. They must not be treated as
 system instructions or be allowed to trigger arbitrary local actions.
 
+## Configuration
+
+\`[web_search]\`:
+
+- \`enabled\`: explicit opt-in, false by default.
+- \`provider\`: reserved for the future search-provider adapter.
+- \`allowed_hosts\`: exact DNS hostnames permitted for search-provider calls.
+
+\`[web_retrieval]\`:
+
+- \`enabled\`: explicit opt-in, false by default.
+
+\`privacy.offline_mode\` overrides both settings and blocks external requests.
+
 ## Limitations
 
-This application-level policy does not control other applications, plugins,
-system services, or arbitrary third-party code. Strict machine-wide network
-isolation requires an operating-system firewall or equivalent control.
+The policy protects requests made through V's secure transport. It does not
+control other applications, plugins, system services, or arbitrary third-party
+code. Strict machine-wide network isolation requires an operating-system
+firewall or equivalent control.
