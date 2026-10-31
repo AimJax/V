@@ -138,6 +138,71 @@ class DesktopSettingsStoreTests(unittest.TestCase):
                 "You are V. Be direct and transparent.",
             )
 
+    def test_rejects_speech_replies_when_voice_is_disabled(self):
+        changes = valid_changes()
+        changes["voice_speak_replies"] = True
+
+        with self.assertRaisesRegex(ValueError, "Enable voice interaction"):
+            validate_desktop_settings(
+                changes,
+                available_models=["gemma-chat", "nomic-embed"],
+            )
+
+    def test_voice_enablement_requires_local_whisper_assets(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            changes = valid_changes()
+            changes["voice_enabled"] = True
+
+            for relative in (
+                changes["voice_whisper_server_path"],
+                changes["voice_whisper_model_path"],
+                changes["voice_silero_vad_model_path"],
+            ):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"test")
+
+            with patch("v.desktop.settings_store.project_root", return_value=root):
+                validated = validate_desktop_settings(
+                    changes,
+                    available_models=["gemma-chat", "nomic-embed"],
+                )
+
+        self.assertTrue(validated["voice_enabled"])
+        self.assertFalse(validated["voice_speak_replies"])
+
+    def test_spoken_replies_require_kokoro_assets(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            changes = valid_changes()
+            changes["voice_enabled"] = True
+            changes["voice_speak_replies"] = True
+
+            for key in (
+                "voice_whisper_server_path",
+                "voice_whisper_model_path",
+                "voice_silero_vad_model_path",
+                "voice_kokoro_model_path",
+                "voice_kokoro_voices_path",
+            ):
+                path = root / changes[key]
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"test")
+
+            with patch("v.desktop.settings_store.project_root", return_value=root):
+                validated = validate_desktop_settings(
+                    changes,
+                    available_models=["gemma-chat", "nomic-embed"],
+                )
+
+        self.assertTrue(validated["voice_enabled"])
+        self.assertTrue(validated["voice_speak_replies"])
+
     def test_rejects_personality_path_outside_project_root(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
