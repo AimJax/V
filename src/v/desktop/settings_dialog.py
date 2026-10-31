@@ -218,6 +218,7 @@ class SettingsDialog(QDialog):
         root.addLayout(footer)
 
         self.memory_enabled.toggled.connect(self._update_memory_controls)
+        self.retrieval_enabled.toggled.connect(self._update_memory_controls)
 
     def _connect_dirty_signals(self) -> None:
         widgets = (
@@ -299,7 +300,7 @@ class SettingsDialog(QDialog):
         self._loading = False
         self._dirty = False
         self.status_label.setText("Settings loaded from local configuration.")
-        self.save_button.setEnabled(True)
+        self.save_button.setEnabled(False)
         self._update_memory_controls()
 
     def _update_memory_controls(self, *_args) -> None:
