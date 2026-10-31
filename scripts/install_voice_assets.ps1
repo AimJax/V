@@ -41,7 +41,8 @@ function Assert-DownloadedFile {
     param(
         [string]$Path,
         [long]$MinimumBytes,
-        [string]$Description
+        [string]$Description,
+        [string]$ExpectedSha256
     )
 
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
@@ -52,6 +53,9 @@ function Assert-DownloadedFile {
         throw "$Description is unexpectedly small ($($file.Length) bytes): $Path"
     }
     $hash = Get-FileHash -LiteralPath $Path -Algorithm SHA256
+    if ($ExpectedSha256 -and $hash.Hash -ne $ExpectedSha256) {
+        throw "$Description SHA256 mismatch. Expected $ExpectedSha256, received $($hash.Hash): $Path"
+    }
     Write-Host ("SHA256 {0}  {1}" -f $hash.Hash, $Path)
 }
 
@@ -126,11 +130,13 @@ if (-not $SkipWhisperBuild) {
             "https://github.com/ggml-org/whisper.cpp.git",
             $WhisperSource
         ) "Clone official whisper.cpp v1.9.5 source"
-    } else {
-        $tag = & git -C $WhisperSource describe --tags --exact-match 2>$null
-        if ($tag -ne "v1.9.5") {
-            throw "Existing whisper.cpp checkout is not exactly v1.9.5. Remove or rename '$WhisperSource' before installing this pinned build."
-        }
+    }
+
+    # Pin the resolved commit, not just the human-readable tag name.
+    # v1.9.5 is an annotated tag that resolves to this commit.
+    $whisperCommit = (& git -C $WhisperSource rev-parse HEAD 2>$null).Trim()
+    if ($whisperCommit -ne "d1be6fde11ac6e0407606b4e42fe72d34add8037") {
+        throw "Existing whisper.cpp checkout is not the pinned v1.9.5 commit. Expected d1be6fde11ac6e0407606b4e42fe72d34add8037, received '$whisperCommit'. Remove or rename '$WhisperSource' before installing this pinned build."
     }
 
     Invoke-Native "cmake" @(
@@ -184,7 +190,7 @@ if (-not $SkipModelDownloads) {
     if ($LASTEXITCODE -ne 0) {
         throw "Silero VAD model download failed with exit code $LASTEXITCODE."
     }
-    Assert-DownloadedFile (Join-Path $ModelDirectory "ggml-silero-v6.2.0.bin") 1000000 "Silero VAD model"
+    Assert-DownloadedFile (Join-Path $ModelDirectory "ggml-silero-v6.2.0.bin") 800000 "Silero VAD model" "2AA269B785EEB53A82983A20501DD7F7C1D9C48E33AB63A41391AC6C9F7FB6987"
 
     Download-File "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.onnx" (Join-Path $KokoroDirectory "kokoro-v1.0.onnx") 100000000
     Download-File "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin" (Join-Path $KokoroDirectory "voices-v1.0.bin") 1000000
