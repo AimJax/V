@@ -381,7 +381,8 @@ async def run_chat() -> int:
         print(f"Restored messages: {len(restored)}")
         print("\nCommands: /help, /new, /sessions, /resume N,")
         print("          /memory, /memory search TEXT, /memory status,")
-        print("          /memory delete ID, /memory retry, /exit")
+        print("          /memory correct ID FIELD VALUE, /memory delete ID,")
+        print("          /memory retry, /exit")
         print("\nV is ready.\n")
 
         # Resume pending extraction jobs after application restart.
