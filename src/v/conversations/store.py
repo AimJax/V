@@ -30,7 +30,7 @@ class StoredMessage:
     created_at: str
 
 def _timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
 
 class ConversationStore:
@@ -160,7 +160,7 @@ class ConversationStore:
                 """
                 SELECT id, title, created_at, updated_at
                 FROM conversations
-                ORDER BY updated_at DESC, created_at DESC
+                ORDER BY updated_at DESC, created_at DESC, rowid DESC
                 LIMIT 1
                 """
             ).fetchone()
@@ -179,7 +179,7 @@ class ConversationStore:
                 """
                 SELECT id, title, created_at, updated_at
                 FROM conversations
-                ORDER BY updated_at DESC, created_at DESC
+                ORDER BY updated_at DESC, created_at DESC, rowid DESC
                 LIMIT ?
                 """,
                 (limit,),
