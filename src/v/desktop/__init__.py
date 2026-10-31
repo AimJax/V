@@ -1,0 +1,1 @@
+"""V desktop application package."""
