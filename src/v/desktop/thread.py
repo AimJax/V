@@ -25,6 +25,7 @@ class DesktopRuntimeThread(QThread):
     memory_operation_failed = Signal(str)
     settings_ready = Signal(object)
     settings_saved = Signal(str)
+    settings_operation_failed = Signal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -118,7 +119,7 @@ class DesktopRuntimeThread(QThread):
                 try:
                     self.settings_ready.emit(service.settings_snapshot())
                 except Exception as error:
-                    self.memory_operation_failed.emit(str(error))
+                    self.settings_operation_failed.emit(str(error))
                 continue
 
             if command == "settings_save":
@@ -130,7 +131,7 @@ class DesktopRuntimeThread(QThread):
                     )
                     self.settings_saved.emit(message)
                 except Exception as error:
-                    self.memory_operation_failed.emit(str(error))
+                    self.settings_operation_failed.emit(str(error))
                 continue
 
             if command == "memory_list":
