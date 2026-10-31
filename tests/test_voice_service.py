@@ -83,7 +83,13 @@ class LocalVoiceServiceTests(unittest.IsolatedAsyncioTestCase):
             root=self.root,
         )
 
-        with patch("v.voice.service.KokoroSpeechEngine", return_value=fake_engine):
+        async def run_sync_in_test(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        with (
+            patch("v.voice.service.KokoroSpeechEngine", return_value=fake_engine),
+            patch("v.voice.service.asyncio.to_thread", side_effect=run_sync_in_test),
+        ):
             result = await service.synthesize("Hello V.")
 
         self.assertEqual(result, b"RIFFvoice")
