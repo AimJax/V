@@ -2,6 +2,7 @@ import unittest
 
 from unittest.mock import AsyncMock
 
+from v.conversations.store import Conversation
 from v.desktop.service import (
     DesktopService,
     DesktopSnapshot,
@@ -27,9 +28,15 @@ class FakeVoiceService:
 
 class DesktopVoiceTurnTests(unittest.IsolatedAsyncioTestCase):
     def _turn_result(self):
+        conversation = Conversation(
+            id="a" * 32,
+            title="Voice test",
+            created_at="2026-11-01T00:00:00+00:00",
+            updated_at="2026-11-01T00:00:00+00:00",
+        )
         snapshot = DesktopSnapshot(
-            conversation=None,
-            conversations=[],
+            conversation=conversation,
+            conversations=[conversation],
             messages=[],
             model="gemma-4-e4b-it",
             network_mode="OFFLINE",
