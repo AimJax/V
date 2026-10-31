@@ -86,6 +86,8 @@ class MemoryManagerDialog(QDialog):
 
         self.status_label = QLabel("Loading memories…")
         self.status_label.setObjectName("muted")
+        self.status_label.setWordWrap(True)
+        self.status_label.setMaximumWidth(440)
         heading.addLayout(title_column)
         heading.addStretch(1)
         heading.addWidget(self.status_label)
@@ -566,6 +568,20 @@ class MemoryManagerDialog(QDialog):
         )
         if answer != QMessageBox.StandardButton.Ok:
             return
+
+        if self._dirty:
+            discard = QMessageBox.question(
+                self,
+                "Discard unsaved corrections?",
+                "Importing will refresh the memory list. Discard your unsaved corrections?",
+                QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if discard != QMessageBox.StandardButton.Discard:
+                return
+            self._dirty = False
+            self.dirty_label.setText("No unsaved changes")
 
         self._operation_pending = True
         self._update_action_state()
