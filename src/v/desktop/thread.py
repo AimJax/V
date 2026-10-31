@@ -6,7 +6,12 @@ import asyncio
 
 from PySide6.QtCore import QThread, Signal
 
-from v.desktop.service import DesktopService, DesktopSnapshot, DesktopTurnResult
+from v.desktop.service import (
+    DesktopService,
+    DesktopSnapshot,
+    DesktopTurnResult,
+    DesktopVoiceTurnResult,
+)
 
 
 class DesktopRuntimeThread(QThread):
@@ -16,6 +21,7 @@ class DesktopRuntimeThread(QThread):
     startup_failed = Signal(str)
     token_received = Signal(str)
     turn_completed = Signal(object)
+    voice_turn_completed = Signal(object)
     operation_failed = Signal(str)
     session_changed = Signal(object)
     memory_list_ready = Signal(object)
@@ -92,6 +98,24 @@ class DesktopRuntimeThread(QThread):
                     self.turn_completed.emit(result)
                 except asyncio.CancelledError:
                     # Shutdown interrupted the in-flight HTTP stream.
+                    pass
+                except Exception as error:
+                    self.operation_failed.emit(str(error))
+                finally:
+                    self._active_task = None
+                continue
+
+            if command == "voice_turn":
+                self._active_task = asyncio.create_task(
+                    service.send_voice_message(
+                        payload,
+                        self.token_received.emit,
+                    )
+                )
+                try:
+                    result: DesktopVoiceTurnResult = await self._active_task
+                    self.voice_turn_completed.emit(result)
+                except asyncio.CancelledError:
                     pass
                 except Exception as error:
                     self.operation_failed.emit(str(error))
@@ -208,6 +232,9 @@ class DesktopRuntimeThread(QThread):
 
     def send_message(self, text: str) -> None:
         self._post("send", text)
+
+    def send_voice_turn(self, wav_data: bytes) -> None:
+        self._post("voice_turn", wav_data)
 
     def new_conversation(self) -> None:
         self._post("new")
