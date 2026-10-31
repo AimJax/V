@@ -19,6 +19,7 @@ from v.memory.queue import ExtractionQueue
 from v.memory.retrieval import build_memory_context, meaningful_terms
 from v.memory.store import MemoryStore
 from v.memory.worker import MemoryWorker
+from v.desktop.settings_store import save_local_desktop_settings
 from v.providers.base import ChatMessage
 from v.providers.errors import ProviderError, ProviderProtocolError
 from v.providers.lm_studio import LMStudioProvider
@@ -44,6 +45,30 @@ class DesktopTurnResult:
     snapshot: DesktopSnapshot
 
 
+@dataclass(frozen=True, slots=True)
+class DesktopSettingsSnapshot:
+    """Editable settings and loaded local model identifiers."""
+
+    model: str
+    available_models: list[str]
+    temperature: float
+    max_tokens: int
+    history_messages: int
+    offline_mode: bool
+    memory_enabled: bool
+    automatic_extraction: bool
+    retrieval_enabled: bool
+    embedding_model: str
+    minimum_confidence: float
+    idle_delay_seconds: float
+    max_jobs_per_idle_cycle: int
+    semantic_threshold: float
+    retrieval_limit: int
+    retrieval_max_characters: int
+    personality: str
+    personality_path: str
+
+
 class DesktopService:
     """Own local providers, persistence, memory, and conversation operations."""
 
@@ -58,6 +83,7 @@ class DesktopService:
         self.retriever: HybridMemoryRetriever | None = None
         self.conversation: Conversation | None = None
         self.model = ""
+        self.available_models: list[str] = []
         self.network_mode = "UNKNOWN"
         self.history_limit = 24
         self.temperature = 0.7
@@ -98,6 +124,7 @@ class DesktopService:
         )
 
         available_models = await self.provider.list_models()
+        self.available_models = list(available_models)
         if self.model not in available_models:
             raise ProviderProtocolError(
                 f"Configured model '{self.model}' is not loaded in LM Studio."
@@ -327,6 +354,80 @@ class DesktopService:
             snapshot=self.snapshot(),
         )
 
+
+    def settings_snapshot(self) -> DesktopSettingsSnapshot:
+        """Return current merged settings without exposing unrelated config."""
+        if not self.settings or not self.available_models:
+            raise RuntimeError("Desktop service has not started.")
+
+        llm = self.settings["llm"]
+        memory = self.settings.get("memory", {})
+        privacy = self.settings.get("privacy", {})
+        paths = self.settings.get("paths", {})
+
+        personality_path = Path(paths.get("personality", "config/personality.md"))
+        if not personality_path.is_absolute():
+            personality_path = Path(__import__(
+                "v.core.config", fromlist=["project_root"]
+            ).project_root()) / personality_path
+
+        return DesktopSettingsSnapshot(
+            model=self.model,
+            available_models=list(self.available_models),
+            temperature=float(llm.get("temperature", 0.7)),
+            max_tokens=int(llm.get("max_tokens", 512)),
+            history_messages=int(llm.get("history_messages", 24)),
+            offline_mode=bool(privacy.get("offline_mode", False)),
+            memory_enabled=bool(memory.get("enabled", True)),
+            automatic_extraction=bool(
+                memory.get("automatic_extraction", True)
+            ),
+            retrieval_enabled=bool(memory.get("retrieval_enabled", True)),
+            embedding_model=str(
+                memory.get(
+                    "embedding_model",
+                    "text-embedding-nomic-embed-text-v1.5",
+                )
+            ),
+            minimum_confidence=float(
+                memory.get("minimum_confidence", 0.90)
+            ),
+            idle_delay_seconds=float(
+                memory.get("idle_delay_seconds", 20)
+            ),
+            max_jobs_per_idle_cycle=int(
+                memory.get("max_jobs_per_idle_cycle", 3)
+            ),
+            semantic_threshold=float(
+                memory.get("semantic_threshold", 0.60)
+            ),
+            retrieval_limit=int(memory.get("retrieval_limit", 5)),
+            retrieval_max_characters=int(
+                memory.get("retrieval_max_characters", 2400)
+            ),
+            personality=self.personality,
+            personality_path=str(personality_path),
+        )
+
+    def save_desktop_settings(
+        self,
+        changes: dict,
+        personality: str,
+    ) -> str:
+        """Persist validated settings locally; running services restart to apply."""
+        if not self.settings or not self.available_models:
+            raise RuntimeError("Desktop service has not started.")
+
+        local_path, personality_path = save_local_desktop_settings(
+            self.settings,
+            changes,
+            personality,
+            available_models=self.available_models,
+        )
+        return (
+            f"Saved local settings to {local_path} and personality to "
+            f"{personality_path}. Restart V to apply the changes."
+        )
 
     def list_memories(
         self,
