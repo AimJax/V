@@ -37,6 +37,26 @@ idle_delay_seconds = 20
 max_jobs_per_idle_cycle = 3
 minimum_confidence = 0.90
 
+[voice]
+# Voice mode remains inactive until local engines are installed and validated.
+enabled = false
+wake_phrase = "Hey V"
+input_device_id = ""
+output_device_id = ""
+sample_rate = 16000
+stt_language = "auto"
+stt_threads = 4
+whisper_server_path = "apps/whisper.cpp/build/bin/Release/whisper-server.exe"
+whisper_model_path = "models/whisper/ggml-base.bin"
+silero_vad_model_path = "models/whisper/ggml-silero-v6.2.0.bin"
+vad_threshold = 0.50
+vad_min_speech_duration_ms = 250
+vad_silence_duration_ms = 700
+max_utterance_seconds = 30
+kokoro_python_path = "voice-venv312/Scripts/python.exe"
+kokoro_voice = "af_heart"
+tts_speed = 1.0
+
 [paths]
 models = "G:/V/models"
 data = "G:/V/data"
