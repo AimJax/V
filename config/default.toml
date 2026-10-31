@@ -19,6 +19,10 @@ cloud_ai_fallback = false
 [web_search]
 enabled = false
 provider = ""
+allowed_hosts = []
+
+[web_retrieval]
+enabled = false
 
 [memory]
 enabled = true
