@@ -66,6 +66,20 @@ class MemoryStoreTests(unittest.TestCase):
                 memory_type="invalid",
             )
 
+    def test_invalid_memory_key_type_is_rejected(self):
+        with self.assertRaises(TypeError):
+            self.store.create_memory(
+                content="Invalid key test.",
+                memory_key=123,
+            )
+
+    def test_boolean_confidence_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.store.create_memory(
+                content="Invalid confidence test.",
+                confidence=True,
+            )
+
     def test_memory_key_is_normalized_and_unique(self):
         first = self.store.create_memory(
             content="The user enjoys shoegaze.",
