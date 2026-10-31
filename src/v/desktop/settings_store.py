@@ -44,11 +44,11 @@ SETTING_FIELDS = {
     "voice_vad_min_speech_duration_ms",
     "voice_vad_silence_duration_ms",
     "voice_max_utterance_seconds",
-    "voice_kokoro_python_path",
     "voice_kokoro_model_path",
     "voice_kokoro_voices_path",
     "voice_kokoro_voice",
     "voice_tts_speed",
+    "voice_speak_replies",
 }
 
 
@@ -231,7 +231,6 @@ def validate_desktop_settings(
         ("voice_whisper_server_path", "Whisper server path"),
         ("voice_whisper_model_path", "Whisper model path"),
         ("voice_silero_vad_model_path", "Silero VAD model path"),
-        ("voice_kokoro_python_path", "Kokoro Python interpreter path"),
         ("voice_kokoro_model_path", "Kokoro ONNX model path"),
         ("voice_kokoro_voices_path", "Kokoro voices file path"),
     ):
@@ -358,11 +357,11 @@ def save_local_desktop_settings(
         "vad_min_speech_duration_ms": normalized["voice_vad_min_speech_duration_ms"],
         "vad_silence_duration_ms": normalized["voice_vad_silence_duration_ms"],
         "max_utterance_seconds": normalized["voice_max_utterance_seconds"],
-        "kokoro_python_path": normalized["voice_kokoro_python_path"],
         "kokoro_model_path": normalized["voice_kokoro_model_path"],
         "kokoro_voices_path": normalized["voice_kokoro_voices_path"],
         "kokoro_voice": normalized["voice_kokoro_voice"],
         "tts_speed": normalized["voice_tts_speed"],
+        "speak_replies": normalized["voice_speak_replies"],
     }
 
     memory_values = {
