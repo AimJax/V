@@ -7,6 +7,7 @@ import asyncio
 from pathlib import Path
 
 from v.core.config import load_settings, project_root
+from v.core.network import NetworkPolicy
 from v.conversations.store import Conversation, ConversationStore
 from v.memory.embedding_provider import LMStudioEmbeddingProvider
 from v.memory.embedding_store import EmbeddingStore
@@ -187,8 +188,13 @@ async def run_chat() -> int:
             memory_store = MemoryStore(memory_database)
             extraction_queue = ExtractionQueue(memory_database)
 
+        network_policy = NetworkPolicy.from_settings(settings)
+        inference_base_url = network_policy.authorize_local_endpoint(
+            llm["base_url"]
+        )
+
         provider = LMStudioProvider(
-            base_url=llm["base_url"],
+            base_url=inference_base_url,
             model=model,
             timeout_seconds=float(
                 llm.get("request_timeout_seconds", 120)
@@ -257,7 +263,7 @@ async def run_chat() -> int:
             and embedding_model in available_models
         ):
             embedding_provider = LMStudioEmbeddingProvider(
-                base_url=llm["base_url"],
+                base_url=inference_base_url,
                 model=embedding_model,
                 timeout_seconds=float(
                     llm.get("request_timeout_seconds", 120)
@@ -298,6 +304,7 @@ async def run_chat() -> int:
         )
 
         print(f"Connected: {model}")
+        print(f"Network policy: {network_policy.mode_label}")
         print(f"Conversation database: {conversation_store.database_path}")
 
         if memory_store is not None:
