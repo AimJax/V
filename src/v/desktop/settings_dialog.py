@@ -200,12 +200,17 @@ class SettingsDialog(QDialog):
 
         self.input_device = QComboBox()
         self.output_device = QComboBox()
-        self.audio_device_note = QLabel("Audio devices have not been enumerated.")
+        self.refresh_audio_button = QPushButton("Refresh devices")
+        self.refresh_audio_button.clicked.connect(self._refresh_audio_devices)
+        self.audio_device_note = QLabel(
+            "Audio devices have not been enumerated. Refreshing lists devices only; it does not open the microphone."
+        )
         self.audio_device_note.setObjectName("muted")
         self.audio_device_note.setWordWrap(True)
 
         voice_form.addRow("Microphone", self.input_device)
         voice_form.addRow("Speaker / output", self.output_device)
+        voice_form.addRow(self.refresh_audio_button)
         voice_form.addRow(self.audio_device_note)
 
         self.whisper_server_path = QLineEdit()
@@ -376,27 +381,37 @@ class SettingsDialog(QDialog):
         if path:
             editor.setText(path)
 
-    def _populate_audio_devices(self, voice: dict) -> None:
+    def _populate_audio_devices(
+        self,
+        voice: dict,
+        *,
+        discover: bool = False,
+    ) -> None:
         self.input_device.clear()
         self.output_device.clear()
         self.input_device.addItem("System default microphone", "")
         self.output_device.addItem("System default speaker", "")
 
-        try:
-            inputs = list_audio_devices("input")
-            outputs = list_audio_devices("output")
-        except (ImportError, RuntimeError, ValueError) as error:
-            inputs = []
-            outputs = []
-            self.audio_device_note.setText(
-                f"Audio device enumeration failed: {error}"
-            )
+        inputs = []
+        outputs = []
+        if discover:
+            try:
+                inputs = list_audio_devices("input")
+                outputs = list_audio_devices("output")
+            except (ImportError, RuntimeError, ValueError) as error:
+                self.audio_device_note.setText(
+                    f"Audio device enumeration failed: {error}"
+                )
+            else:
+                self.audio_device_note.setText(
+                    f"Detected {len(inputs)} microphone(s) and "
+                    f"{len(outputs)} output device(s). "
+                    "Enumeration does not open the microphone."
+                )
         else:
-            input_count = len(inputs)
-            output_count = len(outputs)
             self.audio_device_note.setText(
-                f"Detected {input_count} microphone(s) and {output_count} output device(s). "
-                "Device enumeration does not open the microphone."
+                "Press Refresh devices to enumerate local audio hardware. "
+                "This does not open or record from the microphone."
             )
 
         for device in inputs:
@@ -417,6 +432,10 @@ class SettingsDialog(QDialog):
                 )
                 index = combo.count() - 1
             combo.setCurrentIndex(max(0, index))
+
+    def _refresh_audio_devices(self) -> None:
+        voice = self._snapshot.voice if self._snapshot is not None else {}
+        self._populate_audio_devices(voice, discover=True)
 
     def _connect_dirty_signals(self) -> None:
         widgets = (
