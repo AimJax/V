@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from v.desktop.service import DesktopSnapshot, DesktopTurnResult
+from v.desktop.settings_dialog import SettingsDialog
 from v.desktop.memory_manager import MemoryManagerDialog
 from v.desktop.thread import DesktopRuntimeThread
 from v.providers.base import ChatMessage
@@ -200,6 +201,7 @@ class DesktopWindow(QMainWindow):
         self._assistant_text = ""
         self._last_snapshot: DesktopSnapshot | None = None
         self.memory_manager_dialog: MemoryManagerDialog | None = None
+        self.settings_dialog: SettingsDialog | None = None
 
         self.setWindowTitle("V — Local AI Companion")
         self.resize(1280, 820)
@@ -257,6 +259,10 @@ class DesktopWindow(QMainWindow):
         self.new_chat_button.clicked.connect(self._new_conversation)
         self.new_chat_button.setEnabled(False)
 
+        self.settings_button = QPushButton("Settings")
+        self.settings_button.clicked.connect(self._open_settings)
+        self.settings_button.setEnabled(False)
+
         self.memory_manager_button = QPushButton("Memory manager")
         self.memory_manager_button.clicked.connect(self._open_memory_manager)
         self.memory_manager_button.setEnabled(False)
@@ -284,6 +290,7 @@ class DesktopWindow(QMainWindow):
         layout.addWidget(subtitle)
         layout.addSpacing(10)
         layout.addWidget(self.new_chat_button)
+        layout.addWidget(self.settings_button)
         layout.addWidget(self.memory_manager_button)
         layout.addSpacing(14)
         layout.addWidget(recent_label)
@@ -440,6 +447,7 @@ class DesktopWindow(QMainWindow):
 
         self.new_chat_button.setEnabled(True)
         self.memory_manager_button.setEnabled(True)
+        self.settings_button.setEnabled(True)
         self.conversation_list.setEnabled(True)
         self.message_input.setEnabled(True)
         self.send_button.setEnabled(True)
@@ -453,6 +461,7 @@ class DesktopWindow(QMainWindow):
     def _on_startup_failed(self, message: str) -> None:
         self._ready = False
         self.memory_manager_button.setEnabled(False)
+        self.settings_button.setEnabled(False)
         self.connection_label.setText("NOT CONNECTED")
         self.connection_label.setStyleSheet(
             "color: #ffc0b4; background: #382521; "
@@ -473,6 +482,30 @@ class DesktopWindow(QMainWindow):
         conversation_id = current.data(Qt.ItemDataRole.UserRole)
         if conversation_id:
             self.runtime.select_conversation(str(conversation_id))
+
+    def _open_settings(self) -> None:
+        if not self._ready or self._busy:
+            return
+
+        if self.settings_dialog is None:
+            dialog = SettingsDialog(self)
+            dialog.save_requested.connect(self.runtime.save_settings)
+            self.runtime.settings_ready.connect(dialog.set_snapshot)
+            self.runtime.settings_saved.connect(dialog.on_saved)
+            self.runtime.settings_operation_failed.connect(
+                dialog.on_save_failed
+            )
+            self.settings_dialog = dialog
+        elif self.settings_dialog._dirty or self.settings_dialog._saving:
+            self.settings_dialog.show()
+            self.settings_dialog.raise_()
+            self.settings_dialog.activateWindow()
+            return
+
+        self.settings_dialog.show()
+        self.settings_dialog.raise_()
+        self.settings_dialog.activateWindow()
+        self.runtime.get_settings()
 
     def _open_memory_manager(self) -> None:
         if not self._ready or self._busy:
@@ -569,6 +602,7 @@ class DesktopWindow(QMainWindow):
         self.message_input.setEnabled(self._ready and not busy)
         self.new_chat_button.setEnabled(self._ready and not busy)
         self.memory_manager_button.setEnabled(self._ready and not busy)
+        self.settings_button.setEnabled(self._ready and not busy)
         self.conversation_list.setEnabled(self._ready and not busy)
 
     def closeEvent(self, event: QCloseEvent) -> None:
