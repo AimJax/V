@@ -8,6 +8,7 @@ from PySide6.QtMultimedia import (
     QAudioFormat,
     QAudioSource,
     QMediaDevices,
+    QtAudio,
 )
 
 from v.voice.audio import pcm_to_wav_16khz_mono
@@ -171,7 +172,7 @@ class PushToTalkRecorder(QObject):
     def _on_source_state_changed(self, _state) -> None:
         if not self._active or self._source is None:
             return
-        if self._source.error() != QAudioSource.Error.NoError:
+        if self._source.error() != QtAudio.Error.NoError:
             self._fail(f"Microphone capture error: {self._source.error()}")
 
     def _on_max_duration(self) -> None:
