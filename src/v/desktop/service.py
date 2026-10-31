@@ -9,7 +9,9 @@ from v.chat import _configured_data_path, load_personality
 from v.core.config import load_settings
 from v.core.network import NetworkPolicy
 from v.conversations.store import Conversation, ConversationStore
+from v.memory.backup import export_backup, import_backup
 from v.memory.embedding_provider import LMStudioEmbeddingProvider
+from v.memory.models import Memory
 from v.memory.embedding_store import EmbeddingStore
 from v.memory.extractor import MemoryExtractor
 from v.memory.hybrid_retrieval import HybridMemoryRetriever
@@ -323,6 +325,106 @@ class DesktopService:
         return DesktopTurnResult(
             response=response,
             snapshot=self.snapshot(),
+        )
+
+
+    def list_memories(
+        self,
+        query: str = "",
+        memory_type: str = "",
+        provenance: str = "",
+    ) -> list[Memory]:
+        """Search and filter the local memory database for the manager."""
+        if self.memory_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+
+        if query.strip():
+            memories = self.memory_store.search_memories_any(
+                query.strip(),
+                limit=1000,
+            )
+        else:
+            memories = self.memory_store.list_memories(limit=1000)
+
+        if memory_type:
+            memories = [
+                memory for memory in memories
+                if memory.memory_type == memory_type
+            ]
+
+        if provenance:
+            memories = [
+                memory for memory in memories
+                if memory.provenance == provenance
+            ]
+
+        return memories
+
+    def update_memory(
+        self,
+        memory_id: str,
+        changes: dict,
+    ) -> Memory:
+        """Apply an explicit correction while preserving source references."""
+        if self.memory_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+
+        if not isinstance(changes, dict) or not changes:
+            raise ValueError("At least one memory field correction is required.")
+
+        allowed = {
+            "memory_type",
+            "subject",
+            "content",
+            "memory_key",
+            "confidence",
+            "importance",
+            "evidence",
+        }
+        unexpected = set(changes) - allowed
+        if unexpected:
+            raise ValueError(
+                f"Unsupported memory fields: {sorted(unexpected)}"
+            )
+
+        return self.memory_store.update_memory(memory_id, **changes)
+
+    def delete_memory(self, memory_id: str) -> bool:
+        """Permanently delete one memory record."""
+        if self.memory_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+
+        return self.memory_store.delete_memory(memory_id)
+
+    def export_memories(
+        self,
+        destination: str,
+        *,
+        overwrite: bool = False,
+    ) -> str:
+        """Export a versioned plaintext JSON memory backup."""
+        if self.memory_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+
+        path, count = export_backup(
+            self.memory_store,
+            destination,
+            overwrite=overwrite,
+        )
+        return (
+            f"Exported {count} memory record(s) to {path}. "
+            "This JSON backup is unencrypted."
+        )
+
+    def import_memories(self, source: str) -> str:
+        """Merge a validated backup without overwriting existing memories."""
+        if self.memory_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+
+        restored, skipped = import_backup(self.memory_store, source)
+        return (
+            f"Restored {restored} record(s); skipped {skipped} identical record(s). "
+            "Existing memories were not overwritten or deleted."
         )
 
     async def close(self) -> None:
