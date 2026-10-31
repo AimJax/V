@@ -8,6 +8,10 @@ The first desktop interface is a native Qt Widgets application built with the of
 - The async inference, conversation persistence, semantic retrieval, and memory extraction runtime runs in a dedicated QThread with its own asyncio event loop.
 - Chat uses the configured LM Studio model and the same local conversation and memory databases as the CLI.
 - Conversation history is restored from SQLite and can be switched from the recent-session list.
+- The Settings dialog configures the loaded chat model, generation parameters, personality instructions, memory behavior, and offline-mode policy.
+- Settings are saved as local overrides in `config/local.toml` using TOML round-trip editing so unrelated local values and comments are preserved. The personality file is saved separately under the project directory.
+- Settings changes require an application restart. The current runtime is not hot-reconfigured after saving.
+- Disabling strict offline mode does not activate web access; search and retrieval are not connected to the desktop application yet.
 - The Memory Manager searches and filters records by content, memory type, and provenance.
 - Memory content, subject, type, key, confidence, importance, and supporting evidence can be corrected while original source references are retained.
 - Permanent memory deletion requires confirmation and explicitly notes that conversation-history and backup copies are separate.
