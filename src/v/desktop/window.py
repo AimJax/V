@@ -756,11 +756,40 @@ class DesktopWindow(QMainWindow):
             self.conversation_list.setCurrentItem(selected_item)
         del blocker
 
+    def _remove_message_bubble(self, bubble: MessageBubble) -> None:
+        """Remove an empty placeholder bubble from the conversation layout."""
+        for index in range(self.messages_layout.count()):
+            row = self.messages_layout.itemAt(index).layout()
+            if row is None:
+                continue
+            if any(
+                row.itemAt(child_index).widget() is bubble
+                for child_index in range(row.count())
+            ):
+                self.messages_layout.takeAt(index)
+                bubble.setParent(None)
+                bubble.deleteLater()
+                row.deleteLater()
+                return
+
     def _on_operation_failed(self, message: str) -> None:
-        if self._voice_pending and self._voice_user_bubble is not None:
-            self._voice_user_bubble.set_content(f"Voice input failed: {message}")
-            self._voice_user_bubble = None
+        if self._voice_pending:
+            if self._voice_user_bubble is not None:
+                self._voice_user_bubble.set_content(
+                    f"Voice input failed: {message}"
+                )
+                self._voice_user_bubble = None
             self._voice_pending = False
+
+            # Transcription can fail before chat generation begins. Remove the
+            # empty assistant placeholder instead of labelling it a generation error.
+            if self._assistant_bubble is not None and not self._assistant_text:
+                self._remove_message_bubble(self._assistant_bubble)
+                self._assistant_bubble = None
+
+            self.statusBar().showMessage(f"Voice input failed: {message}")
+            self._set_busy(False)
+            return
 
         if self._assistant_bubble is not None and not self._assistant_text:
             self._assistant_bubble.set_content(
