@@ -28,10 +28,10 @@ class AudioConversionTests(unittest.TestCase):
 
         channels, width, rate, frames, samples = self._read_wav(wav_data)
         self.assertEqual((channels, width, rate, frames), (1, 2, 16000, 4))
-        self.assertEqual(struct.unpack("<4h", samples), (0, 999, -999, 32766))
+        self.assertEqual(struct.unpack("<4h", samples), (0, 1000, -1000, 32766))
 
     def test_downmixes_stereo_and_resamples_to_16khz(self):
-        raw = struct.pack("<8h", 1000, 3000, -1000, 1000, 2000, 2000, 0, 0)
+        raw = struct.pack("<12h", 1000, 3000, -1000, 1000, 2000, 2000, 0, 0, 1500, 500, -500, 500)
         wav_data = pcm_to_wav_16khz_mono(
             raw,
             sample_rate=48000,
