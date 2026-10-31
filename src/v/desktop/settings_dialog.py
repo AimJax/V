@@ -477,7 +477,7 @@ class SettingsDialog(QDialog):
                 state = (
                     "Saved device unavailable"
                     if discover
-                    else "Saved device not checked yet"
+                    else "Saved selection (refresh to verify)"
                 )
                 combo.addItem(
                     f"{state} ({selected_id[:16]}…)",
@@ -488,7 +488,10 @@ class SettingsDialog(QDialog):
         blockers.clear()
 
     def _refresh_audio_devices(self) -> None:
-        voice = self._snapshot.voice if self._snapshot is not None else {}
+        # Preserve current choices, including selections not yet saved to disk.
+        voice = dict(self._snapshot.voice) if self._snapshot is not None else {}
+        voice["input_device_id"] = str(self.input_device.currentData() or "")
+        voice["output_device_id"] = str(self.output_device.currentData() or "")
         self._populate_audio_devices(voice, discover=True)
 
     def _connect_dirty_signals(self) -> None:
