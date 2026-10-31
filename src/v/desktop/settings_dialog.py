@@ -354,6 +354,7 @@ class SettingsDialog(QDialog):
 
         self.memory_enabled.toggled.connect(self._update_memory_controls)
         self.retrieval_enabled.toggled.connect(self._update_memory_controls)
+        self.voice_enabled.toggled.connect(self._update_voice_controls)
 
     def _add_path_picker(
         self,
@@ -582,6 +583,13 @@ class SettingsDialog(QDialog):
         self.status_label.setText("Settings loaded from local configuration.")
         self.save_button.setEnabled(False)
         self._update_memory_controls()
+        self._update_voice_controls()
+
+    def _update_voice_controls(self, *_args) -> None:
+        enabled = self.voice_enabled.isChecked()
+        self.speak_replies.setEnabled(enabled)
+        if not enabled and self.speak_replies.isChecked():
+            self.speak_replies.setChecked(False)
 
     def _update_memory_controls(self, *_args) -> None:
         enabled = self.memory_enabled.isChecked()
