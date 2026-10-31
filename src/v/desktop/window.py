@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from v.desktop.service import DesktopSnapshot, DesktopTurnResult
+from v.desktop.memory_manager import MemoryManagerDialog
 from v.desktop.thread import DesktopRuntimeThread
 from v.providers.base import ChatMessage
 
@@ -198,6 +199,7 @@ class DesktopWindow(QMainWindow):
         self._assistant_bubble: MessageBubble | None = None
         self._assistant_text = ""
         self._last_snapshot: DesktopSnapshot | None = None
+        self.memory_manager_dialog: MemoryManagerDialog | None = None
 
         self.setWindowTitle("V — Local AI Companion")
         self.resize(1280, 820)
@@ -255,6 +257,10 @@ class DesktopWindow(QMainWindow):
         self.new_chat_button.clicked.connect(self._new_conversation)
         self.new_chat_button.setEnabled(False)
 
+        self.memory_manager_button = QPushButton("Memory manager")
+        self.memory_manager_button.clicked.connect(self._open_memory_manager)
+        self.memory_manager_button.setEnabled(False)
+
         recent_label = QLabel("RECENT CONVERSATIONS")
         recent_label.setObjectName("muted")
         recent_label.setStyleSheet("font-size: 8pt; font-weight: 650;")
@@ -278,6 +284,7 @@ class DesktopWindow(QMainWindow):
         layout.addWidget(subtitle)
         layout.addSpacing(10)
         layout.addWidget(self.new_chat_button)
+        layout.addWidget(self.memory_manager_button)
         layout.addSpacing(14)
         layout.addWidget(recent_label)
         layout.addWidget(self.conversation_list, 1)
@@ -432,6 +439,7 @@ class DesktopWindow(QMainWindow):
             self._append_bubble(role, message.content)
 
         self.new_chat_button.setEnabled(True)
+        self.memory_manager_button.setEnabled(True)
         self.conversation_list.setEnabled(True)
         self.message_input.setEnabled(True)
         self.send_button.setEnabled(True)
@@ -444,6 +452,7 @@ class DesktopWindow(QMainWindow):
 
     def _on_startup_failed(self, message: str) -> None:
         self._ready = False
+        self.memory_manager_button.setEnabled(False)
         self.connection_label.setText("NOT CONNECTED")
         self.connection_label.setStyleSheet(
             "color: #ffc0b4; background: #382521; "
@@ -464,6 +473,34 @@ class DesktopWindow(QMainWindow):
         conversation_id = current.data(Qt.ItemDataRole.UserRole)
         if conversation_id:
             self.runtime.select_conversation(str(conversation_id))
+
+    def _open_memory_manager(self) -> None:
+        if not self._ready or self._busy:
+            return
+
+        if self.memory_manager_dialog is None:
+            dialog = MemoryManagerDialog(self)
+            dialog.refresh_requested.connect(self.runtime.list_memories)
+            dialog.update_requested.connect(self.runtime.update_memory)
+            dialog.delete_requested.connect(self.runtime.delete_memory)
+            dialog.export_requested.connect(self.runtime.export_memories)
+            dialog.import_requested.connect(self.runtime.import_memories)
+
+            self.runtime.memory_list_ready.connect(dialog.set_memories)
+            self.runtime.memory_updated.connect(dialog.on_memory_updated)
+            self.runtime.memory_deleted.connect(dialog.on_memory_deleted)
+            self.runtime.memory_backup_completed.connect(
+                dialog.on_backup_completed
+            )
+            self.runtime.memory_operation_failed.connect(
+                dialog.on_operation_failed
+            )
+            self.memory_manager_dialog = dialog
+
+        self.memory_manager_dialog.show()
+        self.memory_manager_dialog.raise_()
+        self.memory_manager_dialog.activateWindow()
+        self.memory_manager_dialog.refresh()
 
     def _new_conversation(self) -> None:
         if self._ready and not self._busy:
@@ -531,6 +568,7 @@ class DesktopWindow(QMainWindow):
         self.send_button.setEnabled(self._ready and not busy)
         self.message_input.setEnabled(self._ready and not busy)
         self.new_chat_button.setEnabled(self._ready and not busy)
+        self.memory_manager_button.setEnabled(self._ready and not busy)
         self.conversation_list.setEnabled(self._ready and not busy)
 
     def closeEvent(self, event: QCloseEvent) -> None:
