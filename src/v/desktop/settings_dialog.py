@@ -474,8 +474,13 @@ class SettingsDialog(QDialog):
             selected_id = str(voice.get(key, "") or "")
             index = combo.findData(selected_id)
             if index < 0 and selected_id:
+                state = (
+                    "Saved device unavailable"
+                    if discover
+                    else "Saved device not checked yet"
+                )
                 combo.addItem(
-                    f"Saved device unavailable ({selected_id[:16]}…)",
+                    f"{state} ({selected_id[:16]}…)",
                     selected_id,
                 )
                 index = combo.count() - 1
