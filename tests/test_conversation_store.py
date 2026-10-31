@@ -1,4 +1,6 @@
 import unittest
+
+from unittest.mock import patch
 from pathlib import Path
 
 from support import temporary_directory
@@ -25,11 +27,16 @@ class ConversationStoreTests(unittest.TestCase):
         self.assertEqual(found.id, conversation.id)
 
     def test_latest_conversation(self):
-        first = self.store.create_conversation("First")
-        second = self.store.create_conversation("Second")
+        with patch(
+            "v.conversations.store._timestamp",
+            return_value="2026-10-31T10:00:00.000000+00:00",
+        ):
+            first = self.store.create_conversation("First")
+            second = self.store.create_conversation("Second")
 
         latest = self.store.get_latest_conversation()
 
+        self.assertNotEqual(first.id, second.id)
         self.assertEqual(latest.id, second.id)
 
     def test_messages_survive_store_reinitialization(self):
