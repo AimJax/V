@@ -212,6 +212,8 @@ class SettingsDialog(QDialog):
         self.whisper_model_path = QLineEdit()
         self.silero_vad_model_path = QLineEdit()
         self.kokoro_python_path = QLineEdit()
+        self.kokoro_model_path = QLineEdit()
+        self.kokoro_voices_path = QLineEdit()
         self._add_path_picker(
             voice_form,
             "Whisper server executable",
@@ -232,9 +234,21 @@ class SettingsDialog(QDialog):
         )
         self._add_path_picker(
             voice_form,
-            "Kokoro Python 3.12 interpreter",
+            "V Python interpreter",
             self.kokoro_python_path,
             "Python interpreter (python.exe)",
+        )
+        self._add_path_picker(
+            voice_form,
+            "Kokoro ONNX model",
+            self.kokoro_model_path,
+            "ONNX models (*.onnx)",
+        )
+        self._add_path_picker(
+            voice_form,
+            "Kokoro voices file",
+            self.kokoro_voices_path,
+            "Kokoro voice files (*.bin)",
         )
 
         self.stt_language = QComboBox()
@@ -285,7 +299,7 @@ class SettingsDialog(QDialog):
 
         voice_note = QLabel(
             "Audio format: 16 kHz mono. Whisper.cpp uses the Silero VAD model before transcription. "
-            "Kokoro requires a separate Python 3.12 environment; it must not be installed into V's Python 3.13 environment. "
+            "Kokoro ONNX supports V's Python 3.13 environment; install the optional voice extra separately. "
             "The selected voice ID is provisional until local voice audition is implemented. "
             "Wake-word listening and microphone capture are not active yet."
         )
@@ -430,6 +444,8 @@ class SettingsDialog(QDialog):
             self.whisper_model_path,
             self.silero_vad_model_path,
             self.kokoro_python_path,
+            self.kokoro_model_path,
+            self.kokoro_voices_path,
             self.vad_threshold,
             self.vad_min_speech,
             self.vad_silence,
@@ -511,6 +527,12 @@ class SettingsDialog(QDialog):
         )
         self.kokoro_python_path.setText(
             str(voice.get("kokoro_python_path", ""))
+        )
+        self.kokoro_model_path.setText(
+            str(voice.get("kokoro_model_path", ""))
+        )
+        self.kokoro_voices_path.setText(
+            str(voice.get("kokoro_voices_path", ""))
         )
         self.stt_language.setCurrentIndex(
             max(
@@ -609,6 +631,8 @@ class SettingsDialog(QDialog):
             "voice_vad_silence_duration_ms": self.vad_silence.value(),
             "voice_max_utterance_seconds": self.max_utterance.value(),
             "voice_kokoro_python_path": self.kokoro_python_path.text().strip(),
+            "voice_kokoro_model_path": self.kokoro_model_path.text().strip(),
+            "voice_kokoro_voices_path": self.kokoro_voices_path.text().strip(),
             "voice_kokoro_voice": self.kokoro_voice.text().strip(),
             "voice_tts_speed": self.tts_speed.value(),
         }
