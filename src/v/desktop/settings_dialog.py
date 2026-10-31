@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtCore import Qt, QSignalBlocker, Signal
+from PySide6.QtGui import QCloseEvent, QShowEvent
 from PySide6.QtWidgets import (
+    QFrame,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QTabWidget,
     QTextEdit,
@@ -40,8 +42,9 @@ class SettingsDialog(QDialog):
         self._saving = False
 
         self.setWindowTitle("V — Settings")
-        self.resize(760, 700)
-        self.setMinimumSize(650, 580)
+        self.resize(780, 720)
+        self.setMinimumSize(420, 320)
+        self.setSizeGripEnabled(True)
         self.setModal(False)
 
         self._build_ui()
@@ -104,7 +107,7 @@ class SettingsDialog(QDialog):
         general_note.setWordWrap(True)
         general_layout.addWidget(general_note)
         general_layout.addStretch(1)
-        self.tabs.addTab(general, "General")
+        self._add_scrollable_tab(general, "General")
 
         personality = QWidget()
         personality_layout = QVBoxLayout(personality)
@@ -118,7 +121,7 @@ class SettingsDialog(QDialog):
         )
         personality_layout.addWidget(self.personality_path)
         personality_layout.addWidget(self.personality_text, 1)
-        self.tabs.addTab(personality, "Personality")
+        self._add_scrollable_tab(personality, "Personality")
 
         memory = QWidget()
         memory_layout = QVBoxLayout(memory)
@@ -181,7 +184,7 @@ class SettingsDialog(QDialog):
         memory_note.setWordWrap(True)
         memory_layout.addWidget(memory_note)
         memory_layout.addStretch(1)
-        self.tabs.addTab(memory, "Memory")
+        self._add_scrollable_tab(memory, "Memory")
 
         voice = QWidget()
         voice_layout = QVBoxLayout(voice)
@@ -313,7 +316,7 @@ class SettingsDialog(QDialog):
         voice_note.setWordWrap(True)
         voice_layout.addWidget(voice_note)
         voice_layout.addStretch(1)
-        self.tabs.addTab(voice, "Voice")
+        self._add_scrollable_tab(voice, "Voice")
 
         privacy = QWidget()
         privacy_layout = QVBoxLayout(privacy)
@@ -334,7 +337,7 @@ class SettingsDialog(QDialog):
         privacy_layout.addWidget(self.privacy_status)
         privacy_layout.addSpacing(12)
         privacy_layout.addStretch(1)
-        self.tabs.addTab(privacy, "Privacy")
+        self._add_scrollable_tab(privacy, "Privacy")
 
         footer = QHBoxLayout()
         self.status_label = QLabel("Loading settings…")
@@ -355,6 +358,43 @@ class SettingsDialog(QDialog):
         self.memory_enabled.toggled.connect(self._update_memory_controls)
         self.retrieval_enabled.toggled.connect(self._update_memory_controls)
         self.voice_enabled.toggled.connect(self._update_voice_controls)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        """Keep the dialog within the usable screen area on scaled displays."""
+        super().showEvent(event)
+        screen = self.screen()
+        if screen is None:
+            return
+
+        available = screen.availableGeometry()
+        margin = 32
+        max_width = max(420, available.width() - margin * 2)
+        max_height = max(320, int(available.height() * 0.90))
+        min_width = min(560, max_width)
+        min_height = min(420, max_height)
+        self.setMinimumSize(min_width, min_height)
+
+        width = min(max(self.width(), min_width), max_width)
+        height = min(max(self.height(), min_height), max_height)
+        self.resize(width, height)
+
+        frame = self.frameGeometry()
+        frame.moveCenter(available.center())
+        self.move(frame.topLeft())
+
+    def _add_scrollable_tab(self, page: QWidget, title: str) -> None:
+        """Give each settings page its own scroll area while keeping the footer fixed."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        scroll.setWidget(page)
+        self.tabs.addTab(scroll, title)
 
     def _add_path_picker(
         self,
@@ -389,11 +429,6 @@ class SettingsDialog(QDialog):
         *,
         discover: bool = False,
     ) -> None:
-        self.input_device.clear()
-        self.output_device.clear()
-        self.input_device.addItem("System default microphone", "")
-        self.output_device.addItem("System default speaker", "")
-
         inputs = []
         outputs = []
         if discover:
@@ -416,6 +451,17 @@ class SettingsDialog(QDialog):
                 "This does not open or record from the microphone."
             )
 
+        # Rebuilding the choices is initialization, not a user edit. Block
+        # currentIndexChanged until the saved selections have been restored.
+        blockers = [
+            QSignalBlocker(self.input_device),
+            QSignalBlocker(self.output_device),
+        ]
+        self.input_device.clear()
+        self.output_device.clear()
+        self.input_device.addItem("System default microphone", "")
+        self.output_device.addItem("System default speaker", "")
+
         for device in inputs:
             self.input_device.addItem(device.label, device.device_id)
         for device in outputs:
@@ -434,6 +480,7 @@ class SettingsDialog(QDialog):
                 )
                 index = combo.count() - 1
             combo.setCurrentIndex(max(0, index))
+        blockers.clear()
 
     def _refresh_audio_devices(self) -> None:
         voice = self._snapshot.voice if self._snapshot is not None else {}
