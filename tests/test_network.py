@@ -67,12 +67,12 @@ class LocalEndpointValidationTests(unittest.TestCase):
         policy = NetworkPolicy(
             offline_mode=False,
             web_search_enabled=True,
-            web_search_allowed_hosts=("api.search.example",),
+            web_search_allowed_hosts=("api.search.example.com",),
         )
 
         self.assertEqual(
             policy.authorize_external_url(
-                "https://api.search.example/v1/search?q=test",
+                "https://api.search.example.com/v1/search?q=test",
                 feature="web_search",
             ),
             "https://api.search.example/v1/search?q=test",
@@ -80,7 +80,7 @@ class LocalEndpointValidationTests(unittest.TestCase):
 
         with self.assertRaises(NetworkPolicyError):
             policy.authorize_external_url(
-                "https://other.example/v1/search?q=test",
+                "https://other.example.com/v1/search?q=test",
                 feature="web_search",
             )
 
