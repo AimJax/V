@@ -18,6 +18,12 @@ desktop = [
     "PySide6>=6.11,<6.13",
     "tomlkit>=0.13,<1.0"
 ]
+voice = [
+    "kokoro-onnx>=0.6.1,<0.7"
+]
+voice-gpu = [
+    "kokoro-onnx[gpu]>=0.6.1,<0.7"
+]
 dev = [
     "pytest>=8.3,<10",
     "ruff>=0.11,<1"
