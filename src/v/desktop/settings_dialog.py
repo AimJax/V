@@ -628,9 +628,6 @@ class SettingsDialog(QDialog):
             "semantic_threshold": self.semantic_threshold.value(),
             "retrieval_limit": self.retrieval_limit.value(),
             "retrieval_max_characters": self.retrieval_characters.value(),
-            "voice_enabled": bool(
-                self._snapshot.voice.get("enabled", False)
-            ),
             "voice_wake_phrase": self.wake_phrase.text().strip(),
             "voice_input_device_id": str(
                 self.input_device.currentData() or ""
