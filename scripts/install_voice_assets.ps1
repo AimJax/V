@@ -8,6 +8,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $WhisperSource = Join-Path $ProjectRoot "apps\whisper.cpp"
@@ -34,6 +35,24 @@ function Invoke-Native {
     if ($LASTEXITCODE -ne 0) {
         throw "$Description failed with exit code $LASTEXITCODE."
     }
+}
+
+function Assert-DownloadedFile {
+    param(
+        [string]$Path,
+        [long]$MinimumBytes,
+        [string]$Description
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "$Description was not downloaded: $Path"
+    }
+    $file = Get-Item -LiteralPath $Path
+    if ($file.Length -lt $MinimumBytes) {
+        throw "$Description is unexpectedly small ($($file.Length) bytes): $Path"
+    }
+    $hash = Get-FileHash -LiteralPath $Path -Algorithm SHA256
+    Write-Host ("SHA256 {0}  {1}" -f $hash.Hash, $Path)
 }
 
 function Download-File {
@@ -144,8 +163,21 @@ if (-not $SkipModelDownloads) {
         throw "The pinned whisper.cpp model download scripts are missing. Run without -SkipWhisperBuild to clone the source."
     }
 
-    Invoke-Native "cmd.exe" @("/c", $whisperDownload, "base", $ModelDirectory) "Download multilingual Whisper base model"
-    Invoke-Native "cmd.exe" @("/c", $vadDownload, "silero-v6.2.0", $ModelDirectory) "Download Silero VAD v6.2.0 model"
+    Write-Host ""
+    Write-Host "== Download multilingual Whisper base model ==" -ForegroundColor Cyan
+    & $whisperDownload "base" $ModelDirectory
+    if ($LASTEXITCODE -ne 0) {
+        throw "Whisper base model download failed with exit code $LASTEXITCODE."
+    }
+    Assert-DownloadedFile (Join-Path $ModelDirectory "ggml-base.bin") 100000000 "Whisper base model"
+
+    Write-Host ""
+    Write-Host "== Download Silero VAD v6.2.0 model ==" -ForegroundColor Cyan
+    & $vadDownload "silero-v6.2.0" $ModelDirectory
+    if ($LASTEXITCODE -ne 0) {
+        throw "Silero VAD model download failed with exit code $LASTEXITCODE."
+    }
+    Assert-DownloadedFile (Join-Path $ModelDirectory "ggml-silero-v6.2.0.bin") 1000000 "Silero VAD model"
 
     Download-File "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.onnx" (Join-Path $KokoroDirectory "kokoro-v1.0.onnx") 100000000
     Download-File "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin" (Join-Path $KokoroDirectory "voices-v1.0.bin") 1000000
