@@ -9,8 +9,10 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
+    QLineEdit,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -21,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from v.desktop.audio_devices import list_audio_devices
 from v.desktop.service import DesktopSettingsSnapshot
 
 
@@ -180,6 +183,118 @@ class SettingsDialog(QDialog):
         memory_layout.addStretch(1)
         self.tabs.addTab(memory, "Memory")
 
+        voice = QWidget()
+        voice_layout = QVBoxLayout(voice)
+        voice_form = QFormLayout()
+        voice_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
+        )
+
+        self.voice_status = QLabel(
+            "Voice setup only: this tab does not open the microphone or start an audio engine. "
+            "Voice capture will remain inactive until the local engines are installed and validated."
+        )
+        self.voice_status.setObjectName("muted")
+        self.voice_status.setWordWrap(True)
+        voice_layout.addWidget(self.voice_status)
+
+        self.input_device = QComboBox()
+        self.output_device = QComboBox()
+        self.audio_device_note = QLabel("Audio devices have not been enumerated.")
+        self.audio_device_note.setObjectName("muted")
+        self.audio_device_note.setWordWrap(True)
+
+        voice_form.addRow("Microphone", self.input_device)
+        voice_form.addRow("Speaker / output", self.output_device)
+        voice_form.addRow(self.audio_device_note)
+
+        self.whisper_server_path = QLineEdit()
+        self.whisper_model_path = QLineEdit()
+        self.silero_vad_model_path = QLineEdit()
+        self.kokoro_python_path = QLineEdit()
+        self._add_path_picker(
+            voice_form,
+            "Whisper server executable",
+            self.whisper_server_path,
+            "Executables (*.exe)",
+        )
+        self._add_path_picker(
+            voice_form,
+            "Whisper model (multilingual)",
+            self.whisper_model_path,
+            "Whisper models (*.bin)",
+        )
+        self._add_path_picker(
+            voice_form,
+            "Silero VAD model",
+            self.silero_vad_model_path,
+            "VAD models (*.bin)",
+        )
+        self._add_path_picker(
+            voice_form,
+            "Kokoro Python 3.12 interpreter",
+            self.kokoro_python_path,
+            "Python interpreter (python.exe)",
+        )
+
+        self.stt_language = QComboBox()
+        self.stt_language.addItem("Automatic detection", "auto")
+        self.stt_language.addItem("English", "en")
+        self.stt_language.addItem("Indonesian", "id")
+
+        self.stt_threads = QSpinBox()
+        self.stt_threads.setRange(1, 8)
+
+        voice_form.addRow("Speech recognition language", self.stt_language)
+        voice_form.addRow("Whisper CPU threads", self.stt_threads)
+
+        self.vad_threshold = QDoubleSpinBox()
+        self.vad_threshold.setRange(0.1, 0.95)
+        self.vad_threshold.setDecimals(2)
+        self.vad_threshold.setSingleStep(0.05)
+
+        self.vad_min_speech = QSpinBox()
+        self.vad_min_speech.setRange(50, 2000)
+        self.vad_min_speech.setSuffix(" ms")
+
+        self.vad_silence = QSpinBox()
+        self.vad_silence.setRange(100, 3000)
+        self.vad_silence.setSuffix(" ms")
+
+        self.max_utterance = QSpinBox()
+        self.max_utterance.setRange(5, 120)
+        self.max_utterance.setSuffix(" s")
+
+        voice_form.addRow("VAD speech threshold", self.vad_threshold)
+        voice_form.addRow("Minimum speech duration", self.vad_min_speech)
+        voice_form.addRow("Silence to end an utterance", self.vad_silence)
+        voice_form.addRow("Maximum utterance duration", self.max_utterance)
+
+        self.wake_phrase = QLineEdit()
+        self.kokoro_voice = QLineEdit()
+        self.kokoro_voice.setPlaceholderText("e.g. af_heart")
+        self.tts_speed = QDoubleSpinBox()
+        self.tts_speed.setRange(0.5, 1.5)
+        self.tts_speed.setDecimals(2)
+        self.tts_speed.setSingleStep(0.05)
+
+        voice_form.addRow("Wake phrase (future stage)", self.wake_phrase)
+        voice_form.addRow("Kokoro voice ID", self.kokoro_voice)
+        voice_form.addRow("Speech rate", self.tts_speed)
+        voice_layout.addLayout(voice_form)
+
+        voice_note = QLabel(
+            "Audio format: 16 kHz mono. Whisper.cpp uses the Silero VAD model before transcription. "
+            "Kokoro requires a separate Python 3.12 environment; it must not be installed into V's Python 3.13 environment. "
+            "The selected voice ID is provisional until local voice audition is implemented. "
+            "Wake-word listening and microphone capture are not active yet."
+        )
+        voice_note.setObjectName("muted")
+        voice_note.setWordWrap(True)
+        voice_layout.addWidget(voice_note)
+        voice_layout.addStretch(1)
+        self.tabs.addTab(voice, "Voice")
+
         privacy = QWidget()
         privacy_layout = QVBoxLayout(privacy)
         self.offline_mode = QCheckBox(
@@ -220,6 +335,75 @@ class SettingsDialog(QDialog):
         self.memory_enabled.toggled.connect(self._update_memory_controls)
         self.retrieval_enabled.toggled.connect(self._update_memory_controls)
 
+    def _add_path_picker(
+        self,
+        form: QFormLayout,
+        label: str,
+        editor: QLineEdit,
+        name_filter: str,
+    ) -> None:
+        row = QHBoxLayout()
+        browse = QPushButton("Browse…")
+        browse.clicked.connect(
+            lambda _checked=False, field=editor, filter_text=name_filter:
+                self._browse_path(field, filter_text)
+        )
+        row.addWidget(editor, 1)
+        row.addWidget(browse)
+        form.addRow(label, row)
+
+    def _browse_path(self, editor: QLineEdit, name_filter: str) -> None:
+        path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Select local voice asset",
+            editor.text() or "",
+            name_filter,
+        )
+        if path:
+            editor.setText(path)
+
+    def _populate_audio_devices(self, voice: dict) -> None:
+        self.input_device.clear()
+        self.output_device.clear()
+        self.input_device.addItem("System default microphone", "")
+        self.output_device.addItem("System default speaker", "")
+
+        try:
+            inputs = list_audio_devices("input")
+            outputs = list_audio_devices("output")
+        except (ImportError, RuntimeError, ValueError) as error:
+            inputs = []
+            outputs = []
+            self.audio_device_note.setText(
+                f"Audio device enumeration failed: {error}"
+            )
+        else:
+            input_count = len(inputs)
+            output_count = len(outputs)
+            self.audio_device_note.setText(
+                f"Detected {input_count} microphone(s) and {output_count} output device(s). "
+                "Device enumeration does not open the microphone."
+            )
+
+        for device in inputs:
+            self.input_device.addItem(device.label, device.device_id)
+        for device in outputs:
+            self.output_device.addItem(device.label, device.device_id)
+
+        for combo, key in (
+            (self.input_device, "input_device_id"),
+            (self.output_device, "output_device_id"),
+        ):
+            selected_id = str(voice.get(key, "") or "")
+            index = combo.findData(selected_id)
+            if index < 0 and selected_id:
+                combo.addItem(
+                    f"Saved device unavailable ({selected_id[:16]}…)",
+                    selected_id,
+                )
+                index = combo.count() - 1
+            combo.setCurrentIndex(max(0, index))
+
     def _connect_dirty_signals(self) -> None:
         widgets = (
             self.chat_model,
@@ -238,6 +422,21 @@ class SettingsDialog(QDialog):
             self.retrieval_limit,
             self.retrieval_characters,
             self.offline_mode,
+            self.input_device,
+            self.output_device,
+            self.stt_language,
+            self.stt_threads,
+            self.whisper_server_path,
+            self.whisper_model_path,
+            self.silero_vad_model_path,
+            self.kokoro_python_path,
+            self.vad_threshold,
+            self.vad_min_speech,
+            self.vad_silence,
+            self.max_utterance,
+            self.wake_phrase,
+            self.kokoro_voice,
+            self.tts_speed,
         )
         for widget in widgets:
             if isinstance(widget, QComboBox):
@@ -249,6 +448,8 @@ class SettingsDialog(QDialog):
             elif isinstance(widget, QCheckBox):
                 widget.toggled.connect(self._mark_dirty)
             elif isinstance(widget, QTextEdit):
+                widget.textChanged.connect(self._mark_dirty)
+            elif isinstance(widget, QLineEdit):
                 widget.textChanged.connect(self._mark_dirty)
 
     def set_snapshot(self, snapshot: DesktopSettingsSnapshot) -> None:
@@ -296,6 +497,43 @@ class SettingsDialog(QDialog):
         self.retrieval_limit.setValue(snapshot.retrieval_limit)
         self.retrieval_characters.setValue(snapshot.retrieval_max_characters)
         self.offline_mode.setChecked(snapshot.offline_mode)
+
+        voice = snapshot.voice
+        self._populate_audio_devices(voice)
+        self.whisper_server_path.setText(
+            str(voice.get("whisper_server_path", ""))
+        )
+        self.whisper_model_path.setText(
+            str(voice.get("whisper_model_path", ""))
+        )
+        self.silero_vad_model_path.setText(
+            str(voice.get("silero_vad_model_path", ""))
+        )
+        self.kokoro_python_path.setText(
+            str(voice.get("kokoro_python_path", ""))
+        )
+        self.stt_language.setCurrentIndex(
+            max(
+                0,
+                self.stt_language.findData(
+                    str(voice.get("stt_language", "auto"))
+                ),
+            )
+        )
+        self.stt_threads.setValue(int(voice.get("stt_threads", 4)))
+        self.vad_threshold.setValue(float(voice.get("vad_threshold", 0.50)))
+        self.vad_min_speech.setValue(
+            int(voice.get("vad_min_speech_duration_ms", 250))
+        )
+        self.vad_silence.setValue(
+            int(voice.get("vad_silence_duration_ms", 700))
+        )
+        self.max_utterance.setValue(
+            int(voice.get("max_utterance_seconds", 30))
+        )
+        self.wake_phrase.setText(str(voice.get("wake_phrase", "Hey V")))
+        self.kokoro_voice.setText(str(voice.get("kokoro_voice", "af_heart")))
+        self.tts_speed.setValue(float(voice.get("tts_speed", 1.0)))
 
         self._loading = False
         self._dirty = False
@@ -348,6 +586,31 @@ class SettingsDialog(QDialog):
             "semantic_threshold": self.semantic_threshold.value(),
             "retrieval_limit": self.retrieval_limit.value(),
             "retrieval_max_characters": self.retrieval_characters.value(),
+            "voice_enabled": bool(
+                self._snapshot.voice.get("enabled", False)
+            ),
+            "voice_wake_phrase": self.wake_phrase.text().strip(),
+            "voice_input_device_id": str(
+                self.input_device.currentData() or ""
+            ),
+            "voice_output_device_id": str(
+                self.output_device.currentData() or ""
+            ),
+            "voice_sample_rate": int(
+                self._snapshot.voice.get("sample_rate", 16000)
+            ),
+            "voice_stt_language": str(self.stt_language.currentData()),
+            "voice_stt_threads": self.stt_threads.value(),
+            "voice_whisper_server_path": self.whisper_server_path.text().strip(),
+            "voice_whisper_model_path": self.whisper_model_path.text().strip(),
+            "voice_silero_vad_model_path": self.silero_vad_model_path.text().strip(),
+            "voice_vad_threshold": self.vad_threshold.value(),
+            "voice_vad_min_speech_duration_ms": self.vad_min_speech.value(),
+            "voice_vad_silence_duration_ms": self.vad_silence.value(),
+            "voice_max_utterance_seconds": self.max_utterance.value(),
+            "voice_kokoro_python_path": self.kokoro_python_path.text().strip(),
+            "voice_kokoro_voice": self.kokoro_voice.text().strip(),
+            "voice_tts_speed": self.tts_speed.value(),
         }
 
     def _save(self) -> None:
