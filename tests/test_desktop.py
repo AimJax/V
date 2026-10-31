@@ -104,6 +104,35 @@ class DesktopWindowTests(unittest.TestCase):
             Qt.TextElideMode.ElideRight,
         )
 
+    def test_push_to_talk_is_disabled_by_default_and_does_not_open_devices(self):
+        self.assertFalse(self.window.voice_button.isEnabled())
+        snapshot = self._snapshot()
+        self.window._apply_snapshot(snapshot)
+        self.application.processEvents()
+
+        self.assertFalse(self.window.voice_button.isEnabled())
+        self.assertIsNotNone(self.window._voice_recorder)
+        self.assertFalse(self.window._voice_recorder.is_recording)
+
+    def test_push_to_talk_is_enabled_only_when_voice_is_configured(self):
+        snapshot = self._snapshot()
+        object.__setattr__(snapshot, "voice_enabled", True)
+        object.__setattr__(
+            snapshot,
+            "voice_settings",
+            {
+                "enabled": True,
+                "input_device_id": "",
+                "max_utterance_seconds": 30,
+                "vad_min_speech_duration_ms": 250,
+            },
+        )
+        self.window._apply_snapshot(snapshot)
+        self.application.processEvents()
+
+        self.assertTrue(self.window.voice_button.isEnabled())
+        self.assertFalse(self.window._voice_recorder.is_recording)
+
     def test_settings_button_is_enabled_only_after_runtime_ready(self):
         self.assertFalse(self.window.settings_button.isEnabled())
         self.window._apply_snapshot(self._snapshot())
