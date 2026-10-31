@@ -3,8 +3,9 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QScrollArea
 
+from v.desktop.audio_devices import AudioDeviceOption
 from v.desktop.service import DesktopSettingsSnapshot
 from v.desktop.settings_dialog import SettingsDialog
 
@@ -108,6 +109,57 @@ class SettingsDialogTests(unittest.TestCase):
         self.dialog.voice_enabled.setChecked(False)
         self.assertFalse(self.dialog.speak_replies.isChecked())
         self.assertFalse(self.dialog.speak_replies.isEnabled())
+
+    def test_settings_pages_are_scrollable_and_footer_remains_available(self):
+        self.assertTrue(self.dialog.setSizeGripEnabled())
+        self.assertLessEqual(self.dialog.minimumWidth(), 560)
+        self.assertLessEqual(self.dialog.minimumHeight(), 420)
+
+        self.assertEqual(
+            [self.dialog.tabs.tabText(index) for index in range(self.dialog.tabs.count())],
+            ["General", "Personality", "Memory", "Voice", "Privacy"],
+        )
+        for index in range(self.dialog.tabs.count()):
+            page = self.dialog.tabs.widget(index)
+            self.assertIsInstance(page, QScrollArea)
+            self.assertTrue(page.widgetResizable())
+
+        # The action buttons belong to the dialog footer, not an individual
+        # tab page, so scrolling a long tab cannot move them out of view.
+        self.assertIsNotNone(self.dialog.save_button.parentWidget())
+        self.assertIsNotNone(self.dialog.close_button.parentWidget())
+
+    def test_refreshing_audio_devices_does_not_create_unsaved_changes(self):
+        with patch(
+            "v.desktop.settings_dialog.list_audio_devices",
+            side_effect=[
+                [
+                    AudioDeviceOption(
+                        device_id="0011",
+                        description="Test microphone",
+                        is_default=True,
+                    )
+                ],
+                [
+                    AudioDeviceOption(
+                        device_id="0022",
+                        description="Test speaker",
+                        is_default=True,
+                    )
+                ],
+            ],
+        ):
+            self.dialog.refresh_audio_button.click()
+
+        self.assertFalse(self.dialog._dirty)
+        self.assertFalse(self.dialog.save_button.isEnabled())
+        self.assertEqual(self.dialog.input_device.currentData(), "")
+        self.assertEqual(self.dialog.output_device.currentData(), "")
+        self.assertIn("Detected 1 microphone", self.dialog.audio_device_note.text())
+
+        self.dialog.input_device.setCurrentIndex(1)
+        self.assertTrue(self.dialog._dirty)
+        self.assertTrue(self.dialog.save_button.isEnabled())
 
     def test_edits_mark_settings_dirty(self):
         self.dialog.max_tokens.setValue(1024)
