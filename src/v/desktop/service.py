@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from v.chat import _configured_data_path, load_personality
-from v.core.config import load_settings
+from v.core.config import load_settings, project_root
 from v.core.network import NetworkPolicy
 from v.conversations.store import Conversation, ConversationStore
 from v.memory.backup import export_backup, import_backup
@@ -367,9 +367,7 @@ class DesktopService:
 
         personality_path = Path(paths.get("personality", "config/personality.md"))
         if not personality_path.is_absolute():
-            personality_path = Path(__import__(
-                "v.core.config", fromlist=["project_root"]
-            ).project_root()) / personality_path
+            personality_path = project_root() / personality_path
 
         return DesktopSettingsSnapshot(
             model=self.model,
