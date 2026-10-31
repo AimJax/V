@@ -44,10 +44,61 @@ class LocalEndpointValidationTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             validate_local_http_url(None)
 
-    def test_local_inference_remains_allowed_in_offline_mode(self):
+    def test_policy_loads_settings_and_validates_boolean_types(self):
+        policy = NetworkPolicy.from_settings({
+            "privacy": {"offline_mode": True},
+            "web_search": {"enabled": False, "allowed_hosts": []},
+            "web_retrieval": {"enabled": False},
+        })
+
+        self.assertTrue(policy.offline_mode)
+        self.assertFalse(policy.web_search_enabled)
+        self.assertFalse(policy.web_retrieval_enabled)
+        self.assertEqual(policy.mode_label, "OFFLINE")
+
+        with self.assertRaises(ValueError):
+            NetworkPolicy.from_settings({
+                "privacy": {"offline_mode": "false"},
+                "web_search": {"enabled": False, "allowed_hosts": []},
+                "web_retrieval": {"enabled": False},
+            })
+
+    def test_search_requires_explicit_host_allowlist(self):
+        policy = NetworkPolicy(
+            offline_mode=False,
+            web_search_enabled=True,
+            web_search_allowed_hosts=("api.search.example",),
+        )
+
+        self.assertEqual(
+            policy.authorize_external_url(
+                "https://api.search.example/v1/search?q=test",
+                feature="web_search",
+            ),
+            "https://api.search.example/v1/search?q=test",
+        )
+
+        with self.assertRaises(NetworkPolicyError):
+            policy.authorize_external_url(
+                "https://other.example/v1/search?q=test",
+                feature="web_search",
+            )
+
+    def test_retrieval_requires_separate_opt_in(self):
+        policy = NetworkPolicy()
+
+        with self.assertRaises(NetworkPolicyError):
+            policy.authorize_external_url(
+                "https://www.example.com/article",
+                feature="web_retrieval",
+            )
+
+    def test_offline_mode_overrides_enabled_web_features(self):
         policy = NetworkPolicy(
             offline_mode=True,
             web_search_enabled=True,
+            web_search_allowed_hosts=("api.search.example",),
+            web_retrieval_enabled=True,
         )
 
         self.assertEqual(
@@ -55,94 +106,65 @@ class LocalEndpointValidationTests(unittest.TestCase):
             "http://127.0.0.1:1234/v1",
         )
 
-        with self.assertRaises(NetworkPolicyError):
-            policy.authorize_external_url(
-                "https://search.example.com/",
-                feature="web_search",
-            )
-
-    def test_external_access_requires_explicit_enablement(self):
-        policy = NetworkPolicy(
-            offline_mode=False,
-            web_search_enabled=False,
-        )
-
-        with self.assertRaises(NetworkPolicyError):
-            policy.authorize_external_url(
-                "https://search.example.com/",
-                feature="web_search",
-            )
-
-    def test_external_access_fails_closed_when_enabled(self):
-        policy = NetworkPolicy(
-            offline_mode=False,
-            web_search_enabled=True,
-        )
-
-        with self.assertRaisesRegex(
-            NetworkPolicyError,
-            "secure outbound transport is implemented",
+        for feature, url in (
+            ("web_search", "https://api.search.example/search"),
+            ("web_retrieval", "https://www.example.com/article"),
         ):
-            policy.authorize_external_url(
-                "https://search.example.com/",
-                feature="web_search",
-            )
+            with self.subTest(feature=feature):
+                with self.assertRaises(NetworkPolicyError):
+                    policy.authorize_external_url(url, feature=feature)
 
-    def test_only_web_search_and_retrieval_features_are_permitted(self):
-        policy = NetworkPolicy(
-            offline_mode=False,
-            web_search_enabled=True,
-        )
+    def test_search_allowlist_must_be_an_array(self):
+        with self.assertRaises(ValueError):
+            NetworkPolicy.from_settings({
+                "privacy": {"offline_mode": False},
+                "web_search": {
+                    "enabled": True,
+                    "allowed_hosts": "api.search.example",
+                },
+            })
 
+    def test_search_allowlist_rejects_invalid_hostnames(self):
         with self.assertRaises(NetworkPolicyError):
-            policy.authorize_external_url(
-                "https://search.example.com/",
-                feature="arbitrary_http",
-            )
+            NetworkPolicy.from_settings({
+                "privacy": {"offline_mode": False},
+                "web_search": {
+                    "enabled": True,
+                    "allowed_hosts": ["127.0.0.1"],
+                },
+            })
 
-    def test_all_external_destinations_fail_closed(self):
-        policy = NetworkPolicy(
-            offline_mode=False,
-            web_search_enabled=True,
-        )
+    def test_external_urls_require_https_and_standard_port(self):
+        policy = NetworkPolicy(web_retrieval_enabled=True)
 
-        destinations = [
-            "https://search.example.com/",
-            "http://search.example.com/",
+        rejected = [
+            "http://www.example.com/",
+            "https://www.example.com:8443/",
+            "https://user:password@www.example.com/",
             "https://127.0.0.1/",
-            "https://192.168.1.1/",
+            "https://localhost/",
+            "https://service.local/",
+            "https://www.example.com/#fragment",
+            "https://www.example.com\\path",
         ]
 
-        for url in destinations:
+        for url in rejected:
             with self.subTest(url=url):
-                with self.assertRaises(NetworkPolicyError):
+                with self.assertRaises((ValueError, NetworkPolicyError)):
                     policy.authorize_external_url(
                         url,
                         feature="web_retrieval",
                     )
-
-    def test_policy_loads_settings_and_validates_boolean_types(self):
-        policy = NetworkPolicy.from_settings({
-            "privacy": {"offline_mode": True},
-            "web_search": {"enabled": False},
-        })
-
-        self.assertTrue(policy.offline_mode)
-        self.assertFalse(policy.web_search_enabled)
-        self.assertEqual(policy.mode_label, "OFFLINE")
-
-        with self.assertRaises(ValueError):
-            NetworkPolicy.from_settings({
-                "privacy": {"offline_mode": "false"},
-                "web_search": {"enabled": False},
-            })
 
     def test_diagnostics_refuses_remote_endpoint_before_network_access(self):
         settings = {
             "llm": {
                 "provider": "lm_studio",
                 "base_url": "https://example.com/v1",
-            }
+            },
+            "privacy": {"offline_mode": True},
+            "web_search": {"enabled": False, "allowed_hosts": []},
+            "web_retrieval": {"enabled": False},
         }
         output = io.StringIO()
 
