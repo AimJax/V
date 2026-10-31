@@ -37,7 +37,19 @@ Use the isolated Python environment:
 
 `G:\V\.venv\Scripts\python.exe`
 
-Start a conversation:
+Install the optional desktop interface into the project environment:
+
+```powershell
+& "G:/V/.venv/Scripts/python.exe" -m pip install -e ".[desktop]"
+```
+
+Launch the desktop application:
+
+```powershell
+& "G:/V/.venv/Scripts/python.exe" -m v desktop
+```
+
+The desktop interface uses PySide6/Qt Widgets and connects only to the configured local LM Studio endpoint. The command-line interface remains available:
 
 `python -m v chat`
 
