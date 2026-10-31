@@ -68,9 +68,15 @@ def _validate_fields(data: dict[str, Any]) -> None:
         data["subject"] = data["subject"].strip()
 
     if "memory_key" in data:
-        data["memory_key"] = _normalize_key(data["memory_key"])
+        memory_key = data["memory_key"]
+        if memory_key is not None and not isinstance(memory_key, str):
+            raise TypeError("Memory key must be a string or None.")
+        data["memory_key"] = _normalize_key(memory_key)
 
     if "confidence" in data:
+        if isinstance(data["confidence"], bool):
+            raise ValueError("Confidence must be numeric, not boolean.")
+
         try:
             confidence = float(data["confidence"])
         except (TypeError, ValueError) as error:
