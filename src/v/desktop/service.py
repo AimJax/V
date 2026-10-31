@@ -44,10 +44,12 @@ class DesktopSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class DesktopTurnResult:
-    """Completed assistant response and refreshed session metadata."""
+    """Completed assistant response, optional speech, and session metadata."""
 
     response: str
     snapshot: DesktopSnapshot
+    audio_wav: bytes | None = None
+    speech_error: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -369,9 +371,24 @@ class DesktopService:
         if latest is not None:
             self.conversation = latest
 
+        audio_wav: bytes | None = None
+        speech_error: str | None = None
+        voice_settings = self.settings.get("voice", {})
+        if (
+            voice_settings.get("enabled", False)
+            and voice_settings.get("speak_replies", False)
+        ):
+            try:
+                audio_wav = await self._get_voice_service().synthesize(response)
+            except Exception as error:
+                # Speech output is optional; a TTS failure must not discard chat.
+                speech_error = str(error)
+
         return DesktopTurnResult(
             response=response,
             snapshot=self.snapshot(),
+            audio_wav=audio_wav,
+            speech_error=speech_error,
         )
 
 
@@ -401,22 +418,11 @@ class DesktopService:
         """Transcribe locally, run the normal chat turn, and optionally synthesize speech."""
         transcription = await self.transcribe_voice(wav_data)
         turn = await self.send_message(transcription, on_token)
-
-        audio_wav: bytes | None = None
-        speech_error: str | None = None
-        if self.settings.get("voice", {}).get("speak_replies", False):
-            service = self._get_voice_service()
-            try:
-                audio_wav = await service.synthesize(turn.response)
-            except Exception as error:
-                # TTS failure must not discard a completed text response.
-                speech_error = str(error)
-
         return DesktopVoiceTurnResult(
             transcription=transcription,
             turn=turn,
-            audio_wav=audio_wav,
-            speech_error=speech_error,
+            audio_wav=turn.audio_wav,
+            speech_error=turn.speech_error,
         )
 
     def settings_snapshot(self) -> DesktopSettingsSnapshot:
