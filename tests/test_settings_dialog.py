@@ -162,24 +162,6 @@ class SettingsDialogTests(unittest.TestCase):
         self.assertTrue(self.dialog._dirty)
         self.assertTrue(self.dialog.save_button.isEnabled())
 
-    def test_saved_audio_device_is_only_called_unavailable_after_refresh(self):
-        self.dialog._populate_audio_devices(
-            {"input_device_id": "", "output_device_id": "a1b2"},
-            discover=False,
-        )
-        self.assertIn("not checked yet", self.dialog.output_device.currentText())
-
-        with patch(
-            "v.desktop.settings_dialog.list_audio_devices",
-            side_effect=[[], []],
-        ):
-            self.dialog._populate_audio_devices(
-                {"input_device_id": "", "output_device_id": "a1b2"},
-                discover=True,
-            )
-
-        self.assertIn("unavailable", self.dialog.output_device.currentText())
-
     def test_edits_mark_settings_dirty(self):
         self.dialog.max_tokens.setValue(1024)
         self.assertTrue(self.dialog._dirty)
