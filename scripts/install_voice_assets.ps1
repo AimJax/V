@@ -94,10 +94,17 @@ if (-not $SkipWhisperBuild) {
     Assert-Command "git"
     Assert-Command "cmake"
 
-    $vswhereCandidates = @(
-        "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\vswhere.exe",
-        "$env:ProgramFiles\Microsoft Visual Studio\Installer\vswhere.exe"
-    )
+    # Environment variable names containing parentheses must use the .NET
+    # accessor or PowerShell's braced variable syntax.
+    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+    $programFiles = [Environment]::GetEnvironmentVariable("ProgramFiles")
+    $vswhereCandidates = @()
+    if ($programFilesX86) {
+        $vswhereCandidates += Join-Path $programFilesX86 "Microsoft Visual Studio\Installer\vswhere.exe"
+    }
+    if ($programFiles) {
+        $vswhereCandidates += Join-Path $programFiles "Microsoft Visual Studio\Installer\vswhere.exe"
+    }
     $vswhere = $vswhereCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
     if (-not $vswhere) {
         throw "Visual Studio 2022 C++ Build Tools were not found. Install the Desktop development with C++ workload, then retry."
