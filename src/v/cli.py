@@ -66,6 +66,11 @@ def main() -> int:
         help="Check the local AI runtime connection.",
     )
 
+    subparsers.add_parser(
+        "desktop",
+        help="Open V's Windows desktop application.",
+    )
+
     memory_parser = subparsers.add_parser(
         "memory",
         help="Export or restore long-term memories.",
@@ -97,6 +102,19 @@ def main() -> int:
 
         if args.command == "doctor":
             return run_diagnostics()
+
+        if args.command == "desktop":
+            try:
+                from v.desktop.app import main as run_desktop
+            except ImportError as error:
+                print(
+                    "Desktop dependencies are not installed. "
+                    'Run: python -m pip install -e ".[desktop]"',
+                    file=sys.stderr,
+                )
+                print(f"Import detail: {error}", file=sys.stderr)
+                return 1
+            return run_desktop()
 
         if args.command == "memory":
             if args.memory_action == "export":
