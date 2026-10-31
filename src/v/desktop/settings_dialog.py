@@ -216,7 +216,6 @@ class SettingsDialog(QDialog):
         self.whisper_server_path = QLineEdit()
         self.whisper_model_path = QLineEdit()
         self.silero_vad_model_path = QLineEdit()
-        self.kokoro_python_path = QLineEdit()
         self.kokoro_model_path = QLineEdit()
         self.kokoro_voices_path = QLineEdit()
         self._add_path_picker(
@@ -236,12 +235,6 @@ class SettingsDialog(QDialog):
             "Silero VAD model",
             self.silero_vad_model_path,
             "VAD models (*.bin)",
-        )
-        self._add_path_picker(
-            voice_form,
-            "V Python interpreter",
-            self.kokoro_python_path,
-            "Python interpreter (python.exe)",
         )
         self._add_path_picker(
             voice_form,
@@ -293,6 +286,12 @@ class SettingsDialog(QDialog):
         self.kokoro_voice = QLineEdit()
         self.kokoro_voice.setPlaceholderText("e.g. af_heart")
         self.tts_speed = QDoubleSpinBox()
+        self.voice_enabled = QCheckBox(
+            "Enable local voice interaction (push-to-talk)"
+        )
+        self.speak_replies = QCheckBox(
+            "Speak V's replies using the selected Kokoro voice"
+        )
         self.tts_speed.setRange(0.5, 1.5)
         self.tts_speed.setDecimals(2)
         self.tts_speed.setSingleStep(0.05)
@@ -300,13 +299,15 @@ class SettingsDialog(QDialog):
         voice_form.addRow("Wake phrase (future stage)", self.wake_phrase)
         voice_form.addRow("Kokoro voice ID", self.kokoro_voice)
         voice_form.addRow("Speech rate", self.tts_speed)
+        voice_form.addRow(self.voice_enabled)
+        voice_form.addRow(self.speak_replies)
         voice_layout.addLayout(voice_form)
 
         voice_note = QLabel(
             "Audio format: 16 kHz mono. Whisper.cpp uses the Silero VAD model before transcription. "
             "Kokoro ONNX supports V's Python 3.13 environment; install the optional voice extra separately. "
             "The selected voice ID is provisional until local voice audition is implemented. "
-            "Wake-word listening and microphone capture are not active yet."
+            "Voice is disabled by default. When enabled, microphone capture starts only while you hold the Push to Talk button. Wake-word listening is not active yet."
         )
         voice_note.setObjectName("muted")
         voice_note.setWordWrap(True)
@@ -462,7 +463,6 @@ class SettingsDialog(QDialog):
             self.whisper_server_path,
             self.whisper_model_path,
             self.silero_vad_model_path,
-            self.kokoro_python_path,
             self.kokoro_model_path,
             self.kokoro_voices_path,
             self.vad_threshold,
@@ -472,6 +472,8 @@ class SettingsDialog(QDialog):
             self.wake_phrase,
             self.kokoro_voice,
             self.tts_speed,
+            self.voice_enabled,
+            self.speak_replies,
         )
         for widget in widgets:
             if isinstance(widget, QComboBox):
@@ -544,9 +546,6 @@ class SettingsDialog(QDialog):
         self.silero_vad_model_path.setText(
             str(voice.get("silero_vad_model_path", ""))
         )
-        self.kokoro_python_path.setText(
-            str(voice.get("kokoro_python_path", ""))
-        )
         self.kokoro_model_path.setText(
             str(voice.get("kokoro_model_path", ""))
         )
@@ -575,6 +574,8 @@ class SettingsDialog(QDialog):
         self.wake_phrase.setText(str(voice.get("wake_phrase", "Hey V")))
         self.kokoro_voice.setText(str(voice.get("kokoro_voice", "af_heart")))
         self.tts_speed.setValue(float(voice.get("tts_speed", 1.0)))
+        self.voice_enabled.setChecked(bool(voice.get("enabled", False)))
+        self.speak_replies.setChecked(bool(voice.get("speak_replies", False)))
 
         self._loading = False
         self._dirty = False
@@ -649,11 +650,12 @@ class SettingsDialog(QDialog):
             "voice_vad_min_speech_duration_ms": self.vad_min_speech.value(),
             "voice_vad_silence_duration_ms": self.vad_silence.value(),
             "voice_max_utterance_seconds": self.max_utterance.value(),
-            "voice_kokoro_python_path": self.kokoro_python_path.text().strip(),
             "voice_kokoro_model_path": self.kokoro_model_path.text().strip(),
             "voice_kokoro_voices_path": self.kokoro_voices_path.text().strip(),
             "voice_kokoro_voice": self.kokoro_voice.text().strip(),
             "voice_tts_speed": self.tts_speed.value(),
+            "voice_enabled": self.voice_enabled.isChecked(),
+            "voice_speak_replies": self.speak_replies.isChecked(),
         }
 
     def _save(self) -> None:
