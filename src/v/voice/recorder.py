@@ -164,7 +164,7 @@ class PushToTalkRecorder(QObject):
         if len(self._raw) + len(chunk) > maximum:
             remaining = max(0, maximum - len(self._raw))
             self._raw.extend(chunk[:remaining])
-            self.stop()
+            self.stop(_read_remaining=False)
             return
 
         self._raw.extend(chunk)
@@ -183,11 +183,12 @@ class PushToTalkRecorder(QObject):
         self._cleanup()
         self.recording_failed.emit(message)
 
-    def stop(self) -> None:
+    def stop(self, *, _read_remaining: bool = True) -> None:
         if not self._active:
             return
 
-        self._read_available()
+        if _read_remaining:
+            self._read_available()
         if not self._active:
             return
 
