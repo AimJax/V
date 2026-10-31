@@ -377,10 +377,14 @@ class DesktopWindow(QMainWindow):
                 while item.layout().count():
                     child = item.layout().takeAt(0)
                     if child.widget() is not None:
-                        child.widget().deleteLater()
+                        widget = child.widget()
+                        widget.setParent(None)
+                        widget.deleteLater()
                 item.layout().deleteLater()
             elif item.widget() is not None:
-                item.widget().deleteLater()
+                widget = item.widget()
+                widget.setParent(None)
+                widget.deleteLater()
 
         self._assistant_bubble = None
         self._assistant_text = ""
