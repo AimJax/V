@@ -159,7 +159,6 @@ class DesktopRuntimeThread(QThread):
             if command == "memory_import":
                 try:
                     message = service.import_memories(str(payload))
-                    self.memory_backup_completed.emit(message)
                     query, memory_type, provenance = self._memory_filters
                     memories = service.list_memories(
                         query=query,
@@ -167,6 +166,7 @@ class DesktopRuntimeThread(QThread):
                         provenance=provenance,
                     )
                     self.memory_list_ready.emit(memories)
+                    self.memory_backup_completed.emit(message)
                 except Exception as error:
                     self.memory_operation_failed.emit(str(error))
                 continue
