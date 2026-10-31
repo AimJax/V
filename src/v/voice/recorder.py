@@ -194,13 +194,11 @@ class PushToTalkRecorder(QObject):
         sample_rate = self._sample_rate
         channels = self._channels
         sample_format = _sample_format_name(self._sample_format)
+        bytes_per_sample = _sample_width(self._sample_format)
         self._cleanup()
 
         try:
             minimum_samples = max(1, round(sample_rate * self.minimum_speech_ms / 1000))
-            bytes_per_sample = _sample_width(
-                self._sample_format
-            )
             if len(raw) < minimum_samples * channels * bytes_per_sample:
                 raise ValueError("No speech detected; the recording was too short.")
 
