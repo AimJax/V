@@ -6,11 +6,13 @@ from support import temporary_directory
 
 from v.chat import (
     _build_messages,
+    _correct_memory,
     load_personality,
     trim_history,
 )
 from v.core.config import load_settings
 from v.conversations.store import ConversationStore
+from v.memory.store import MemoryStore
 from v.providers.base import ChatMessage
 
 
@@ -65,6 +67,46 @@ class ChatTests(unittest.TestCase):
         self.assertEqual(messages[0].role, "system")
         self.assertIn("V personality", messages[0].content)
         self.assertIn("Relevant user preference.", messages[0].content)
+
+
+    def test_memory_correction_command_updates_content(self):
+        with temporary_directory() as temp:
+            store = MemoryStore(Path(temp) / "memory.sqlite3")
+            memory = store.create_memory(
+                content="The user likes jazz.",
+                memory_type="preference",
+                source_conversation_id="conversation-1",
+                source_message_id=12,
+            )
+
+            _correct_memory(
+                store,
+                f'/memory correct {memory.id} content "The user prefers shoegaze."',
+            )
+
+            corrected = store.get_memory(memory.id)
+
+        self.assertEqual(corrected.content, "The user prefers shoegaze.")
+        self.assertEqual(corrected.source_conversation_id, "conversation-1")
+        self.assertEqual(corrected.source_message_id, 12)
+        self.assertEqual(corrected.created_at, memory.created_at)
+
+    def test_memory_correction_can_clear_optional_evidence(self):
+        with temporary_directory() as temp:
+            store = MemoryStore(Path(temp) / "memory.sqlite3")
+            memory = store.create_memory(
+                content="A preference.",
+                evidence="Original source text.",
+            )
+
+            _correct_memory(
+                store,
+                f"/memory correct {memory.id} evidence --clear",
+            )
+
+            corrected = store.get_memory(memory.id)
+
+        self.assertIsNone(corrected.evidence)
 
     def test_no_memory_context_preserves_personality(self):
         with temporary_directory() as temp:
