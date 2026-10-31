@@ -43,6 +43,8 @@ def valid_changes():
         "voice_vad_silence_duration_ms": 700,
         "voice_max_utterance_seconds": 30,
         "voice_kokoro_python_path": ".venv/Scripts/python.exe",
+        "voice_kokoro_model_path": "models/kokoro/kokoro-v1.0.onnx",
+        "voice_kokoro_voices_path": "models/kokoro/voices-v1.0.bin",
         "voice_kokoro_voice": "af_heart",
         "voice_tts_speed": 1.0,
     }
