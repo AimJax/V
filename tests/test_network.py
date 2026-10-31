@@ -75,7 +75,7 @@ class LocalEndpointValidationTests(unittest.TestCase):
                 "https://api.search.example.com/v1/search?q=test",
                 feature="web_search",
             ),
-            "https://api.search.example/v1/search?q=test",
+            "https://api.search.example.com/v1/search?q=test",
         )
 
         with self.assertRaises(NetworkPolicyError):
