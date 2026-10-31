@@ -18,6 +18,12 @@ The first desktop interface is a native Qt Widgets application built with the of
 - Memory JSON export and merge-only import are available from the manager, with plaintext and overwrite warnings.
 - Memory database operations are routed through the runtime thread rather than the Qt GUI thread.
 - The desktop service does not start cloud inference, telemetry, or external error reporting.
+- The Voice settings tab configures local Whisper.cpp, Silero VAD, and Kokoro ONNX assets.
+- Voice mode is disabled by default. With the asset files installed and voice explicitly enabled, the chat composer exposes a Hold to talk control. The microphone is opened only while the user holds that control; captured audio is kept in memory and converted to 16 kHz mono WAV before local transcription.
+- Whisper.cpp runs as a separate local process bound to 127.0.0.1. Silero VAD is applied by Whisper.cpp before transcription. The server is started lazily on the first push-to-talk utterance and stopped when V closes.
+- Kokoro ONNX loads lazily and synthesizes PCM WAV in memory. The optional Speak replies setting applies to typed and voice chat responses; a TTS failure does not discard the text response.
+- Audio device discovery is user-triggered from Settings > Voice > Refresh devices. Opening Settings does not open or record from the microphone.
+- Wake phrase detection (including continuous “Hey V” listening), barge-in while V speaks, voice audition, and webcam/vision are not implemented in this milestone.
 - The CLI remains available independently of the optional desktop dependency.
 
 ## Install and launch
@@ -35,8 +41,32 @@ LM Studio must be running with the configured model loaded before V starts. The 
 
 The optional dependency is constrained to `PySide6>=6.11,<6.13`. Qt 6.12 is the final Qt release line supporting Windows 10; Windows 10 22H2 is within the documented Windows 10 1809-or-later support range. This upper bound prevents a future Qt 6.13 upgrade from silently dropping the target OS.
 
+## Optional voice setup
+
+The voice runtime is optional and does not affect text-only use. Voice assets are stored under ignored project folders.
+
+1. Install the optional Kokoro ONNX dependency into V's Python 3.13 environment:
+
+   ```powershell
+   & "G:/V/.venv/Scripts/python.exe" -m pip install -e ".[voice]"
+   ```
+
+2. Ensure Git, CMake, and Visual Studio 2022 Build Tools with the Desktop development with C++ workload are installed.
+3. Run the pinned local asset installer from PowerShell:
+
+   ```powershell
+   Set-Location G:\V
+   .\scripts\install_voice_assets.ps1
+   ```
+
+   The script clones whisper.cpp v1.9.5, builds the CPU-only whisper-server, and downloads the multilingual Whisper base model, Silero VAD v6.2.0, and Kokoro ONNX model/voices files. It prints SHA-256 values for downloaded assets. It does not start the server or activate the microphone.
+
+4. Open Settings > Voice, press **Refresh devices**, and confirm the microphone and output device. Enable **Enable local voice interaction (push-to-talk)**. Enable **Speak V's replies** only when the Kokoro ONNX model and voices file are present. Save settings and restart V.
+
+The first voice implementation supports explicit push-to-talk only. It sends audio through local Whisper.cpp/VAD, then the existing Gemma chat and memory pipeline. Optional replies are spoken with Kokoro ONNX and played from memory without writing audio to disk. Whisper currently runs CPU-only; GPU acceleration is a later optimization.
+
 ## Current scope
 
-This is the first graphical milestone, not the complete planned application. It currently provides persistent local chat, streaming responses, recent conversation switching, local model status, and background memory extraction/retrieval.
+The desktop application currently provides persistent local chat, streaming responses, recent conversation switching, local model status, memory management, editable settings, and optional explicit push-to-talk with local STT/TTS.
 
-Voice controls, wake-word configuration, webcam/vision, a dedicated memory manager, editable settings screens, tray/background controls, packaging, and installer work remain future stages.
+The wake phrase “Hey V”, always-on wake-word listening, barge-in while V speaks, voice audition, webcam/vision, tray/background controls, packaging, and installer work remain future stages.
