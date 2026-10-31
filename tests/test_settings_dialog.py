@@ -61,11 +61,11 @@ class SettingsDialogTests(unittest.TestCase):
                 "vad_min_speech_duration_ms": 250,
                 "vad_silence_duration_ms": 700,
                 "max_utterance_seconds": 30,
-                "kokoro_python_path": ".venv/Scripts/python.exe",
                 "kokoro_model_path": "models/kokoro/kokoro-v1.0.onnx",
                 "kokoro_voices_path": "models/kokoro/voices-v1.0.bin",
                 "kokoro_voice": "af_heart",
                 "tts_speed": 1.0,
+                "speak_replies": False,
             },
         )
 
