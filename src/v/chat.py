@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import shlex
 
 from pathlib import Path
 
@@ -112,6 +113,72 @@ def _print_sessions(store: ConversationStore) -> None:
         print(f"  {index:>2}. {session.title} [{updated}]")
 
     print("\nUse /resume N to open a conversation.\n")
+
+
+def _correct_memory(memory_store: MemoryStore, user_input: str) -> None:
+    """Apply one explicit, user-requested correction to a saved memory."""
+    try:
+        parts = shlex.split(user_input)
+    except ValueError as error:
+        print(f"Invalid correction syntax: {error}\n")
+        return
+
+    if len(parts) < 5:
+        print(
+            "Usage: /memory correct ID FIELD VALUE\n"
+            "Fields: content, subject, type, key, confidence, importance, evidence\n"
+            "Use --clear to clear an optional key or evidence field.\n"
+        )
+        return
+
+    memory_id, field = parts[2], parts[3].casefold()
+    value = " ".join(parts[4:])
+    field_map = {
+        "content": "content",
+        "subject": "subject",
+        "type": "memory_type",
+        "key": "memory_key",
+        "confidence": "confidence",
+        "importance": "importance",
+        "evidence": "evidence",
+    }
+
+    if field not in field_map:
+        print("Unsupported field. Use /memory correct to see supported fields.\n")
+        return
+
+    target_field = field_map[field]
+
+    try:
+        if value == "--clear":
+            if target_field not in {"memory_key", "evidence"}:
+                raise ValueError("--clear is only valid for key and evidence.")
+
+            parsed_value = None
+        elif target_field == "confidence":
+            parsed_value = float(value)
+        elif target_field == "importance":
+            parsed_value = int(value)
+        elif target_field == "memory_type":
+            parsed_value = value.casefold()
+        else:
+            parsed_value = value
+
+        memory = memory_store.update_memory(
+            memory_id,
+            **{target_field: parsed_value},
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        print(f"Memory correction failed: {error}\n")
+        return
+
+    print("\nMemory corrected:")
+    print(f"  ID: {memory.id}")
+    print(f"  Type: {memory.memory_type}")
+    print(f"  Subject: {memory.subject}")
+    print(f"  Content: {memory.content}")
+    print(f"  Importance: {memory.importance}/5")
+    print(f"  Confidence: {memory.confidence:.2f}\n")
 
 
 def _print_memories(
@@ -348,6 +415,7 @@ async def run_chat() -> int:
                 print("  /memory               - List saved memories")
                 print("  /memory search TEXT   - Search saved memories")
                 print("  /memory status        - Show memory counts")
+                print("  /memory correct ID FIELD VALUE - Correct a saved memory")
                 print("  /memory delete ID     - Permanently delete a memory")
                 print("  /memory retry         - Retry failed extraction jobs")
                 print("  /exit                 - Exit V\n")
@@ -442,6 +510,10 @@ async def run_chat() -> int:
                         print("Memory permanently deleted.\n")
                     else:
                         print("Memory ID not found.\n")
+                    continue
+
+                if subcommand == "correct":
+                    _correct_memory(memory_store, user_input)
                     continue
 
                 if subcommand == "retry":
