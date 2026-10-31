@@ -39,6 +39,7 @@ class DesktopSnapshot:
     semantic_memory_enabled: bool
     voice_enabled: bool = False
     speak_replies: bool = False
+    voice_settings: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,6 +249,7 @@ class DesktopService:
             semantic_memory_enabled=self.retriever is not None,
             voice_enabled=bool(self.settings.get("voice", {}).get("enabled", False)),
             speak_replies=bool(self.settings.get("voice", {}).get("speak_replies", False)),
+            voice_settings=dict(self.settings.get("voice", {})),
         )
 
     def new_conversation(self) -> DesktopSnapshot:
