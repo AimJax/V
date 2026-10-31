@@ -30,6 +30,23 @@ SETTING_FIELDS = {
     "semantic_threshold",
     "retrieval_limit",
     "retrieval_max_characters",
+    "voice_enabled",
+    "voice_wake_phrase",
+    "voice_input_device_id",
+    "voice_output_device_id",
+    "voice_sample_rate",
+    "voice_stt_language",
+    "voice_stt_threads",
+    "voice_whisper_server_path",
+    "voice_whisper_model_path",
+    "voice_silero_vad_model_path",
+    "voice_vad_threshold",
+    "voice_vad_min_speech_duration_ms",
+    "voice_vad_silence_duration_ms",
+    "voice_max_utterance_seconds",
+    "voice_kokoro_python_path",
+    "voice_kokoro_voice",
+    "voice_tts_speed",
 }
 
 
@@ -68,6 +85,33 @@ def _require_float(
             f"{name} must be between {minimum} and {maximum}."
         )
     return number
+
+
+def _require_string(
+    value: Any,
+    name: str,
+    *,
+    allow_empty: bool = False,
+    maximum: int = 512,
+) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{name} must be text.")
+    normalized = value.strip()
+    if not allow_empty and not normalized:
+        raise ValueError(f"{name} cannot be empty.")
+    if len(normalized) > maximum:
+        raise ValueError(f"{name} exceeds {maximum} characters.")
+    return normalized
+
+
+def _require_project_path(value: Any, name: str) -> str:
+    normalized = _require_string(value, name)
+    candidate = Path(normalized).expanduser()
+    root = project_root().resolve()
+    resolved = candidate.resolve() if candidate.is_absolute() else (root / candidate).resolve()
+    if not resolved.is_relative_to(root):
+        raise ValueError(f"{name} must remain inside the V project directory.")
+    return normalized
 
 
 def validate_desktop_settings(
@@ -148,6 +192,75 @@ def validate_desktop_settings(
                 "Choose different models for chat and semantic embeddings."
             )
 
+    normalized["voice_enabled"] = _require_bool(
+        normalized["voice_enabled"], "Voice enabled"
+    )
+    normalized["voice_wake_phrase"] = _require_string(
+        normalized["voice_wake_phrase"], "Wake phrase", maximum=80
+    )
+    for field, name in (
+        ("voice_input_device_id", "Microphone device ID"),
+        ("voice_output_device_id", "Speaker device ID"),
+    ):
+        device_id = _require_string(
+            normalized[field], name, allow_empty=True, maximum=256
+        )
+        if device_id and (
+            len(device_id) % 2
+            or any(character not in "0123456789abcdefABCDEF" for character in device_id)
+        ):
+            raise ValueError(f"{name} must be an audio device ID in hexadecimal form.")
+        normalized[field] = device_id.casefold()
+
+    normalized["voice_sample_rate"] = _require_int(
+        normalized["voice_sample_rate"], "Voice sample rate", 16000, 16000
+    )
+    normalized["voice_stt_language"] = _require_string(
+        normalized["voice_stt_language"], "Speech recognition language", maximum=12
+    ).casefold()
+    if normalized["voice_stt_language"] not in {"auto", "en", "id"}:
+        raise ValueError("Speech recognition language must be auto, en, or id.")
+
+    normalized["voice_stt_threads"] = _require_int(
+        normalized["voice_stt_threads"], "Speech recognition threads", 1, 8
+    )
+
+    for field, name in (
+        ("voice_whisper_server_path", "Whisper server path"),
+        ("voice_whisper_model_path", "Whisper model path"),
+        ("voice_silero_vad_model_path", "Silero VAD model path"),
+        ("voice_kokoro_python_path", "Kokoro Python interpreter path"),
+    ):
+        normalized[field] = _require_project_path(normalized[field], name)
+
+    normalized["voice_vad_threshold"] = _require_float(
+        normalized["voice_vad_threshold"], "VAD threshold", 0.1, 0.95
+    )
+    normalized["voice_vad_min_speech_duration_ms"] = _require_int(
+        normalized["voice_vad_min_speech_duration_ms"],
+        "VAD minimum speech duration",
+        50,
+        2000,
+    )
+    normalized["voice_vad_silence_duration_ms"] = _require_int(
+        normalized["voice_vad_silence_duration_ms"],
+        "VAD silence duration",
+        100,
+        3000,
+    )
+    normalized["voice_max_utterance_seconds"] = _require_int(
+        normalized["voice_max_utterance_seconds"],
+        "Maximum voice utterance",
+        5,
+        120,
+    )
+    normalized["voice_kokoro_voice"] = _require_string(
+        normalized["voice_kokoro_voice"], "Kokoro voice ID", maximum=48
+    )
+    normalized["voice_tts_speed"] = _require_float(
+        normalized["voice_tts_speed"], "TTS speed", 0.5, 1.5
+    )
+
     return normalized
 
 
@@ -226,6 +339,26 @@ def save_local_desktop_settings(
     privacy_values = {
         "offline_mode": normalized["offline_mode"],
     }
+    voice_values = {
+        "enabled": normalized["voice_enabled"],
+        "wake_phrase": normalized["voice_wake_phrase"],
+        "input_device_id": normalized["voice_input_device_id"],
+        "output_device_id": normalized["voice_output_device_id"],
+        "sample_rate": normalized["voice_sample_rate"],
+        "stt_language": normalized["voice_stt_language"],
+        "stt_threads": normalized["voice_stt_threads"],
+        "whisper_server_path": normalized["voice_whisper_server_path"],
+        "whisper_model_path": normalized["voice_whisper_model_path"],
+        "silero_vad_model_path": normalized["voice_silero_vad_model_path"],
+        "vad_threshold": normalized["voice_vad_threshold"],
+        "vad_min_speech_duration_ms": normalized["voice_vad_min_speech_duration_ms"],
+        "vad_silence_duration_ms": normalized["voice_vad_silence_duration_ms"],
+        "max_utterance_seconds": normalized["voice_max_utterance_seconds"],
+        "kokoro_python_path": normalized["voice_kokoro_python_path"],
+        "kokoro_voice": normalized["voice_kokoro_voice"],
+        "tts_speed": normalized["voice_tts_speed"],
+    }
+
     memory_values = {
         "enabled": normalized["memory_enabled"],
         "automatic_extraction": normalized["automatic_extraction"],
@@ -243,6 +376,7 @@ def save_local_desktop_settings(
         ("llm", llm_values),
         ("privacy", privacy_values),
         ("memory", memory_values),
+        ("voice", voice_values),
     ):
         section = document.get(section_name)
         if section is None:
