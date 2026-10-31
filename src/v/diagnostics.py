@@ -6,7 +6,7 @@ import httpx
 
 from v import __version__
 from v.core.config import load_settings
-from v.core.network import validate_local_http_url
+from v.core.network import NetworkPolicy
 
 
 def main() -> int:
@@ -14,7 +14,10 @@ def main() -> int:
     llm = settings["llm"]
 
     try:
-        base_url = validate_local_http_url(llm.get("base_url", ""))
+        network_policy = NetworkPolicy.from_settings(settings)
+        base_url = network_policy.authorize_local_endpoint(
+            llm.get("base_url", "")
+        )
     except (TypeError, ValueError) as error:
         print(f"V {__version__}")
         print("LM Studio API: REFUSED")
@@ -26,6 +29,7 @@ def main() -> int:
     print(f"V {__version__}")
     print("Project: configured")
     print(f"Provider: {llm['provider']}")
+    print(f"Network policy: {network_policy.mode_label}")
     print(f"Endpoint: {endpoint}")
     print("Checking local inference server...")
 
