@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from v.chat import _configured_data_path, load_personality
 from v.core.config import load_settings, project_root
@@ -68,6 +68,7 @@ class DesktopSettingsSnapshot:
     retrieval_max_characters: int
     personality: str
     personality_path: str
+    voice: dict[str, Any] = field(default_factory=dict)
 
 
 class DesktopService:
@@ -406,6 +407,7 @@ class DesktopService:
             ),
             personality=self.personality,
             personality_path=str(personality_path),
+            voice=dict(self.settings.get("voice", {})),
         )
 
     def save_desktop_settings(
