@@ -18,6 +18,11 @@ class DesktopRuntimeThread(QThread):
     turn_completed = Signal(object)
     operation_failed = Signal(str)
     session_changed = Signal(object)
+    memory_list_ready = Signal(object)
+    memory_updated = Signal(object)
+    memory_deleted = Signal(str)
+    memory_backup_completed = Signal(str)
+    memory_operation_failed = Signal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -25,6 +30,7 @@ class DesktopRuntimeThread(QThread):
         self._commands: asyncio.Queue | None = None
         self._active_task: asyncio.Task | None = None
         self._shutdown_requested = False
+        self._memory_filters = ("", "", "")
 
     def run(self) -> None:
         loop = asyncio.new_event_loop()
@@ -106,6 +112,65 @@ class DesktopRuntimeThread(QThread):
                     self.operation_failed.emit(str(error))
                 continue
 
+            if command == "memory_list":
+                try:
+                    query, memory_type, provenance = payload
+                    memories = service.list_memories(
+                        query=query,
+                        memory_type=memory_type,
+                        provenance=provenance,
+                    )
+                    self.memory_list_ready.emit(memories)
+                except Exception as error:
+                    self.memory_operation_failed.emit(str(error))
+                continue
+
+            if command == "memory_update":
+                try:
+                    memory_id, changes = payload
+                    memory = service.update_memory(memory_id, changes)
+                    self.memory_updated.emit(memory)
+                except Exception as error:
+                    self.memory_operation_failed.emit(str(error))
+                continue
+
+            if command == "memory_delete":
+                try:
+                    deleted = service.delete_memory(str(payload))
+                    if not deleted:
+                        raise KeyError(f"Memory not found: {payload}")
+                    self.memory_deleted.emit(str(payload))
+                except Exception as error:
+                    self.memory_operation_failed.emit(str(error))
+                continue
+
+            if command == "memory_export":
+                try:
+                    destination, overwrite = payload
+                    message = service.export_memories(
+                        destination,
+                        overwrite=overwrite,
+                    )
+                    self.memory_backup_completed.emit(message)
+                except Exception as error:
+                    self.memory_operation_failed.emit(str(error))
+                continue
+
+            if command == "memory_import":
+                try:
+                    message = service.import_memories(str(payload))
+                    self.memory_backup_completed.emit(message)
+                    query, memory_type, provenance = self._memory_filters
+                    memories = service.list_memories(
+                        query=query,
+                        memory_type=memory_type,
+                        provenance=provenance,
+                    )
+                    self.memory_list_ready.emit(memories)
+                except Exception as error:
+                    self.memory_operation_failed.emit(str(error))
+                continue
+
         await service.close()
 
     def _post(self, command: str, payload: object = None) -> None:
@@ -127,6 +192,27 @@ class DesktopRuntimeThread(QThread):
 
     def select_conversation(self, conversation_id: str) -> None:
         self._post("select", conversation_id)
+
+    def list_memories(
+        self,
+        query: str = "",
+        memory_type: str = "",
+        provenance: str = "",
+    ) -> None:
+        self._memory_filters = (query, memory_type, provenance)
+        self._post("memory_list", self._memory_filters)
+
+    def update_memory(self, memory_id: str, changes: dict) -> None:
+        self._post("memory_update", (memory_id, changes))
+
+    def delete_memory(self, memory_id: str) -> None:
+        self._post("memory_delete", memory_id)
+
+    def export_memories(self, destination: str, *, overwrite: bool = False) -> None:
+        self._post("memory_export", (destination, overwrite))
+
+    def import_memories(self, source: str) -> None:
+        self._post("memory_import", source)
 
     def request_shutdown(self) -> None:
         """Cancel active generation and close services without blocking Qt."""
