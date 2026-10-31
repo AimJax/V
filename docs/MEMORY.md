@@ -46,19 +46,19 @@ Correction fields: `content`, `subject`, `type`, `key`, `confidence`, `importanc
 Export all memories:
 
 ```powershell
-v memory export "G:/V/backups/memories.json"
+& "G:/V/.venv/Scripts/python.exe" -m v memory export "G:/V/backups/memories.json"
 ```
 
 Replace an existing export only when explicitly requested:
 
 ```powershell
-v memory export "G:/V/backups/memories.json" --overwrite
+& "G:/V/.venv/Scripts/python.exe" -m v memory export "G:/V/backups/memories.json" --overwrite
 ```
 
 Restore from a backup:
 
 ```powershell
-v memory import "G:/V/backups/memories.json"
+& "G:/V/.venv/Scripts/python.exe" -m v memory import "G:/V/backups/memories.json"
 ```
 
 Restore uses merge semantics. Identical existing memory IDs are skipped. A conflicting ID or unique memory key aborts the entire import; existing records are never overwritten or deleted. The import retains memory IDs, provenance, source references, evidence, and timestamps. It does not restore conversation history, extraction jobs, or embedding vectors. Missing or stale semantic vectors are rebuilt locally when retrieval next needs them.
