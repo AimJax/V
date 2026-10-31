@@ -197,6 +197,11 @@ def validate_desktop_settings(
     normalized["voice_enabled"] = _require_bool(
         normalized["voice_enabled"], "Voice enabled"
     )
+    normalized["voice_speak_replies"] = _require_bool(
+        normalized["voice_speak_replies"], "Speak replies"
+    )
+    if normalized["voice_speak_replies"] and not normalized["voice_enabled"]:
+        raise ValueError("Enable voice interaction before enabling spoken replies.")
     normalized["voice_wake_phrase"] = _require_string(
         normalized["voice_wake_phrase"], "Wake phrase", maximum=80
     )
@@ -263,6 +268,30 @@ def validate_desktop_settings(
     normalized["voice_tts_speed"] = _require_float(
         normalized["voice_tts_speed"], "TTS speed", 0.5, 1.5
     )
+
+    if normalized["voice_enabled"]:
+        required_voice_assets = [
+            ("voice_whisper_server_path", "Whisper server executable"),
+            ("voice_whisper_model_path", "Whisper model"),
+            ("voice_silero_vad_model_path", "Silero VAD model"),
+        ]
+        if normalized["voice_speak_replies"]:
+            required_voice_assets.extend([
+                ("voice_kokoro_model_path", "Kokoro ONNX model"),
+                ("voice_kokoro_voices_path", "Kokoro voice file"),
+            ])
+        root = project_root().resolve()
+        for field, label in required_voice_assets:
+            candidate = Path(normalized[field]).expanduser()
+            candidate = (
+                candidate.resolve()
+                if candidate.is_absolute()
+                else (root / candidate).resolve()
+            )
+            if not candidate.is_file():
+                raise FileNotFoundError(
+                    f"{label} is not installed at the configured path: {candidate}"
+                )
 
     return normalized
 
