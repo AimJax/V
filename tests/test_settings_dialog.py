@@ -92,6 +92,23 @@ class SettingsDialogTests(unittest.TestCase):
             "models/kokoro/voices-v1.0.bin",
         )
 
+    def test_voice_activation_and_speech_output_are_explicit_opt_ins(self):
+        self.assertFalse(self.dialog.voice_enabled.isChecked())
+        self.assertFalse(self.dialog.speak_replies.isChecked())
+        self.assertFalse(self.dialog.speak_replies.isEnabled())
+
+        self.dialog.voice_enabled.setChecked(True)
+        self.assertTrue(self.dialog.speak_replies.isEnabled())
+        self.dialog.speak_replies.setChecked(True)
+
+        values = self.dialog._settings_values()
+        self.assertTrue(values["voice_enabled"])
+        self.assertTrue(values["voice_speak_replies"])
+
+        self.dialog.voice_enabled.setChecked(False)
+        self.assertFalse(self.dialog.speak_replies.isChecked())
+        self.assertFalse(self.dialog.speak_replies.isEnabled())
+
     def test_edits_mark_settings_dirty(self):
         self.dialog.max_tokens.setValue(1024)
         self.assertTrue(self.dialog._dirty)
