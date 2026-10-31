@@ -104,6 +104,12 @@ class DesktopWindowTests(unittest.TestCase):
             Qt.TextElideMode.ElideRight,
         )
 
+    def test_settings_button_is_enabled_only_after_runtime_ready(self):
+        self.assertFalse(self.window.settings_button.isEnabled())
+        self.window._apply_snapshot(self._snapshot())
+        self.application.processEvents()
+        self.assertTrue(self.window.settings_button.isEnabled())
+
     def test_message_content_is_rendered_as_plain_text(self):
         bubble = MessageBubble("V", "<b>not markup</b>")
         self.assertEqual(
