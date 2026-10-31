@@ -23,6 +23,8 @@ class DesktopRuntimeThread(QThread):
     memory_deleted = Signal(str)
     memory_backup_completed = Signal(str)
     memory_operation_failed = Signal(str)
+    settings_ready = Signal(object)
+    settings_saved = Signal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -112,6 +114,25 @@ class DesktopRuntimeThread(QThread):
                     self.operation_failed.emit(str(error))
                 continue
 
+            if command == "settings_get":
+                try:
+                    self.settings_ready.emit(service.settings_snapshot())
+                except Exception as error:
+                    self.memory_operation_failed.emit(str(error))
+                continue
+
+            if command == "settings_save":
+                try:
+                    changes, personality = payload
+                    message = service.save_desktop_settings(
+                        changes,
+                        personality,
+                    )
+                    self.settings_saved.emit(message)
+                except Exception as error:
+                    self.memory_operation_failed.emit(str(error))
+                continue
+
             if command == "memory_list":
                 try:
                     query, memory_type, provenance = payload
@@ -192,6 +213,12 @@ class DesktopRuntimeThread(QThread):
 
     def select_conversation(self, conversation_id: str) -> None:
         self._post("select", conversation_id)
+
+    def get_settings(self) -> None:
+        self._post("settings_get")
+
+    def save_settings(self, changes: dict, personality: str) -> None:
+        self._post("settings_save", (changes, personality))
 
     def list_memories(
         self,
