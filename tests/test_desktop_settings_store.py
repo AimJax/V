@@ -28,6 +28,23 @@ def valid_changes():
         "semantic_threshold": 0.62,
         "retrieval_limit": 6,
         "retrieval_max_characters": 2600,
+        "voice_enabled": False,
+        "voice_wake_phrase": "Hey V",
+        "voice_input_device_id": "",
+        "voice_output_device_id": "",
+        "voice_sample_rate": 16000,
+        "voice_stt_language": "auto",
+        "voice_stt_threads": 4,
+        "voice_whisper_server_path": "apps/whisper.cpp/build/bin/Release/whisper-server.exe",
+        "voice_whisper_model_path": "models/whisper/ggml-base.bin",
+        "voice_silero_vad_model_path": "models/whisper/ggml-silero-v6.2.0.bin",
+        "voice_vad_threshold": 0.50,
+        "voice_vad_min_speech_duration_ms": 250,
+        "voice_vad_silence_duration_ms": 700,
+        "voice_max_utterance_seconds": 30,
+        "voice_kokoro_python_path": ".venv/Scripts/python.exe",
+        "voice_kokoro_voice": "af_heart",
+        "voice_tts_speed": 1.0,
     }
 
 
