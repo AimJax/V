@@ -260,6 +260,10 @@ class DesktopWindow(QMainWindow):
         recent_label.setStyleSheet("font-size: 8pt; font-weight: 650;")
 
         self.conversation_list = QListWidget()
+        self.conversation_list.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.conversation_list.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.conversation_list.currentItemChanged.connect(
             self._on_conversation_selected
         )
@@ -412,6 +416,7 @@ class DesktopWindow(QMainWindow):
 
         for conversation in snapshot.conversations:
             item = QListWidgetItem(conversation.title)
+            item.setToolTip(conversation.title)
             item.setData(Qt.ItemDataRole.UserRole, conversation.id)
             self.conversation_list.addItem(item)
             if conversation.id == snapshot.conversation.id:
@@ -503,6 +508,7 @@ class DesktopWindow(QMainWindow):
         selected_item = None
         for conversation in snapshot.conversations:
             item = QListWidgetItem(conversation.title)
+            item.setToolTip(conversation.title)
             item.setData(Qt.ItemDataRole.UserRole, conversation.id)
             self.conversation_list.addItem(item)
             if conversation.id == snapshot.conversation.id:
