@@ -47,6 +47,7 @@ class DesktopWindowTests(unittest.TestCase):
         self.assertFalse(self.window.new_chat_button.isEnabled())
 
         self.window._apply_snapshot(self._snapshot())
+        self.application.processEvents()
 
         self.assertTrue(self.window.send_button.isEnabled())
         self.assertTrue(self.window.new_chat_button.isEnabled())
@@ -54,6 +55,7 @@ class DesktopWindowTests(unittest.TestCase):
     def test_snapshot_restores_session_and_chat_history(self):
         snapshot = self._snapshot()
         self.window._apply_snapshot(snapshot)
+        self.application.processEvents()
 
         self.assertEqual(
             self.window.conversation_title.text(),
@@ -81,6 +83,7 @@ class DesktopWindowTests(unittest.TestCase):
     def test_new_snapshot_replaces_visible_history(self):
         first = self._snapshot()
         self.window._apply_snapshot(first)
+        self.application.processEvents()
 
         other = Conversation(
             id="b" * 32,
@@ -97,6 +100,7 @@ class DesktopWindowTests(unittest.TestCase):
             semantic_memory_enabled=False,
         )
         self.window._apply_snapshot(second)
+        self.application.processEvents()
 
         labels = [
             label.text()
