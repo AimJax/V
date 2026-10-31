@@ -190,7 +190,7 @@ if (-not $SkipModelDownloads) {
     if ($LASTEXITCODE -ne 0) {
         throw "Silero VAD model download failed with exit code $LASTEXITCODE."
     }
-    Assert-DownloadedFile (Join-Path $ModelDirectory "ggml-silero-v6.2.0.bin") 800000 "Silero VAD model" "2AA269B785EEB53A82983A20501DD7F7C1D9C48E33AB63A41391AC6C9F7FB6987"
+    Assert-DownloadedFile (Join-Path $ModelDirectory "ggml-silero-v6.2.0.bin") 800000 "Silero VAD model" "2AA269B785EEB53A82983A20501DDF7C1D9C48E33AB63A41391AC6C9F7FB6987"
 
     Download-File "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.onnx" (Join-Path $KokoroDirectory "kokoro-v1.0.onnx") 100000000
     Download-File "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin" (Join-Path $KokoroDirectory "voices-v1.0.bin") 1000000
