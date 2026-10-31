@@ -46,6 +46,27 @@ class SettingsDialogTests(unittest.TestCase):
             retrieval_max_characters=2400,
             personality="You are V. Be direct and honest.",
             personality_path="G:/V/config/personality.md",
+            voice={
+                "enabled": False,
+                "wake_phrase": "Hey V",
+                "input_device_id": "",
+                "output_device_id": "",
+                "sample_rate": 16000,
+                "stt_language": "auto",
+                "stt_threads": 4,
+                "whisper_server_path": "apps/whisper.cpp/build/bin/Release/whisper-server.exe",
+                "whisper_model_path": "models/whisper/ggml-base.bin",
+                "silero_vad_model_path": "models/whisper/ggml-silero-v6.2.0.bin",
+                "vad_threshold": 0.5,
+                "vad_min_speech_duration_ms": 250,
+                "vad_silence_duration_ms": 700,
+                "max_utterance_seconds": 30,
+                "kokoro_python_path": ".venv/Scripts/python.exe",
+                "kokoro_model_path": "models/kokoro/kokoro-v1.0.onnx",
+                "kokoro_voices_path": "models/kokoro/voices-v1.0.bin",
+                "kokoro_voice": "af_heart",
+                "tts_speed": 1.0,
+            },
         )
 
     def test_snapshot_populates_settings_and_loaded_models(self):
@@ -62,6 +83,14 @@ class SettingsDialogTests(unittest.TestCase):
         )
         self.assertFalse(self.dialog._dirty)
         self.assertFalse(self.dialog.save_button.isEnabled())
+        self.assertEqual(
+            self.dialog.kokoro_model_path.text(),
+            "models/kokoro/kokoro-v1.0.onnx",
+        )
+        self.assertEqual(
+            self.dialog.kokoro_voices_path.text(),
+            "models/kokoro/voices-v1.0.bin",
+        )
 
     def test_edits_mark_settings_dirty(self):
         self.dialog.max_tokens.setValue(1024)
