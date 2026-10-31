@@ -72,6 +72,38 @@ class DesktopWindowTests(unittest.TestCase):
         self.assertIn("Keep this conversation local.", labels)
         self.assertIn("The model runs locally.", labels)
 
+    def test_sidebar_elides_long_titles_without_horizontal_scrollbar(self):
+        title = "How should you explain technical subjects to me?"
+        conversation = Conversation(
+            id="c" * 32,
+            title=title,
+            created_at="2026-10-31T10:00:00+00:00",
+            updated_at="2026-10-31T10:01:00+00:00",
+        )
+        snapshot = DesktopSnapshot(
+            conversation=conversation,
+            conversations=[conversation],
+            messages=[],
+            model="gemma-4-e4b-it",
+            network_mode="OFFLINE",
+            semantic_memory_enabled=True,
+        )
+
+        self.window._apply_snapshot(snapshot)
+        self.application.processEvents()
+
+        item = self.window.conversation_list.item(0)
+        self.assertEqual(item.text(), title)
+        self.assertEqual(item.toolTip(), title)
+        self.assertEqual(
+            self.window.conversation_list.horizontalScrollBarPolicy(),
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
+        )
+        self.assertEqual(
+            self.window.conversation_list.textElideMode(),
+            Qt.TextElideMode.ElideRight,
+        )
+
     def test_message_content_is_rendered_as_plain_text(self):
         bubble = MessageBubble("V", "<b>not markup</b>")
         self.assertEqual(
