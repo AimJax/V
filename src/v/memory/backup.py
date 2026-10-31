@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sqlite3
 import tempfile
 
 from contextlib import closing
@@ -278,14 +279,13 @@ def import_backup(
                         [record[field] for field in MEMORY_FIELDS],
                     )
                     restored += 1
-    except Exception as error:
-        # The connection context rolls back the complete batch on any error.
-        if isinstance(error, ValueError):
-            raise
+    except sqlite3.IntegrityError as error:
         if "UNIQUE constraint failed: memories.memory_key" in str(error):
             raise ValueError(
                 "Memory-key conflict; no data was imported."
             ) from error
-        raise
+        raise ValueError(
+            "Database constraint conflict; no data was imported."
+        ) from error
 
     return restored, skipped
