@@ -111,7 +111,7 @@ class SettingsDialogTests(unittest.TestCase):
         self.assertFalse(self.dialog.speak_replies.isEnabled())
 
     def test_settings_pages_are_scrollable_and_footer_remains_available(self):
-        self.assertTrue(self.dialog.setSizeGripEnabled())
+        self.assertTrue(self.dialog.isSizeGripEnabled())
         self.assertLessEqual(self.dialog.minimumWidth(), 560)
         self.assertLessEqual(self.dialog.minimumHeight(), 420)
 
