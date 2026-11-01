@@ -485,6 +485,11 @@ class MemoryReviewService:
         if unexpected:
             raise ValueError(f"Unsupported candidate edits: {sorted(unexpected)}")
         payload.update(changes)
+        if (
+            not isinstance(payload.get("memory_key"), str)
+            or not payload["memory_key"].strip()
+        ):
+            raise ValueError("Approved backfill memories require a non-empty memory key.")
 
         try:
             memory = self.memory_store.create_memory(
@@ -500,6 +505,8 @@ class MemoryReviewService:
                 evidence=payload["evidence"],
             )
         except ValueError as error:
+            if "already exists with key" not in str(error):
+                raise
             existing = self.memory_store.get_memory_by_key(payload["memory_key"])
             if existing is not None:
                 same_source = (
