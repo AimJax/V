@@ -438,6 +438,7 @@ class MemoryExtractor:
                     importance=candidate["importance"],
                     source_conversation_id=candidate["source_conversation_id"],
                     source_message_id=candidate["source_message_id"],
+                    source_created_at=candidate["source_created_at"],
                     evidence=candidate["evidence"],
                 )
                 created += 1
