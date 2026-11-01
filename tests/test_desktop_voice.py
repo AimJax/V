@@ -175,6 +175,30 @@ class DesktopVoiceTurnTests(unittest.IsolatedAsyncioTestCase):
             on_error,
         )
 
+    async def test_speech_synthesis_receives_cleaned_markdown(self):
+        class StreamingVoice:
+            def __init__(self):
+                self.texts = []
+
+            async def synthesize_stream(self, text):
+                self.texts.append(text)
+                yield b"RIFFaudio"
+
+        service = DesktopService()
+        voice = StreamingVoice()
+        audio_chunks = []
+
+        await service._synthesize_speech_segment(
+            voice,
+            service._speech_generation,
+            "**Hello**. Use `git pull`.",
+            audio_chunks.append,
+            None,
+        )
+
+        self.assertEqual(voice.texts, ["Hello. Use git pull."])
+        self.assertEqual(audio_chunks, [b"RIFFaudio"])
+
 
 if __name__ == "__main__":
     unittest.main()
