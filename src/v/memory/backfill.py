@@ -605,6 +605,7 @@ class MemoryReviewService:
                 importance=int(payload["importance"]),
                 source_conversation_id=payload["source_conversation_id"],
                 source_message_id=int(payload["source_message_id"]),
+                source_created_at=payload.get("source_created_at"),
                 evidence=payload["evidence"],
             )
         except ValueError as error:
