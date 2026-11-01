@@ -28,6 +28,7 @@ class MemoryBackfillDialogTests(unittest.TestCase):
         payload = {
             "source_message_id": 17,
             "source_conversation_id": "conversation-1",
+            "source_created_at": "2026-10-31T10:00:00+00:00",
             "memory_type": "episodic",
             "subject": "Current work context",
             "content": "I currently work in construction.",
@@ -79,6 +80,10 @@ class MemoryBackfillDialogTests(unittest.TestCase):
 
         self.assertEqual(self.dialog.candidate_table.rowCount(), 1)
         self.assertIn("17", self.dialog.candidate_id_label.text())
+        self.assertIn(
+            "2026-10-31T10:00:00+00:00",
+            self.dialog.candidate_id_label.text(),
+        )
         self.assertIn(
             "The user currently works in construction.",
             self.dialog.suggested_summary.text(),
