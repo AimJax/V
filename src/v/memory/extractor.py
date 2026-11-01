@@ -227,30 +227,23 @@ class MemoryExtractor:
         self.queue = queue
         self.min_confidence = min_confidence
 
-    async def process_pending(self, limit: int = 5) -> ExtractionReport:
-        jobs = self.queue.list_pending(limit=limit)
+    async def extract_candidates(
+        self,
+        messages: list,
+    ) -> tuple[list[dict], int]:
+        """Extract and strictly validate proposals without writing memories.
 
-        if not jobs:
-            return ExtractionReport()
-
-        source_messages = {}
-
-        for job in jobs:
-            message_id = job["source_message_id"]
-            message = self.conversation_store.get_message_record(message_id)
-
-            if (
-                message is None
-                or message.role != "user"
-                or message.conversation_id != job["conversation_id"]
-            ):
-                self.queue.complete(message_id)
-                continue
-
-            source_messages[message_id] = message
-
+        This shared path is used by both automatic extraction and historical
+        backfill. Backfill proposals are stored for human review; normal
+        extraction continues to save only validated verbatim evidence.
+        """
+        source_messages = {
+            message.id: message
+            for message in messages
+            if message.role == "user" and message.content.strip()
+        }
         if not source_messages:
-            return ExtractionReport(jobs_completed=len(jobs))
+            return [], 0
 
         source_payload = [
             {
@@ -259,42 +252,23 @@ class MemoryExtractor:
             }
             for message_id, message in source_messages.items()
         ]
-
-        try:
-            result = await self.provider.chat(
-                [
-                    ChatMessage(
-                        role="system",
-                        content=EXTRACTION_SYSTEM_PROMPT,
-                    ),
-                    ChatMessage(
-                        role="user",
-                        content=json.dumps(
-                            source_payload,
-                            ensure_ascii=False,
-                        ),
-                    ),
-                ],
-                temperature=0.1,
-                max_tokens=1200,
-            )
-
-            candidates = _parse_response(result.content)
-
-        except Exception as error:
-            for message_id in source_messages:
-                self.queue.fail(message_id, str(error))
-
-            return ExtractionReport(
-                jobs_failed=len(source_messages),
-            )
-
-        created = 0
+        result = await self.provider.chat(
+            [
+                ChatMessage(role="system", content=EXTRACTION_SYSTEM_PROMPT),
+                ChatMessage(
+                    role="user",
+                    content=json.dumps(source_payload, ensure_ascii=False),
+                ),
+            ],
+            temperature=0.1,
+            max_tokens=1200,
+        )
+        raw_candidates = _parse_response(result.content)
+        validated: list[dict] = []
         skipped = 0
 
-        for candidate in candidates:
+        for candidate in raw_candidates:
             message_id = candidate.get("source_message_id")
-
             if (
                 isinstance(message_id, bool)
                 or not isinstance(message_id, int)
@@ -303,11 +277,10 @@ class MemoryExtractor:
                 skipped += 1
                 continue
 
-            source = source_messages[message_id].content
-
+            source_message = source_messages[message_id]
             memory_type = candidate.get("memory_type")
             subject = candidate.get("subject")
-            content = candidate.get("content")
+            model_content = candidate.get("content")
             memory_key = candidate.get("memory_key")
             provenance = candidate.get("provenance")
             evidence = candidate.get("evidence")
@@ -320,8 +293,8 @@ class MemoryExtractor:
                 or provenance != "explicit"
                 or not isinstance(subject, str)
                 or not subject.strip()
-                or not isinstance(content, str)
-                or not content.strip()
+                or not isinstance(model_content, str)
+                or not model_content.strip()
                 or not isinstance(memory_key, str)
                 or not memory_key.strip()
                 or len(memory_key) > 160
@@ -348,9 +321,8 @@ class MemoryExtractor:
                 skipped += 1
                 continue
 
-            normalized_source = _normalize_text(source)
+            normalized_source = _normalize_text(source_message.content)
             normalized_evidence = _normalize_text(evidence)
-
             if (
                 len(normalized_evidence) < 6
                 or normalized_evidence not in normalized_source
@@ -359,34 +331,82 @@ class MemoryExtractor:
                 continue
 
             if _contains_sensitive_content(
-                source,
+                source_message.content,
                 evidence,
-                content,
+                model_content,
                 subject,
             ):
                 skipped += 1
                 continue
 
+            validated.append(
+                {
+                    "source_message_id": message_id,
+                    "source_conversation_id": source_message.conversation_id,
+                    "memory_type": memory_type,
+                    "subject": subject.strip(),
+                    # Automatic extraction stores evidence verbatim. The model's
+                    # suggested summary is retained only for manual review.
+                    "content": evidence.strip(),
+                    "model_content": model_content.strip(),
+                    "memory_key": memory_key.strip(),
+                    "provenance": "explicit",
+                    "confidence": float(confidence),
+                    "importance": importance,
+                    "evidence": evidence.strip(),
+                }
+            )
+
+        return validated, skipped
+
+    async def process_pending(self, limit: int = 5) -> ExtractionReport:
+        jobs = self.queue.list_pending(limit=limit)
+        if not jobs:
+            return ExtractionReport()
+
+        source_messages = {}
+        for job in jobs:
+            message_id = job["source_message_id"]
+            message = self.conversation_store.get_message_record(message_id)
+            if (
+                message is None
+                or message.role != "user"
+                or message.conversation_id != job["conversation_id"]
+            ):
+                self.queue.complete(message_id)
+                continue
+            source_messages[message_id] = message
+
+        if not source_messages:
+            return ExtractionReport(jobs_completed=len(jobs))
+
+        try:
+            candidates, skipped = await self.extract_candidates(
+                list(source_messages.values())
+            )
+        except Exception as error:
+            for message_id in source_messages:
+                self.queue.fail(message_id, str(error))
+            return ExtractionReport(jobs_failed=len(source_messages))
+
+        created = 0
+        for candidate in candidates:
             try:
                 self.memory_store.create_memory(
-                    content=evidence.strip(),
-                    memory_type=memory_type,
-                    subject=subject,
-                    memory_key=memory_key,
+                    content=candidate["content"],
+                    memory_type=candidate["memory_type"],
+                    subject=candidate["subject"],
+                    memory_key=candidate["memory_key"],
                     provenance="explicit",
-                    confidence=float(confidence),
-                    importance=importance,
-                    source_conversation_id=(
-                        source_messages[message_id].conversation_id
-                    ),
-                    source_message_id=message_id,
-                    evidence=evidence,
+                    confidence=candidate["confidence"],
+                    importance=candidate["importance"],
+                    source_conversation_id=candidate["source_conversation_id"],
+                    source_message_id=candidate["source_message_id"],
+                    evidence=candidate["evidence"],
                 )
                 created += 1
-
             except (ValueError, TypeError):
-                # A duplicate key or invalid candidate is not allowed
-                # to overwrite an existing memory.
+                # Duplicate keys or invalid candidates never overwrite memories.
                 skipped += 1
 
         for message_id in source_messages:
