@@ -190,6 +190,8 @@ class MemoryBackfillTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.memory.count_memories(), 1)
         self.assertEqual(memory.source_message_id, message_id)
         self.assertEqual(memory.source_conversation_id, self.conversation.id)
+        source_message = self.conversations.get_message_record(message_id)
+        self.assertEqual(memory.source_created_at, source_message.created_at)
         self.assertEqual(memory.content, "The user prefers shoegaze and slowcore music.")
         self.assertEqual(memory.evidence, "I prefer shoegaze and slowcore.")
         reviewed = self.review.get_candidate(candidate["id"])
