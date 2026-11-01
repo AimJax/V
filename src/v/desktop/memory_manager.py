@@ -60,13 +60,39 @@ class MemoryManagerDialog(QDialog):
         self._operation_pending = False
 
         self.setWindowTitle("V — Memory Manager")
-        self.resize(1120, 760)
-        self.setMinimumSize(900, 620)
+        self.setWindowFlags(
+            Qt.WindowType.Dialog
+            | Qt.WindowType.WindowTitleHint
+            | Qt.WindowType.WindowSystemMenuHint
+            | Qt.WindowType.WindowCloseButtonHint
+            | Qt.WindowType.WindowMinimizeButtonHint
+            | Qt.WindowType.WindowMaximizeButtonHint
+        )
+        self.setSizeGripEnabled(True)
         self.setModal(False)
+        self._fit_to_available_screen()
 
         self._build_ui()
         self._connect_editor_signals()
         self._set_editor_enabled(False)
+
+    def _fit_to_available_screen(self) -> None:
+        """Keep the full native title bar and window controls on-screen."""
+        screen = self.screen()
+        if screen is None:
+            self.setMinimumSize(900, 620)
+            self.resize(1120, 760)
+            return
+
+        available = screen.availableGeometry()
+        width = min(1120, max(1, int(available.width() * 0.92)))
+        height = min(760, max(1, int(available.height() * 0.92)))
+        self.setMinimumSize(min(900, width), min(620, height))
+        self.resize(width, height)
+        self.move(
+            available.x() + (available.width() - width) // 2,
+            available.y() + (available.height() - height) // 2,
+        )
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
