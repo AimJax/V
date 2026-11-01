@@ -34,7 +34,7 @@ semantic_threshold = 0.60
 retrieval_limit = 5
 retrieval_max_characters = 2400
 idle_delay_seconds = 20
-max_jobs_per_idle_cycle = 3
+max_jobs_per_idle_cycle = 8
 minimum_confidence = 0.90
 
 [voice]
