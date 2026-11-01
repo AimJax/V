@@ -142,31 +142,31 @@ if ((-not $SkipWhisperBuild) -or $BuildWhisperCuda) {
     }
 
     if (-not $SkipWhisperBuild) {
-    Invoke-Native "cmake" @(
-        "-S", $WhisperSource,
-        "-B", $WhisperBuild,
-        "-DWHISPER_BUILD_SERVER=ON",
-        "-DWHISPER_BUILD_EXAMPLES=ON",
-        "-DWHISPER_BUILD_TESTS=OFF",
-        "-DGGML_CUDA=OFF"
-    ) "Configure CPU-only whisper.cpp server"
+        Invoke-Native "cmake" @(
+            "-S", $WhisperSource,
+            "-B", $WhisperBuild,
+            "-DWHISPER_BUILD_SERVER=ON",
+            "-DWHISPER_BUILD_EXAMPLES=ON",
+            "-DWHISPER_BUILD_TESTS=OFF",
+            "-DGGML_CUDA=OFF"
+        ) "Configure CPU-only whisper.cpp server"
 
-    Invoke-Native "cmake" @(
-        "--build", $WhisperBuild,
-        "--config", "Release",
-        "--target", "whisper-server",
-        "--parallel", "$BuildThreads"
-    ) "Build whisper-server"
+        Invoke-Native "cmake" @(
+            "--build", $WhisperBuild,
+            "--config", "Release",
+            "--target", "whisper-server",
+            "--parallel", "$BuildThreads"
+        ) "Build whisper-server"
 
-    $serverCandidates = @(
-        (Join-Path $WhisperBuild "bin\Release\whisper-server.exe"),
-        (Join-Path $WhisperBuild "bin\whisper-server.exe")
-    )
-    $serverPath = $serverCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-    if (-not $serverPath) {
-        throw "Build completed but whisper-server.exe was not found under $WhisperBuild."
-    }
-    Write-Host "Whisper server: $serverPath" -ForegroundColor Green
+        $serverCandidates = @(
+            (Join-Path $WhisperBuild "bin\Release\whisper-server.exe"),
+            (Join-Path $WhisperBuild "bin\whisper-server.exe")
+        )
+        $serverPath = $serverCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+        if (-not $serverPath) {
+            throw "Build completed but whisper-server.exe was not found under $WhisperBuild."
+        }
+        Write-Host "Whisper server: $serverPath" -ForegroundColor Green
     }
 }
 
