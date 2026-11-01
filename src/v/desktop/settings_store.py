@@ -275,7 +275,7 @@ def validate_desktop_settings(
         normalized["voice_kokoro_voice"], "Kokoro voice ID", maximum=48
     )
     normalized["voice_tts_speed"] = _require_float(
-        normalized["voice_tts_speed"], "TTS speed", 0.5, 1.5
+        normalized["voice_tts_speed"], "TTS speed", 0.5, 2.0
     )
 
     if normalized["voice_enabled"]:
