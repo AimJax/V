@@ -2,21 +2,27 @@
 
 from __future__ import annotations
 
+import json
+import math
+import sqlite3
 import statistics
 
 from dataclasses import dataclass
 from pathlib import Path
+from contextlib import closing
 from tempfile import TemporaryDirectory
 from typing import Protocol
 
 from v.core.config import project_root
 from v.memory.embedding_store import EmbeddingStore
+from v.memory.models import Memory
 from v.memory.hybrid_retrieval import (
     memory_document,
     rank_memory_candidates,
 )
 from v.memory.retrieval import (
     meaningful_terms,
+    build_memory_context,
     resolve_temporal_memories,
 )
 from v.memory.store import MemoryStore
@@ -479,3 +485,454 @@ async def evaluate_memory_retrieval(
                 "rejection rate. This does not change V's configuration."
             ),
         }
+
+
+PERSONAL_CASES_VERSION = 1
+DEFAULT_PERSONAL_CASES_PATH = Path("data/memory/evaluation_cases.json")
+PERSONAL_CASES_TEMPLATE = {
+    "version": PERSONAL_CASES_VERSION,
+    "instructions": [
+        "Keep this file private. It is stored under V's ignored data directory.",
+        "Write realistic questions you expect V to answer from saved memories.",
+        "For relevant_memory_ids, paste full IDs from /memory search or Memory Manager.",
+        "List every memory needed to answer a multi-memory question.",
+        "For questions that should retrieve nothing, use an empty relevant_memory_ids array.",
+        "For historical questions, label the historical snapshot IDs that answer the question.",
+        "For present-state questions, label the latest relevant snapshot, not superseded history.",
+        "Add an answerable case and a no-answer case to measure false positives.",
+    ],
+    "cases": [],
+    "examples": [
+        {
+            "query": "What preferences have I stated about programming help?",
+            "relevant_memory_ids": ["PASTE_FULL_MEMORY_ID"],
+        },
+        {
+            "query": "How has my work situation changed over time?",
+            "relevant_memory_ids": ["OLDER_MEMORY_ID", "LATEST_MEMORY_ID"],
+        },
+        {
+            "query": "What did I say about owning a submarine?",
+            "relevant_memory_ids": [],
+        },
+    ],
+}
+
+
+def _validate_thresholds(
+    thresholds: tuple[float, ...],
+    limit: int,
+) -> None:
+    if not thresholds:
+        raise ValueError("At least one semantic threshold is required.")
+    if any(
+        not math.isfinite(threshold) or not 0 <= threshold <= 1
+        for threshold in thresholds
+    ):
+        raise ValueError("All semantic thresholds must be finite values from 0 to 1.")
+    if len(set(thresholds)) != len(thresholds):
+        raise ValueError("Semantic thresholds must be unique.")
+    if limit < 1:
+        raise ValueError("Retrieval limit must be positive.")
+
+
+def resolve_personal_cases_path(
+    path: str | Path | None = None,
+) -> Path:
+    """Resolve an evaluation-label file without allowing paths outside V_HOME."""
+    root = project_root().resolve()
+    configured = DEFAULT_PERSONAL_CASES_PATH if path is None else Path(path)
+    resolved = (
+        configured.expanduser()
+        if configured.is_absolute()
+        else root / configured.expanduser()
+    ).resolve()
+    if not resolved.is_relative_to(root):
+        raise ValueError("Personal evaluation files must remain inside V_HOME.")
+    return resolved
+
+
+def create_personal_cases_template(
+    destination: str | Path | None = None,
+) -> Path:
+    """Create a private starter file without overwriting an existing file."""
+    path = resolve_personal_cases_path(destination)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    serialized = json.dumps(
+        PERSONAL_CASES_TEMPLATE,
+        ensure_ascii=False,
+        indent=2,
+    ) + "\n"
+    try:
+        with path.open("x", encoding="utf-8", newline="\n") as file:
+            file.write(serialized)
+    except FileExistsError:
+        raise FileExistsError(
+            f"Evaluation case file already exists; it was not overwritten: {path}"
+        ) from None
+    return path
+
+
+def load_personal_cases(
+    path: str | Path,
+    available_memory_ids: set[str],
+) -> list[BenchmarkQuery]:
+    """Load and validate human-labeled queries and existing memory IDs."""
+    cases_path = resolve_personal_cases_path(path)
+    try:
+        data = json.loads(cases_path.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise ValueError(f"Could not read personal evaluation file: {cases_path}") from error
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f"Personal evaluation file is not valid JSON at line {error.lineno}."
+        ) from error
+
+    if (
+        not isinstance(data, dict)
+        or type(data.get("version")) is not int
+        or data.get("version") != PERSONAL_CASES_VERSION
+    ):
+        raise ValueError(
+            f"Personal evaluation file must be an object with version "
+            f"{PERSONAL_CASES_VERSION}."
+        )
+
+    raw_cases = data.get("cases")
+    if not isinstance(raw_cases, list) or not raw_cases:
+        raise ValueError("Add at least one test case to the 'cases' array.")
+
+    result: list[BenchmarkQuery] = []
+    unknown_ids: set[str] = set()
+    for index, item in enumerate(raw_cases, start=1):
+        if not isinstance(item, dict):
+            raise ValueError(f"Evaluation case {index} must be a JSON object.")
+
+        query = item.get("query")
+        ids = item.get("relevant_memory_ids")
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError(f"Evaluation case {index} needs a non-empty query.")
+        if not isinstance(ids, list) or any(
+            not isinstance(memory_id, str) or not memory_id.strip()
+            for memory_id in ids
+        ):
+            raise ValueError(
+                f"Evaluation case {index} needs a relevant_memory_ids array "
+                "containing full memory ID strings."
+            )
+        normalized_ids = tuple(memory_id.strip() for memory_id in ids)
+        if len(set(normalized_ids)) != len(normalized_ids):
+            raise ValueError(f"Evaluation case {index} contains duplicate memory IDs.")
+        unknown_ids.update(set(normalized_ids) - available_memory_ids)
+        result.append(BenchmarkQuery(query.strip(), normalized_ids))
+
+    if unknown_ids:
+        preview = ", ".join(sorted(unknown_ids)[:5])
+        suffix = "…" if len(unknown_ids) > 5 else ""
+        raise ValueError(
+            "Some labeled memory IDs do not exist in the current memory database: "
+            f"{preview}{suffix}. Refresh your labels after deleting or changing memories."
+        )
+
+    if not any(case.relevant_record_ids for case in result):
+        raise ValueError("At least one case must label one or more relevant memories.")
+    if all(case.relevant_record_ids for case in result):
+        raise ValueError(
+            "Add at least one no-answer case with an empty relevant_memory_ids array."
+        )
+
+    return result
+
+
+def _load_cached_embeddings_read_only(
+    database_path: Path,
+    model: str,
+    memories: list[Memory],
+) -> dict[str, tuple[float, ...]]:
+    """Read valid cached vectors without creating tables or writing to SQLite."""
+    uri = f"{database_path.resolve().as_uri()}?mode=ro"
+    with closing(sqlite3.connect(uri, uri=True)) as connection:
+        connection.row_factory = sqlite3.Row
+        table = connection.execute(
+            """
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'memory_embeddings'
+            """
+        ).fetchone()
+        if table is None:
+            return {}
+
+        rows = connection.execute(
+            """
+            SELECT e.memory_id, e.dimensions, e.vector, e.content_hash,
+                   m.content, m.memory_type, m.subject
+            FROM memory_embeddings AS e
+            JOIN memories AS m ON m.id = e.memory_id
+            WHERE e.model = ?
+            """,
+            (model,),
+        ).fetchall()
+
+    memories_by_id = {memory.id: memory for memory in memories}
+    valid: dict[str, tuple[float, ...]] = {}
+    for row in rows:
+        memory = memories_by_id.get(row["memory_id"])
+        if memory is None:
+            continue
+        digest = EmbeddingStore._content_hash(
+            row["memory_type"],
+            row["subject"],
+            row["content"],
+        )
+        if digest != row["content_hash"]:
+            continue
+        valid[row["memory_id"]] = EmbeddingStore._decode_vector(
+            row["vector"],
+            row["dimensions"],
+        )
+    return valid
+
+
+async def evaluate_personal_memory_retrieval(
+    memory_store: MemoryStore,
+    embedding_provider: LocalEmbeddingProvider,
+    cases: list[BenchmarkQuery],
+    *,
+    model: str,
+    thresholds: tuple[float, ...] = DEFAULT_THRESHOLDS,
+    limit: int = DEFAULT_LIMIT,
+    batch_size: int = 32,
+    max_context_characters: int = 2400,
+) -> dict:
+    """Evaluate the real memory corpus without writing to its DB or vector cache.
+
+    Existing compatible embeddings are read through a SQLite read-only
+    connection. Missing/stale vectors are created in RAM in bounded batches.
+    The configured memory database and embedding cache are never modified.
+    """
+    if not model.strip():
+        raise ValueError("Embedding model identifier is required.")
+    _validate_thresholds(thresholds, limit)
+    if not getattr(memory_store, "read_only", False):
+        raise ValueError(
+            "Personal evaluation requires MemoryStore(read_only=True)."
+        )
+    if not cases:
+        raise ValueError("At least one personal evaluation case is required.")
+    if not any(case.relevant_record_ids for case in cases):
+        raise ValueError("At least one personal case must label relevant memories.")
+    if all(case.relevant_record_ids for case in cases):
+        raise ValueError("At least one personal case must be a no-answer query.")
+    if batch_size < 1:
+        raise ValueError("Embedding batch size must be positive.")
+    if max_context_characters < 1:
+        raise ValueError("Memory context character limit must be positive.")
+
+    memories = memory_store.list_memories(limit=10000)
+    if not memories:
+        raise ValueError("There are no saved memories to evaluate.")
+
+    available_ids = {memory.id for memory in memories}
+    for index, case in enumerate(cases, start=1):
+        if not isinstance(case.query, str) or not case.query.strip():
+            raise ValueError(f"Evaluation case {index} has an empty query.")
+        if set(case.relevant_record_ids) - available_ids:
+            raise ValueError(
+                f"Evaluation case {index} refers to memory IDs that no longer exist."
+            )
+
+    try:
+        stored_vectors = _load_cached_embeddings_read_only(
+            memory_store.database_path,
+            model,
+            memories,
+        )
+    except sqlite3.Error as error:
+        raise ValueError(
+            f"Could not read the existing embedding cache in read-only mode: {error}"
+        ) from error
+    pending = [
+        memory for memory in memories
+        if memory.id not in stored_vectors
+    ]
+    for start in range(0, len(pending), batch_size):
+        batch = pending[start:start + batch_size]
+        vectors = await embedding_provider.embed_documents(
+            [memory_document(memory) for memory in batch]
+        )
+        if len(vectors) != len(batch):
+            raise ValueError("Embedding provider returned the wrong document count.")
+        for memory, vector in zip(batch, vectors):
+            stored_vectors[memory.id] = tuple(float(value) for value in vector)
+
+    if len(stored_vectors) != len(memories):
+        raise ValueError("Could not obtain a valid vector for every saved memory.")
+
+    query_vectors = await embedding_provider.embed_queries(
+        [case.query for case in cases]
+    )
+    if len(query_vectors) != len(cases):
+        raise ValueError("Embedding provider returned the wrong query count.")
+
+    query_details_by_threshold: dict[float, list[dict]] = {}
+    threshold_results: list[dict] = []
+
+    for threshold in thresholds:
+        per_case: list[dict] = []
+        for index, (case, query_vector) in enumerate(
+            zip(cases, query_vectors),
+            start=1,
+        ):
+            terms = meaningful_terms(case.query)
+            lexical = (
+                memory_store.search_memories_any(
+                    " ".join(terms),
+                    limit=max(limit * 4, limit),
+                )
+                if terms
+                else []
+            )
+            ranked = rank_memory_candidates(
+                memories,
+                query_vector,
+                stored_vectors,
+                {memory.id for memory in lexical},
+                semantic_threshold=threshold,
+            )
+            resolved = resolve_temporal_memories(
+                ranked,
+                memories,
+                case.query,
+                limit=limit,
+            )
+            returned_ids = [memory.id for memory in resolved]
+            metrics = query_metrics(returned_ids, case.relevant_record_ids)
+            context = build_memory_context(
+                resolved,
+                max_characters=max_context_characters,
+            )
+            per_case.append({
+                "case": index,
+                "query": case.query,
+                "returned_memory_ids": returned_ids,
+                "relevant_memory_ids": list(case.relevant_record_ids),
+                "missing_relevant_memory_ids": sorted(
+                    set(case.relevant_record_ids) - set(returned_ids)
+                ),
+                **metrics,
+                "context_characters": len(context or ""),
+            })
+
+        positives = [
+            item for item, case in zip(per_case, cases)
+            if case.relevant_record_ids
+        ]
+        negatives = [
+            item for item, case in zip(per_case, cases)
+            if not case.relevant_record_ids
+        ]
+        ordered_metrics = positives + negatives
+        aggregate = _aggregate(
+            ordered_metrics,
+            positive_count=len(positives),
+            negative_count=len(negatives),
+        )
+        aggregate["mean_context_characters"] = statistics.fmean(
+            item["context_characters"] for item in per_case
+        )
+        aggregate["mean_returned_memories"] = statistics.fmean(
+            item["returned_count"] for item in per_case
+        )
+        threshold_results.append({
+            "threshold": threshold,
+            **aggregate,
+        })
+        query_details_by_threshold[threshold] = per_case
+
+    fts_details = []
+    for index, case in enumerate(cases, start=1):
+        terms = meaningful_terms(case.query)
+        lexical = (
+            memory_store.search_memories_any(
+                " ".join(terms),
+                limit=max(limit * 4, limit),
+            )
+            if terms
+            else []
+        )
+        resolved = resolve_temporal_memories(
+            lexical,
+            memories,
+            case.query,
+            limit=limit,
+        )
+        returned_ids = [memory.id for memory in resolved]
+        metrics = query_metrics(returned_ids, case.relevant_record_ids)
+        context = build_memory_context(
+            resolved,
+            max_characters=max_context_characters,
+        )
+        fts_details.append({
+            "case": index,
+            "query": case.query,
+            "returned_memory_ids": returned_ids,
+            "relevant_memory_ids": list(case.relevant_record_ids),
+            "missing_relevant_memory_ids": sorted(
+                set(case.relevant_record_ids) - set(returned_ids)
+            ),
+            **metrics,
+            "context_characters": len(context or ""),
+        })
+
+    positives = [
+        item for item, case in zip(fts_details, cases)
+        if case.relevant_record_ids
+    ]
+    negatives = [
+        item for item, case in zip(fts_details, cases)
+        if not case.relevant_record_ids
+    ]
+    fts_baseline = _aggregate(
+        positives + negatives,
+        positive_count=len(positives),
+        negative_count=len(negatives),
+    )
+    fts_baseline["mean_context_characters"] = statistics.fmean(
+        item["context_characters"] for item in fts_details
+    )
+    fts_baseline["mean_returned_memories"] = statistics.fmean(
+        item["returned_count"] for item in fts_details
+    )
+
+    best = max(
+        threshold_results,
+        key=lambda item: (
+            item["selection_score"],
+            -item["false_positive_rate"],
+            item["mrr"],
+            item["threshold"],
+        ),
+    )
+    return {
+        "model": model,
+        "memory_count": len(memories),
+        "query_count": len(cases),
+        "positive_queries": len(positives),
+        "negative_queries": len(negatives),
+        "limit": limit,
+        "max_context_characters": max_context_characters,
+        "cached_embeddings_reused": len(memories) - len(pending),
+        "embeddings_generated_in_memory": len(pending),
+        "fts_baseline": fts_baseline,
+        "thresholds": threshold_results,
+        "query_details": query_details_by_threshold,
+        "fts_query_details": fts_details,
+        "best_scoring_threshold": best["threshold"],
+        "selection_note": (
+            "Heuristic ranking only: F1 multiplied by the negative-query "
+            "rejection rate. Inspect per-query misses and false positives "
+            "before changing the production threshold."
+        ),
+        "database_modified": False,
+    }

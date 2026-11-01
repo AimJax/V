@@ -35,7 +35,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result, 0)
         restore.assert_called_once_with("G:/V/backups/memories.json")
 
-    def test_memory_evaluate_dispatches_local_benchmark(self):
+    def test_memory_evaluate_dispatches_synthetic_benchmark(self):
         with patch.object(
             sys,
             "argv",
@@ -47,7 +47,57 @@ class CliTests(unittest.TestCase):
             result = main()
 
         self.assertEqual(result, 0)
-        evaluate.assert_awaited_once_with()
+        evaluate.assert_awaited_once_with(
+            personal=False,
+            cases_path=None,
+            limit=5,
+        )
+
+    def test_memory_evaluate_dispatches_personal_labels(self):
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "v", "memory", "evaluate", "--personal",
+                "--cases", "data/memory/my_eval.json",
+                "--limit", "3",
+            ],
+        ), patch(
+            "v.cli._run_memory_evaluation",
+            new=AsyncMock(return_value=0),
+        ) as evaluate:
+            result = main()
+
+        self.assertEqual(result, 0)
+        evaluate.assert_awaited_once_with(
+            personal=True,
+            cases_path="data/memory/my_eval.json",
+            limit=3,
+        )
+
+    def test_memory_eval_init_dispatches_template_creation(self):
+        with patch.object(
+            sys,
+            "argv",
+            ["v", "memory", "eval-init"],
+        ), patch(
+            "v.cli._run_memory_evaluation_init",
+            return_value=0,
+        ) as initialize:
+            result = main()
+
+        self.assertEqual(result, 0)
+        initialize.assert_called_once_with(None)
+
+    def test_memory_evaluate_rejects_custom_cases_without_personal_mode(self):
+        with patch.object(
+            sys,
+            "argv",
+            ["v", "memory", "evaluate", "--cases", "data/memory/cases.json"],
+        ):
+            result = main()
+
+        self.assertEqual(result, 1)
 
     def test_memory_backfill_dispatches_batch_and_new_run_options(self):
         with patch.object(

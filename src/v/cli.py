@@ -15,7 +15,15 @@ from v.conversations.store import ConversationStore
 from v.diagnostics import main as run_diagnostics
 from v.memory.backup import export_backup, import_backup
 from v.memory.embedding_provider import LMStudioEmbeddingProvider
-from v.memory.evaluation import DEFAULT_THRESHOLDS, evaluate_memory_retrieval
+from v.memory.evaluation import (
+    DEFAULT_PERSONAL_CASES_PATH,
+    DEFAULT_THRESHOLDS,
+    create_personal_cases_template,
+    evaluate_memory_retrieval,
+    evaluate_personal_memory_retrieval,
+    load_personal_cases,
+    resolve_personal_cases_path,
+)
 from v.memory.backfill import (
     MemoryBackfillRunner,
     MemoryBackfillStore,
@@ -28,7 +36,7 @@ from v.providers.errors import ProviderError
 from v.providers.lm_studio import LMStudioProvider
 
 
-def _memory_store() -> MemoryStore:
+def _memory_store(*, read_only: bool = False) -> MemoryStore:
     settings = load_settings()
     root = project_root().resolve()
     configured = Path(settings["paths"]["memory_db"])
@@ -39,7 +47,7 @@ def _memory_store() -> MemoryStore:
     if not database_path.is_relative_to(root):
         raise ValueError("Configured memory database must remain inside V_HOME.")
 
-    return MemoryStore(database_path)
+    return MemoryStore(database_path, read_only=read_only)
 
 
 def _run_memory_export(destination: str, *, overwrite: bool) -> int:
@@ -62,8 +70,13 @@ def _run_memory_import(source: str) -> int:
 
 
 
-async def _run_memory_evaluation() -> int:
-    """Run a local retrieval threshold sweep on an isolated synthetic corpus."""
+async def _run_memory_evaluation(
+    *,
+    personal: bool = False,
+    cases_path: str | None = None,
+    limit: int = 5,
+) -> int:
+    """Run a synthetic or personalized local-only memory retrieval evaluation."""
     settings = load_settings()
     memory_settings = settings.get("memory", {})
     llm_settings = settings.get("llm", {})
@@ -76,6 +89,25 @@ async def _run_memory_evaluation() -> int:
     if not model:
         raise ValueError("No memory embedding model is configured.")
 
+    configured_threshold = float(
+        memory_settings.get("semantic_threshold", 0.60)
+    )
+    thresholds = tuple(sorted(set(DEFAULT_THRESHOLDS) | {configured_threshold}))
+
+    memory_store = None
+    personal_cases = None
+    selected_cases_path = None
+    if personal:
+        if cases_path is None:
+            selected_cases_path = resolve_personal_cases_path()
+        else:
+            selected_cases_path = resolve_personal_cases_path(cases_path)
+        memory_store = _memory_store(read_only=True)
+        personal_cases = load_personal_cases(
+            selected_cases_path,
+            {memory.id for memory in memory_store.list_memories(limit=10000)},
+        )
+
     policy = NetworkPolicy.from_settings(settings)
     endpoint = policy.authorize_local_endpoint(
         str(llm_settings.get("base_url", ""))
@@ -85,16 +117,23 @@ async def _run_memory_evaluation() -> int:
         model=model,
         timeout_seconds=float(llm_settings.get("request_timeout_seconds", 120)),
     )
-    configured_threshold = float(
-        memory_settings.get("semantic_threshold", 0.60)
-    )
-    thresholds = tuple(sorted(set(DEFAULT_THRESHOLDS) | {configured_threshold}))
     try:
-        report = await evaluate_memory_retrieval(
-            provider,
-            model=model,
-            thresholds=thresholds,
-        )
+        if personal:
+            report = await evaluate_personal_memory_retrieval(
+                memory_store,
+                provider,
+                personal_cases,
+                model=model,
+                thresholds=thresholds,
+                limit=limit,
+            )
+        else:
+            report = await evaluate_memory_retrieval(
+                provider,
+                model=model,
+                thresholds=thresholds,
+                limit=limit,
+            )
     except ProviderError as error:
         print(f"Memory evaluation failed: {error}", file=sys.stderr)
         return 1
@@ -102,16 +141,31 @@ async def _run_memory_evaluation() -> int:
         await provider.aclose()
 
     fts = report["fts_baseline"]
-    print("\nV memory retrieval benchmark")
-    print("============================")
+    mode = "personal memory" if personal else "synthetic"
+    print(f"\nV memory retrieval benchmark ({mode})")
+    print("=" * (34 + len(mode)))
     print(f"Embedding model: {report['model']}")
     print(f"Current configured threshold: {configured_threshold:.2f}")
-    print(
-        f"Isolated corpus: {report['corpus_size']} synthetic memories; "
-        f"{report['query_count']} queries "
-        f"({report['positive_queries']} answerable, "
-        f"{report['negative_queries']} no-answer)"
-    )
+    if personal:
+        print(f"Evaluation labels: {selected_cases_path}")
+        print(
+            f"Saved memories: {report['memory_count']}  "
+            f"Queries: {report['query_count']} "
+            f"({report['positive_queries']} answerable, "
+            f"{report['negative_queries']} no-answer)"
+        )
+        print(
+            f"Embedding cache reused: {report['cached_embeddings_reused']}  "
+            f"New vectors generated in RAM: "
+            f"{report['embeddings_generated_in_memory']}"
+        )
+    else:
+        print(
+            f"Isolated corpus: {report['corpus_size']} synthetic memories; "
+            f"{report['query_count']} queries "
+            f"({report['positive_queries']} answerable, "
+            f"{report['negative_queries']} no-answer)"
+        )
     print(
         "FTS5-only baseline: "
         f"P={fts['precision']:.3f}  R={fts['recall']:.3f}  "
@@ -129,13 +183,55 @@ async def _run_memory_evaluation() -> int:
             f"{item['false_positive_rate']:>13.3f}  "
             f"{item['selection_score']:>5.3f}"
         )
+    if personal:
+        print()
+        print("Per-question results at the top-scoring threshold:")
+        details = report["query_details"][report["best_scoring_threshold"]]
+        for item in details:
+            if item["relevant_memory_ids"]:
+                status = (
+                    "MISS"
+                    if item["missing_relevant_memory_ids"]
+                    else "HIT"
+                )
+                coverage = (
+                    f"{len(item['relevant_memory_ids']) - len(item['missing_relevant_memory_ids'])}"
+                    f"/{len(item['relevant_memory_ids'])} relevant"
+                )
+            else:
+                status = "FALSE POSITIVE" if item["false_positive"] else "REJECTED"
+                coverage = "no-answer"
+            print(
+                f"  Q{item['case']:02d} [{status}] {coverage}; "
+                f"returned={item['returned_count']}; "
+                f"context={item['context_characters']} chars"
+            )
+        best_result = next(
+            item for item in report["thresholds"]
+            if item["threshold"] == report["best_scoring_threshold"]
+        )
+        print(
+            "Average context size at selected threshold: "
+            f"{best_result['mean_context_characters']:.0f} characters"
+        )
+        print("Persistent database/cache writes: none.")
     print()
     print(
         "Top-scoring calibration candidate: "
         f"{report['best_scoring_threshold']:.2f}"
     )
     print(report["selection_note"])
-    print("No real memories were read or modified. Configuration was not changed.")
+    print("No threshold was applied to configuration.")
+    return 0
+
+
+def _run_memory_evaluation_init(destination: str | None = None) -> int:
+    """Create a local-only JSON file for human-labeled retrieval cases."""
+    path = create_personal_cases_template(destination)
+    print(f"Created personal memory evaluation template: {path}")
+    print("Edit its 'cases' array and add full memory IDs to each relevant_memory_ids list.")
+    print("Find IDs with /memory search in chat or in the Memory Manager.")
+    print("The file is under V's ignored data directory and is not committed to Git.")
     return 0
 
 
@@ -365,9 +461,36 @@ def main() -> int:
     )
     import_parser.add_argument("source", help="Source JSON backup file path.")
 
-    memory_actions.add_parser(
+    evaluate_parser = memory_actions.add_parser(
         "evaluate",
         help="Benchmark local memory retrieval without touching saved memories.",
+    )
+    evaluate_parser.add_argument(
+        "--personal",
+        action="store_true",
+        help="Evaluate manually labeled questions against your real memory corpus.",
+    )
+    evaluate_parser.add_argument(
+        "--cases",
+        help=(
+            "Personal evaluation JSON file (default: "
+            f"{DEFAULT_PERSONAL_CASES_PATH.as_posix()}; must be inside V_HOME)."
+        ),
+    )
+    evaluate_parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Maximum retrieved memories per question (default: 5).",
+    )
+
+    eval_init_parser = memory_actions.add_parser(
+        "eval-init",
+        help="Create a private JSON template for personalized retrieval evaluation.",
+    )
+    eval_init_parser.add_argument(
+        "--destination",
+        help="Optional destination inside V_HOME.",
     )
 
     confirm_parser = memory_actions.add_parser(
@@ -457,7 +580,18 @@ def main() -> int:
 
         if args.command == "memory":
             if args.memory_action == "evaluate":
-                return asyncio.run(_run_memory_evaluation())
+                if args.cases and not args.personal:
+                    raise ValueError("--cases requires --personal.")
+                return asyncio.run(
+                    _run_memory_evaluation(
+                        personal=args.personal,
+                        cases_path=args.cases,
+                        limit=args.limit,
+                    )
+                )
+
+            if args.memory_action == "eval-init":
+                return _run_memory_evaluation_init(args.destination)
 
             if args.memory_action == "backfill":
                 if args.status:

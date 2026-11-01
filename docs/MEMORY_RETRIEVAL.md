@@ -20,7 +20,27 @@ Run a threshold sweep using the configured local embedding model:
 & ".\.venv\Scripts\python.exe" -m v memory evaluate
 ```
 
-The benchmark creates a temporary SQLite database under `tmp/memory-evaluation` and embeds a fictional corpus and its queries through the local embedding endpoint. It compares several semantic thresholds, including the currently configured value, against an FTS5-only baseline. It reports precision, recall, mean reciprocal rank, and false-positive rate on no-answer queries. The temporary database is removed after the run. The configured memory database is never read or modified, and no threshold is applied automatically. This synthetic benchmark is a calibration aid, not a substitute for a separately curated evaluation set based on real retrieval needs.
+The benchmark creates a temporary SQLite database under `tmp/memory-evaluation` and embeds a fictional corpus and its queries through the local embedding endpoint. It compares semantic thresholds against an FTS5-only baseline and reports precision, recall, MRR, and no-answer false-positive rate. The temporary database is removed after the run. The configured memory database is never read or modified, and no threshold is applied automatically. This is a calibration aid, not a personalized ground-truth set.
+
+## Personalized retrieval evaluation
+
+Create a private starter file:
+
+```powershell
+& ".\.venv\Scripts\python.exe" -m v memory eval-init
+```
+
+Edit `data/memory/evaluation_cases.json`. Add realistic questions to its `cases` array and label the full memory IDs that should answer each question. Find IDs with `/memory search TEXT` in chat or in the desktop Memory Manager. Use an empty `relevant_memory_ids` array for a question that should retrieve nothing. Include at least one answerable case and one no-answer case. For historical questions, label the dated snapshots that answer them; for current questions, label the latest relevant snapshot.
+
+Run the personalized evaluation:
+
+```powershell
+& ".\.venv\Scripts\python.exe" -m v memory evaluate --personal
+```
+
+Use `--cases data/memory/another_set.json` to select another local label file. The benchmark validates every labeled ID against the current database and reports stale IDs instead of silently ignoring them. It reports per-question hits and misses, context size, and threshold-level precision, recall, MRR, and no-answer false-positive rate.
+
+Personal mode opens the memory database and compatible embedding cache read-only. Missing or stale vectors are embedded in bounded batches through the configured loopback LM Studio endpoint and held only in RAM. No memory rows or cached vectors are written. The label file may contain sensitive questions and IDs, so keep it in V's ignored `data/` directory. Do not commit or share it.
 
 ## Integration
 - Retrieval occurs before the chat completion request.

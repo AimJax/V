@@ -1,3 +1,4 @@
+import sqlite3
 import unittest
 
 from contextlib import closing
@@ -16,6 +17,22 @@ class MemoryStoreTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp_dir.cleanup()
+
+    def test_read_only_store_does_not_initialize_or_modify_database(self):
+        original = self.store.create_memory(
+            content="A memory that must remain unchanged.",
+        )
+        modified_before = self.database_path.stat().st_mtime_ns
+
+        read_only = MemoryStore(self.database_path, read_only=True)
+        loaded = read_only.get_memory(original.id)
+
+        self.assertEqual(loaded.content, original.content)
+        self.assertEqual(self.database_path.stat().st_mtime_ns, modified_before)
+        with self.assertRaises(sqlite3.OperationalError):
+            read_only.create_memory(content="This write must be rejected.")
+        self.assertEqual(self.store.count_memories(), 1)
+        self.assertEqual(self.database_path.stat().st_mtime_ns, modified_before)
 
     def test_create_and_retrieve_explicit_memory(self):
         memory = self.store.create_memory(

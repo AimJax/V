@@ -139,16 +139,37 @@ class MemoryStore:
 
     SCHEMA_VERSION = 3
 
-    def __init__(self, database_path: Path | str) -> None:
+    def __init__(
+        self,
+        database_path: Path | str,
+        *,
+        read_only: bool = False,
+    ) -> None:
         self.database_path = Path(database_path).expanduser().resolve()
-        self.database_path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
+        self.read_only = read_only
+
+        if read_only:
+            if not self.database_path.is_file():
+                raise FileNotFoundError(
+                    f"Memory database does not exist: {self.database_path}"
+                )
+        else:
+            self.database_path.parent.mkdir(parents=True, exist_ok=True)
+            self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(
-            str(self.database_path),
-            timeout=5.0,
-        )
+        if self.read_only:
+            database_uri = f"{self.database_path.as_uri()}?mode=ro"
+            connection = sqlite3.connect(
+                database_uri,
+                uri=True,
+                timeout=5.0,
+            )
+        else:
+            connection = sqlite3.connect(
+                str(self.database_path),
+                timeout=5.0,
+            )
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA busy_timeout = 5000")
