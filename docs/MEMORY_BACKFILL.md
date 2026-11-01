@@ -10,6 +10,8 @@ Backfill is deliberately a proposal workflow. It never inserts proposed memories
 
 - Every stored user-authored message in every saved conversation.
 - Messages are read in ascending permanent message-ID order, in bounded pages.
+- Each source user message is accompanied by at most one neighboring message before and after it, capped at 1,200 characters each, to clarify references without expanding the evidence source.
+- The original source timestamp is retained in each proposal and shown in review so old circumstances remain historically dated.
 - The scan records an upper message-ID boundary when a run starts. Messages added after that boundary belong to normal ongoing extraction and are not mixed into the current historical run.
 - Assistant messages are never sent as source material.
 - The same explicit-evidence, confidence, and sensitive-information validation used by normal extraction is applied.
