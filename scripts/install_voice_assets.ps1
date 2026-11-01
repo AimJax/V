@@ -269,12 +269,12 @@ if (-not $SkipModelDownloads) {
     }
 
     Write-Host ""
-    Write-Host "== Download multilingual Whisper base model ==" -ForegroundColor Cyan
-    & $whisperDownload "base" $ModelDirectory
+    Write-Host "== Download multilingual Whisper small model ==" -ForegroundColor Cyan
+    & $whisperDownload "small" $ModelDirectory
     if ($LASTEXITCODE -ne 0) {
         throw "Whisper base model download failed with exit code $LASTEXITCODE."
     }
-    Assert-DownloadedFile (Join-Path $ModelDirectory "ggml-base.bin") 100000000 "Whisper base model"
+    Assert-DownloadedFile (Join-Path $ModelDirectory "ggml-small.bin") 400000000 "Whisper small model"
 
     Write-Host ""
     Write-Host "== Download Silero VAD v6.2.0 model ==" -ForegroundColor Cyan
