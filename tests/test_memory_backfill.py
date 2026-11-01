@@ -105,6 +105,51 @@ class MemoryBackfillTests(unittest.IsolatedAsyncioTestCase):
         recovered_view = MemoryBackfillStore(self.memory.database_path)
         self.assertEqual(recovered_view.latest_run()["status"], "paused")
 
+    async def test_one_source_message_can_propose_multiple_episodic_snapshots(self):
+        message_id = self.add_user_message(
+            "I worked at Site A last year. I now work at Site B."
+        )
+        run = self.review.create_run(
+            upper_message_id=message_id,
+            total_messages=1,
+        )
+        self.review.set_run_status(run["id"], "running")
+        proposals = [
+            {
+                "source_message_id": message_id,
+                "source_conversation_id": self.conversation.id,
+                "memory_key": "user.work_context",
+                "memory_type": "episodic",
+                "evidence": "I worked at Site A last year.",
+            },
+            {
+                "source_message_id": message_id,
+                "source_conversation_id": self.conversation.id,
+                "memory_key": "user.work_context",
+                "memory_type": "episodic",
+                "evidence": "I now work at Site B.",
+            },
+        ]
+
+        result = self.review.save_batch(
+            run["id"],
+            last_message_id=message_id,
+            processed_messages=1,
+            candidates=proposals,
+            candidates_skipped=0,
+        )
+
+        self.assertEqual(result["candidates_found"], 2)
+        pending = self.review.list_candidates(status="pending")
+        self.assertEqual(len(pending), 2)
+        self.assertEqual(
+            {item["payload"]["evidence"] for item in pending},
+            {
+                "I worked at Site A last year.",
+                "I now work at Site B.",
+            },
+        )
+
     async def test_backfill_creates_review_proposals_without_saving_memories(self):
         first_id = self.add_user_message("I currently work in construction.")
         self.conversations.add_message(
