@@ -22,6 +22,7 @@ class FakeProvider:
     def __init__(self):
         self.calls = 0
         self.cancel_on_call = None
+        self.memory_type = "episodic"
 
     async def chat(self, messages, **kwargs):
         self.calls += 1
@@ -36,7 +37,7 @@ class FakeProvider:
             candidates.append(
                 {
                     "source_message_id": message_id,
-                    "memory_type": "episodic",
+                    "memory_type": self.memory_type,
                     "subject": "User context",
                     "content": f"Remembered context from message {message_id}.",
                     "memory_key": f"backfill.message.{message_id}",
@@ -244,6 +245,7 @@ class MemoryBackfillTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reviewed["approved_memory_id"], memory.id)
 
     async def test_duplicate_key_is_never_allowed_to_overwrite_existing_memory(self):
+        self.provider.memory_type = "preference"
         self.add_user_message("I prefer shoegaze music.")
         await self.make_runner().run()
         candidate = self.review.list_candidates(status="pending")[0]
