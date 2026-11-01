@@ -1,8 +1,9 @@
+import os
 import tempfile
 import unittest
 
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from v.voice.whisper import (
     WhisperServer,
@@ -45,9 +46,17 @@ class WhisperCommandTests(unittest.TestCase):
             "0.5",
         )
 
-    def test_cuda_is_not_disabled_by_default(self):
-        command = build_whisper_server_command(self.config, port=8178)
-        self.assertNotIn("--no-gpu", command)
+    def test_cuda_runtime_bin_is_prepended_to_child_path(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            cuda_root = Path(temporary)
+            cuda_bin = cuda_root / "bin"
+            cuda_bin.mkdir()
+            with patch.dict(os.environ, {"CUDA_PATH": str(cuda_root)}):
+                from v.voice.whisper import _whisper_child_environment
+
+                environment = _whisper_child_environment()
+
+        self.assertEqual(environment["PATH"].split(os.pathsep)[0], str(cuda_bin))
 
     def test_rejects_non_loopback_host(self):
         with self.assertRaisesRegex(ValueError, "loopback"):
