@@ -105,7 +105,6 @@ class MemoryBackfillStore:
                     reviewed_at TEXT,
                     FOREIGN KEY (run_id) REFERENCES memory_backfill_runs(id)
                         ON DELETE RESTRICT,
-                    UNIQUE(run_id, source_message_id, memory_key)
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_memory_review_status
@@ -116,6 +115,58 @@ class MemoryBackfillStore:
                 """
             )
             connection.commit()
+
+            candidate_schema = connection.execute(
+                """
+                SELECT sql FROM sqlite_master
+                WHERE type = 'table' AND name = 'memory_review_candidates'
+                """
+            ).fetchone()
+            normalized_schema = (
+                "".join(candidate_schema["sql"].split())
+                if candidate_schema is not None
+                else ""
+            )
+            if "UNIQUE(run_id,source_message_id,memory_key)" in normalized_schema:
+                # Older review databases allowed only one proposal per key
+                # within a source message. Rebuild without that constraint so
+                # multiple episodic facts from one long message are retained.
+                connection.execute("PRAGMA foreign_keys = OFF")
+                try:
+                    connection.executescript(
+                        """
+                        BEGIN;
+                        CREATE TABLE memory_review_candidates_new (
+                            id TEXT PRIMARY KEY,
+                            run_id TEXT NOT NULL,
+                            source_message_id INTEGER NOT NULL,
+                            source_conversation_id TEXT NOT NULL,
+                            memory_key TEXT NOT NULL,
+                            payload_json TEXT NOT NULL,
+                            status TEXT NOT NULL DEFAULT 'pending' CHECK (
+                                status IN ('pending', 'approved', 'rejected', 'duplicate')
+                            ),
+                            review_note TEXT,
+                            approved_memory_id TEXT,
+                            created_at TEXT NOT NULL,
+                            reviewed_at TEXT,
+                            FOREIGN KEY (run_id) REFERENCES memory_backfill_runs(id)
+                                ON DELETE RESTRICT
+                        );
+                        INSERT INTO memory_review_candidates_new
+                        SELECT * FROM memory_review_candidates;
+                        DROP TABLE memory_review_candidates;
+                        ALTER TABLE memory_review_candidates_new
+                            RENAME TO memory_review_candidates;
+                        CREATE INDEX idx_memory_review_status
+                            ON memory_review_candidates(status, created_at);
+                        CREATE INDEX idx_memory_review_run
+                            ON memory_review_candidates(run_id, source_message_id);
+                        COMMIT;
+                        """
+                    )
+                finally:
+                    connection.execute("PRAGMA foreign_keys = ON")
 
     def acquire_run_lock(self) -> bool:
         """Acquire an exclusive cross-process lock for the historical scanner."""
@@ -295,8 +346,11 @@ class MemoryBackfillStore:
                 for candidate in candidates:
                     source_id = int(candidate["source_message_id"])
                     memory_key = str(candidate["memory_key"])
+                    evidence_fingerprint = hashlib.sha256(
+                        str(candidate.get("evidence", "")).encode("utf-8")
+                    ).hexdigest()
                     stable_id = hashlib.sha256(
-                        f"{run_id}:{source_id}:{memory_key}".encode("utf-8")
+                        f"{run_id}:{source_id}:{memory_key}:{evidence_fingerprint}".encode("utf-8")
                     ).hexdigest()[:32]
                     cursor = connection.execute(
                         """
