@@ -129,7 +129,7 @@ class MemoryBackfillStore:
             handle = self._lock_path.open("a+b")
             handle.seek(0, os.SEEK_END)
             if handle.tell() == 0:
-                handle.write(b"\\0")
+                handle.write(b"\0")
                 handle.flush()
             handle.seek(0)
 
