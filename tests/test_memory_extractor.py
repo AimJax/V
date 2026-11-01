@@ -122,6 +122,8 @@ class MemoryExtractorTests(unittest.IsolatedAsyncioTestCase):
         saved = self.memory.list_memories()[0]
         self.assertEqual(saved.content, "I'm TestUser")
         self.assertEqual(saved.source_message_id, self.message_id)
+        source_message = self.conversations.get_message_record(self.message_id)
+        self.assertEqual(saved.source_created_at, source_message.created_at)
 
     async def test_model_paraphrase_is_not_stored_as_fact(self):
         provider = FakeProvider(
