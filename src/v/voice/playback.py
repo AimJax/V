@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 
-from PySide6.QtCore import QObject, QBuffer, QByteArray, QIODevice, QUrl, Signal
+from PySide6.QtCore import QObject, QBuffer, QByteArray, QIODevice, QTimer, QUrl, Signal
 from PySide6.QtMultimedia import QAudioOutput, QMediaDevices, QMediaPlayer
 
 
@@ -81,21 +81,35 @@ class SpeechPlayback(QObject):
         self.player.play()
 
     def _release_buffer(self) -> None:
+        """Defer buffer destruction until Qt has processed the source change."""
         buffer, self._buffer = self._buffer, None
         if buffer is not None:
-            buffer.close()
             buffer.deleteLater()
 
     def stop(self) -> None:
-        """Stop the current segment and discard every queued segment."""
+        """Stop playback, detach its source, and discard every queued segment."""
         self.player.stop()
+        self.player.setSource(QUrl())
         self._pending.clear()
         self._release_buffer()
 
     def _on_media_status(self, status: QMediaPlayer.MediaStatus) -> None:
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
+            if self._buffer is None:
+                return
+
+            # QMediaPlayer can still retain the source device at EndOfMedia.
+            # Detach it before scheduling the QBuffer for deletion.
+            self.player.stop()
+            self.player.setSource(QUrl())
             self._release_buffer()
-            self._play_next()
+
+            if self._pending:
+                # Advance on the next Qt event-loop turn, after the old source
+                # has been detached by the multimedia backend.
+                QTimer.singleShot(0, self._play_next)
+            else:
+                self.playback_finished.emit()
         elif status == QMediaPlayer.MediaStatus.InvalidMedia:
             self.stop()
             self.playback_failed.emit("Qt Multimedia could not decode the synthesized WAV.")
