@@ -62,6 +62,12 @@ For every proposed memory:
   profile, preference, episodic, relationship, project, fact.
 - importance must be an integer from 1 to 5.
 - Use importance 3 or higher only for information genuinely worth retaining.
+- Interpret each message using its supplied original timestamp, not the date of reprocessing.
+- A statement such as "currently", "now", or "this year" describes the user's circumstances
+  at the source message timestamp. Do not present old circumstances as current today.
+- When a circumstance changes over time, preserve distinct dated episodic snapshots
+  rather than collapsing them into one timeless profile fact.
+- If a date or timeframe is not explicit in the message, do not invent one.
 - Never turn a temporary statement into a permanent profile fact.
 
 Return ONLY valid JSON. No Markdown fences or explanatory text.
@@ -248,6 +254,8 @@ class MemoryExtractor:
         source_payload = [
             {
                 "source_message_id": message_id,
+                "source_conversation_id": message.conversation_id,
+                "source_created_at": message.created_at,
                 "user_message": message.content,
             }
             for message_id, message in source_messages.items()
@@ -343,6 +351,7 @@ class MemoryExtractor:
                 {
                     "source_message_id": message_id,
                     "source_conversation_id": source_message.conversation_id,
+                    "source_created_at": source_message.created_at,
                     "memory_type": memory_type,
                     "subject": subject.strip(),
                     # Automatic extraction stores evidence verbatim. The model's
