@@ -49,6 +49,7 @@ class MemoryManagerDialog(QDialog):
     delete_requested = Signal(str)
     export_requested = Signal(str, bool)
     import_requested = Signal(str)
+    backfill_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -261,9 +262,11 @@ class MemoryManagerDialog(QDialog):
         root.addWidget(splitter, 1)
 
         actions = QHBoxLayout()
+        self.backfill_button = QPushButton("Reprocess history…")
         self.export_button = QPushButton("Export…")
         self.import_button = QPushButton("Import…")
         self.delete_button = QPushButton("Delete")
+        self.backfill_button.clicked.connect(self.backfill_requested.emit)
         self.save_button = QPushButton("Save changes")
         self.save_button.setObjectName("primary")
 
@@ -272,6 +275,7 @@ class MemoryManagerDialog(QDialog):
         self.delete_button.clicked.connect(self._delete)
         self.save_button.clicked.connect(self._save)
 
+        actions.addWidget(self.backfill_button)
         actions.addWidget(self.export_button)
         actions.addWidget(self.import_button)
         actions.addStretch(1)
@@ -632,6 +636,7 @@ class MemoryManagerDialog(QDialog):
         self.search_input.setEnabled(enabled)
         self.type_filter.setEnabled(enabled)
         self.provenance_filter.setEnabled(enabled)
+        self.backfill_button.setEnabled(enabled)
         self.export_button.setEnabled(enabled)
         self.import_button.setEnabled(enabled)
         self._set_editor_enabled(self._selected_memory_id is not None)
