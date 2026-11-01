@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import os
 import socket
 import subprocess
 import time
@@ -45,6 +46,22 @@ def _validate_loopback_host(host: str) -> str:
     if not address.is_loopback:
         raise ValueError("Whisper server may only bind to a loopback address.")
     return str(address)
+
+
+def _whisper_child_environment() -> dict[str, str]:
+    """Expose the installed CUDA runtime DLL directory to the child process."""
+    environment = os.environ.copy()
+    cuda_root = environment.get("CUDA_PATH")
+    if cuda_root:
+        cuda_bin = Path(cuda_root) / "bin"
+        if cuda_bin.is_dir():
+            existing_path = environment.get("PATH", "")
+            environment["PATH"] = (
+                str(cuda_bin)
+                if not existing_path
+                else os.pathsep.join((str(cuda_bin), existing_path))
+            )
+    return environment
 
 
 def build_whisper_server_command(
@@ -152,6 +169,7 @@ class WhisperServer:
                 stderr=subprocess.STDOUT,
                 shell=False,
                 creationflags=creation_flags,
+                env=_whisper_child_environment(),
             )
             self._client = httpx.AsyncClient(
                 base_url=str(self.base_url),
