@@ -131,6 +131,14 @@ class MemoryManagerDialogTests(unittest.TestCase):
         self.assertEqual(changes["provenance"] if "provenance" in changes else None, None)
         self.assertNotIn("source_message_id", changes)
 
+    def test_backfill_button_requests_historical_review(self):
+        emitted = []
+        self.dialog.backfill_requested.connect(lambda: emitted.append(True))
+
+        self.dialog.backfill_button.click()
+
+        self.assertEqual(emitted, [True])
+
     def test_modified_record_is_marked_unsaved(self):
         self.dialog.set_memories([self._memory()])
         self.dialog.content_input.setPlainText("Corrected content")
