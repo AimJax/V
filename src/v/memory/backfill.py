@@ -616,6 +616,7 @@ class MemoryReviewService:
                 same_source = (
                     existing.source_message_id == int(payload["source_message_id"])
                     and existing.source_conversation_id == payload["source_conversation_id"]
+                    and existing.source_created_at == payload.get("source_created_at")
                     and existing.evidence == payload["evidence"]
                 )
                 if same_source:
