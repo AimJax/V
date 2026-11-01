@@ -14,6 +14,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+try:
+    import msvcrt
+except ImportError:  # pragma: no cover - non-Windows hosts use fcntl
+    msvcrt = None
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows uses msvcrt
+    fcntl = None
+
+
+_LOCAL_LOCKS: dict[str, threading.Lock] = {}
+_LOCAL_LOCKS_GUARD = threading.Lock()
+
+
 from v.conversations.store import ConversationStore
 from v.memory.extractor import MemoryExtractor
 from v.memory.store import MemoryStore
