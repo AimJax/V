@@ -21,9 +21,9 @@ The first desktop interface is a native Qt Widgets application built with the of
 - The Voice settings tab configures local Whisper.cpp, Silero VAD, and Kokoro ONNX assets.
 - Voice mode is disabled by default. With the asset files installed and voice explicitly enabled, the chat composer exposes a Hold to talk control. The microphone is opened only while the user holds that control; captured audio is kept in memory and converted to 16 kHz mono WAV before local transcription.
 - Whisper.cpp runs as a separate local process bound to 127.0.0.1. Silero VAD is applied by Whisper.cpp before transcription. The server is started lazily on the first push-to-talk utterance and stopped when V closes.
-- Kokoro ONNX loads lazily and synthesizes PCM WAV in memory. The optional Speak replies setting applies to typed and voice chat responses; a TTS failure does not discard the text response.
+- When Speak replies is enabled, V warms Kokoro in a background worker and segments Gemma's streamed text into speakable phrases. Kokoro synthesizes audio chunks asynchronously on CPU while Gemma continues generating; the Qt player queues them in order. Speech synthesis never delays text completion, and a TTS failure does not discard the response. Starting a new turn, switching conversations, or pressing push-to-talk interrupts stale queued speech. CPU synthesis deliberately leaves the limited 8 GB GPU memory available for the chat and embedding models.
 - Audio device discovery is user-triggered from Settings > Voice > Refresh devices. Opening Settings does not open or record from the microphone.
-- Wake phrase detection (including continuous “Hey V” listening), barge-in while V speaks, voice audition, and webcam/vision are not implemented in this milestone.
+- Wake phrase detection (including continuous “Hey V” listening), automatic voice-activity barge-in, voice audition, and webcam/vision are not implemented in this milestone. Pressing push-to-talk manually interrupts current speech.
 - The CLI remains available independently of the optional desktop dependency.
 
 ## Install and launch

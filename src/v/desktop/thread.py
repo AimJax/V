@@ -20,6 +20,8 @@ class DesktopRuntimeThread(QThread):
     ready = Signal(object)
     startup_failed = Signal(str)
     token_received = Signal(str)
+    speech_audio_ready = Signal(bytes)
+    speech_failed = Signal(str)
     turn_completed = Signal(object)
     voice_turn_completed = Signal(object)
     operation_failed = Signal(str)
@@ -91,7 +93,12 @@ class DesktopRuntimeThread(QThread):
 
             if command == "send":
                 self._active_task = asyncio.create_task(
-                    service.send_message(payload, self.token_received.emit)
+                    service.send_message(
+                        payload,
+                        self.token_received.emit,
+                        self.speech_audio_ready.emit,
+                        self.speech_failed.emit,
+                    )
                 )
                 try:
                     result: DesktopTurnResult = await self._active_task
@@ -110,6 +117,8 @@ class DesktopRuntimeThread(QThread):
                     service.send_voice_message(
                         payload,
                         self.token_received.emit,
+                        self.speech_audio_ready.emit,
+                        self.speech_failed.emit,
                     )
                 )
                 try:
@@ -121,6 +130,10 @@ class DesktopRuntimeThread(QThread):
                     self.operation_failed.emit(str(error))
                 finally:
                     self._active_task = None
+                continue
+
+            if command == "speech_stop":
+                service.interrupt_speech()
                 continue
 
             if command == "new":
@@ -235,6 +248,9 @@ class DesktopRuntimeThread(QThread):
 
     def send_voice_turn(self, wav_data: bytes) -> None:
         self._post("voice_turn", wav_data)
+
+    def interrupt_speech(self) -> None:
+        self._post("speech_stop")
 
     def new_conversation(self) -> None:
         self._post("new")

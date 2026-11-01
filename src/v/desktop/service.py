@@ -25,6 +25,7 @@ from v.providers.base import ChatMessage
 from v.providers.errors import ProviderError, ProviderProtocolError
 from v.providers.lm_studio import LMStudioProvider
 from v.voice.service import LocalVoiceService
+from v.voice.streaming import SpeechTextSegmenter
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +112,10 @@ class DesktopService:
         self.retrieval_max_characters = 2400
         self.personality = ""
         self.started = False
+        self._speech_queue: asyncio.Queue | None = None
+        self._speech_worker_task: asyncio.Task[None] | None = None
+        self._speech_active_task: asyncio.Task[None] | None = None
+        self._speech_generation = 0
 
     async def start(self) -> DesktopSnapshot:
         """Connect only to the configured local model and load local state."""
@@ -233,6 +238,14 @@ class DesktopService:
             await self.memory_worker.schedule()
 
         self.started = True
+        voice_settings = self.settings.get("voice", {})
+        if voice_settings.get("enabled", False) and voice_settings.get(
+            "speak_replies", False
+        ):
+            self._speech_queue = asyncio.Queue()
+            self._speech_worker_task = asyncio.create_task(
+                self._run_speech_worker()
+            )
         return self.snapshot()
 
     def snapshot(self) -> DesktopSnapshot:
@@ -255,6 +268,7 @@ class DesktopService:
         )
 
     def new_conversation(self) -> DesktopSnapshot:
+        self.interrupt_speech()
         if self.conversation_store is None:
             raise RuntimeError("Desktop service has not started.")
 
@@ -262,6 +276,7 @@ class DesktopService:
         return self.snapshot()
 
     def select_conversation(self, conversation_id: str) -> DesktopSnapshot:
+        self.interrupt_speech()
         if self.conversation_store is None:
             raise RuntimeError("Desktop service has not started.")
 
@@ -276,6 +291,8 @@ class DesktopService:
         self,
         user_text: str,
         on_token: Callable[[str], None],
+        on_audio: Callable[[bytes], None] | None = None,
+        on_speech_error: Callable[[str], None] | None = None,
     ) -> DesktopTurnResult:
         """Stream one turn and persist it only after a complete response."""
         if (
@@ -289,6 +306,17 @@ class DesktopService:
         user_text = user_text.strip()
         if not user_text:
             raise ValueError("Message cannot be empty.")
+
+        self.interrupt_speech()
+        speech_generation = self._speech_generation
+        voice_settings = self.settings.get("voice", {})
+        speech_enabled = (
+            self._speech_queue is not None
+            and voice_settings.get("enabled", False)
+            and voice_settings.get("speak_replies", False)
+            and on_audio is not None
+        )
+        speech_segmenter = SpeechTextSegmenter() if speech_enabled else None
 
         if self.memory_worker is not None:
             await self.memory_worker.cancel()
@@ -342,10 +370,21 @@ class DesktopService:
         ):
             response_parts.append(chunk)
             on_token(chunk)
+            if speech_segmenter is not None and self._speech_queue is not None:
+                for segment in speech_segmenter.feed(chunk):
+                    self._speech_queue.put_nowait(
+                        (speech_generation, segment, on_audio, on_speech_error)
+                    )
 
         response = "".join(response_parts)
         if not response:
             raise ProviderProtocolError("LM Studio returned an empty response.")
+
+        if speech_segmenter is not None and self._speech_queue is not None:
+            for segment in speech_segmenter.flush():
+                self._speech_queue.put_nowait(
+                    (speech_generation, segment, on_audio, on_speech_error)
+                )
 
         source_message_id = self.conversation_store.add_message(
             self.conversation.id,
@@ -371,26 +410,86 @@ class DesktopService:
         if latest is not None:
             self.conversation = latest
 
-        audio_wav: bytes | None = None
-        speech_error: str | None = None
-        voice_settings = self.settings.get("voice", {})
-        if (
-            voice_settings.get("enabled", False)
-            and voice_settings.get("speak_replies", False)
-        ):
-            try:
-                audio_wav = await self._get_voice_service().synthesize(response)
-            except Exception as error:
-                # Speech output is optional; a TTS failure must not discard chat.
-                speech_error = str(error)
-
         return DesktopTurnResult(
             response=response,
             snapshot=self.snapshot(),
-            audio_wav=audio_wav,
-            speech_error=speech_error,
         )
 
+    async def _run_speech_worker(self) -> None:
+        """Warm Kokoro once, then synthesize queued segments outside chat generation."""
+        voice_service = self._get_voice_service()
+        warmup_error: str | None = None
+        try:
+            await voice_service.warm_up_tts()
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            warmup_error = str(error)
+
+        while self._speech_queue is not None:
+            item = await self._speech_queue.get()
+            if item is None:
+                return
+
+            generation, text, on_audio, on_speech_error = item
+            if generation != self._speech_generation:
+                continue
+            if warmup_error is not None:
+                if on_speech_error is not None:
+                    on_speech_error(warmup_error)
+                continue
+
+            active_task = asyncio.create_task(
+                self._synthesize_speech_segment(
+                    voice_service,
+                    generation,
+                    text,
+                    on_audio,
+                    on_speech_error,
+                )
+            )
+            self._speech_active_task = active_task
+            try:
+                await active_task
+            except asyncio.CancelledError:
+                current = asyncio.current_task()
+                if current is not None and current.cancelling():
+                    raise
+            finally:
+                if self._speech_active_task is active_task:
+                    self._speech_active_task = None
+
+    async def _synthesize_speech_segment(
+        self,
+        voice_service: LocalVoiceService,
+        generation: int,
+        text: str,
+        on_audio: Callable[[bytes], None],
+        on_speech_error: Callable[[str], None] | None,
+    ) -> None:
+        try:
+            async for wav_data in voice_service.synthesize_stream(text):
+                if generation != self._speech_generation:
+                    return
+                on_audio(wav_data)
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            if generation == self._speech_generation and on_speech_error is not None:
+                on_speech_error(str(error))
+
+    def interrupt_speech(self) -> None:
+        """Discard pending speech and cancel the segment currently being synthesized."""
+        self._speech_generation += 1
+        if self._speech_queue is not None:
+            while True:
+                try:
+                    self._speech_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+        active = self._speech_active_task
+        if active is not None and not active.done():
+            active.cancel()
 
     def _get_voice_service(self) -> LocalVoiceService:
         voice_settings = self.settings.get("voice", {})
@@ -414,10 +513,20 @@ class DesktopService:
         self,
         wav_data: bytes,
         on_token: Callable[[str], None],
+        on_audio: Callable[[bytes], None] | None = None,
+        on_speech_error: Callable[[str], None] | None = None,
     ) -> DesktopVoiceTurnResult:
-        """Transcribe locally, run the normal chat turn, and optionally synthesize speech."""
+        """Transcribe locally and run the normal streaming chat/speech pipeline."""
         transcription = await self.transcribe_voice(wav_data)
-        turn = await self.send_message(transcription, on_token)
+        if on_audio is None and on_speech_error is None:
+            turn = await self.send_message(transcription, on_token)
+        else:
+            turn = await self.send_message(
+                transcription,
+                on_token,
+                on_audio,
+                on_speech_error,
+            )
         return DesktopVoiceTurnResult(
             transcription=transcription,
             turn=turn,
@@ -598,7 +707,18 @@ class DesktopService:
         )
 
     async def close(self) -> None:
-        """Stop background extraction and close local HTTP clients."""
+        """Stop background workers and close local clients."""
+        if self._speech_worker_task is not None:
+            self.interrupt_speech()
+            if self._speech_queue is not None:
+                self._speech_queue.put_nowait(None)
+            await asyncio.gather(
+                self._speech_worker_task,
+                return_exceptions=True,
+            )
+            self._speech_worker_task = None
+            self._speech_queue = None
+
         if self.voice_service is not None:
             await self.voice_service.close()
             self.voice_service = None

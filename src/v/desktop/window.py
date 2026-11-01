@@ -239,6 +239,8 @@ class DesktopWindow(QMainWindow):
         self.runtime.ready.connect(self._on_ready)
         self.runtime.startup_failed.connect(self._on_startup_failed)
         self.runtime.token_received.connect(self._on_token)
+        self.runtime.speech_audio_ready.connect(self._enqueue_speech_audio)
+        self.runtime.speech_failed.connect(self._on_speech_failed)
         self.runtime.turn_completed.connect(self._on_turn_completed)
         self.runtime.voice_turn_completed.connect(self._on_voice_turn_completed)
         self.runtime.operation_failed.connect(self._on_operation_failed)
@@ -501,6 +503,7 @@ class DesktopWindow(QMainWindow):
             return
         conversation_id = current.data(Qt.ItemDataRole.UserRole)
         if conversation_id:
+            self._stop_speech()
             self.runtime.select_conversation(str(conversation_id))
 
     def _open_settings(self) -> None:
@@ -557,6 +560,7 @@ class DesktopWindow(QMainWindow):
 
     def _new_conversation(self) -> None:
         if self._ready and not self._busy:
+            self._stop_speech()
             self.runtime.new_conversation()
 
     def _on_session_changed(self, snapshot: DesktopSnapshot) -> None:
@@ -566,6 +570,8 @@ class DesktopWindow(QMainWindow):
         if not self._ready or self._busy:
             return
 
+        self._stop_speech()
+        self.runtime.interrupt_speech()
         text = self.message_input.toPlainText().strip()
         if not text:
             return
@@ -583,39 +589,51 @@ class DesktopWindow(QMainWindow):
         if self._assistant_bubble is not None:
             self._assistant_bubble.set_content(self._assistant_text)
 
+    def _enqueue_speech_audio(self, audio_wav: bytes) -> None:
+        if not audio_wav:
+            return
+        try:
+            from v.voice.playback import SpeechPlayback
+
+            if self._speech_player is None:
+                voice = (
+                    self._last_snapshot.voice_settings
+                    if self._last_snapshot is not None
+                    else {}
+                )
+                output_id = str(voice.get("output_device_id", "") or "")
+                self._speech_player = SpeechPlayback(
+                    device_id=output_id,
+                    parent=self,
+                )
+                self._speech_player.playback_failed.connect(
+                    self._on_speech_failed
+                )
+            self._speech_player.enqueue(audio_wav)
+            self.statusBar().showMessage("V is speaking…")
+        except Exception as error:
+            self._on_speech_failed(str(error))
+
+    def _on_speech_failed(self, message: str) -> None:
+        self.statusBar().showMessage(
+            f"Text response is available; local speech failed: {message}"
+        )
+
+    def _stop_speech(self) -> None:
+        if self._speech_player is not None:
+            self._speech_player.stop()
+
     def _play_speech_response(
         self,
         audio_wav: bytes | None,
         speech_error: str | None,
         snapshot: DesktopSnapshot,
     ) -> None:
+        # Retain compatibility with completed-turn audio results.
         if audio_wav:
-            try:
-                from v.voice.playback import SpeechPlayback
-
-                if self._speech_player is None:
-                    output_id = str(
-                        snapshot.voice_settings.get("output_device_id", "") or ""
-                    )
-                    self._speech_player = SpeechPlayback(
-                        device_id=output_id,
-                        parent=self,
-                    )
-                    self._speech_player.playback_failed.connect(
-                        lambda message: self.statusBar().showMessage(
-                            f"Text response completed; speech playback failed: {message}"
-                        )
-                    )
-                self._speech_player.play(audio_wav)
-                self.statusBar().showMessage("Playing local Kokoro speech output…")
-            except Exception as error:
-                self.statusBar().showMessage(
-                    f"Text response completed; speech playback failed: {error}"
-                )
+            self._enqueue_speech_audio(audio_wav)
         elif speech_error:
-            self.statusBar().showMessage(
-                f"Text response completed; local speech synthesis failed: {speech_error}"
-            )
+            self._on_speech_failed(speech_error)
 
     def _on_turn_completed(self, result: DesktopTurnResult) -> None:
         if self._assistant_bubble is not None:
@@ -628,6 +646,8 @@ class DesktopWindow(QMainWindow):
                 result.speech_error,
                 result.snapshot,
             )
+        elif self._speech_player is not None and self._speech_player.is_playing:
+            self.statusBar().showMessage("V is speaking…")
         else:
             self.statusBar().showMessage("Response completed.")
 
@@ -673,6 +693,8 @@ class DesktopWindow(QMainWindow):
     def _start_voice_recording(self) -> None:
         if not self._ready or self._busy:
             return
+        self._stop_speech()
+        self.runtime.interrupt_speech()
         if not self._voice_enabled or self._voice_recorder is None:
             self.statusBar().showMessage(
                 "Enable voice interaction in Settings and restart V."
@@ -737,7 +759,10 @@ class DesktopWindow(QMainWindow):
             result.turn.snapshot,
         )
         if not result.audio_wav and not result.speech_error:
-            self.statusBar().showMessage("Voice turn completed.")
+            if self._speech_player is not None and self._speech_player.is_playing:
+                self.statusBar().showMessage("V is speaking…")
+            else:
+                self.statusBar().showMessage("Voice turn completed.")
 
     def _apply_session_list(self, snapshot: DesktopSnapshot) -> None:
         self._last_snapshot = snapshot

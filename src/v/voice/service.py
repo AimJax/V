@@ -132,6 +132,30 @@ class LocalVoiceService:
             language=str(self.config.get("stt_language", "auto")),
         )
 
+    async def warm_up_tts(self) -> None:
+        """Load Kokoro and run a tiny discarded inference before the first reply."""
+        self._enabled()
+        engine = self._kokoro()
+        await asyncio.to_thread(
+            engine.synthesize_wav,
+            "Ready.",
+            voice=str(self.config.get("kokoro_voice", "af_heart")),
+            speed=float(self.config.get("tts_speed", 1.0)),
+            language="en-us",
+        )
+
+    async def synthesize_stream(self, text: str):
+        """Yield Kokoro WAV chunks without blocking the desktop event loop."""
+        self._enabled()
+        engine = self._kokoro()
+        async for wav_data in engine.synthesize_stream(
+            text,
+            voice=str(self.config.get("kokoro_voice", "af_heart")),
+            speed=float(self.config.get("tts_speed", 1.0)),
+            language="en-us",
+        ):
+            yield wav_data
+
     async def synthesize(self, text: str) -> bytes:
         self._enabled()
         engine = self._kokoro()

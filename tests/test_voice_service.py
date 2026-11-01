@@ -131,6 +131,50 @@ class LocalVoiceServiceTests(unittest.IsolatedAsyncioTestCase):
             language="en-us",
         )
 
+    async def test_synthesize_stream_forwards_audio_chunks(self):
+        fake_engine = Mock()
+
+        async def generate(*_args, **_kwargs):
+            yield b"RIFFfirst"
+            yield b"RIFFsecond"
+
+        fake_engine.synthesize_stream = generate
+        service = LocalVoiceService(
+            {"voice": self.assets},
+            root=self.root,
+        )
+        with patch("v.voice.service.KokoroSpeechEngine", return_value=fake_engine):
+            chunks = [
+                chunk
+                async for chunk in service.synthesize_stream("Hello there.")
+            ]
+
+        self.assertEqual(chunks, [b"RIFFfirst", b"RIFFsecond"])
+
+    async def test_warm_up_primes_kokoro_in_a_worker_thread(self):
+        fake_engine = Mock()
+        fake_engine.synthesize_wav.return_value = b"RIFFwarmup"
+        service = LocalVoiceService(
+            {"voice": self.assets},
+            root=self.root,
+        )
+
+        async def run_sync_in_test(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        with (
+            patch("v.voice.service.KokoroSpeechEngine", return_value=fake_engine),
+            patch("v.voice.service.asyncio.to_thread", side_effect=run_sync_in_test),
+        ):
+            await service.warm_up_tts()
+
+        fake_engine.synthesize_wav.assert_called_once_with(
+            "Ready.",
+            voice="af_heart",
+            speed=1.0,
+            language="en-us",
+        )
+
     async def test_rejects_voice_asset_path_outside_project(self):
         settings = {
             "voice": {

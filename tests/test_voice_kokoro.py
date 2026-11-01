@@ -1,3 +1,4 @@
+import asyncio
 import importlib
 import io
 import sys
@@ -70,6 +71,31 @@ class KokoroSpeechEngineTests(unittest.TestCase):
             str(self.model),
             str(self.voices),
         )
+
+    def test_synthesize_stream_yields_wav_chunks(self):
+        engine = KokoroSpeechEngine(self.model, self.voices)
+        instance = Mock()
+
+        async def create_stream(text, *, voice, speed, lang):
+            self.assertEqual(text, "Hello there.")
+            self.assertEqual(voice, "af_heart")
+            self.assertEqual(speed, 1.0)
+            self.assertEqual(lang, "en-us")
+            yield [0.0, 0.5], 24000
+            yield [-0.5, 0.0], 24000
+
+        instance.create_stream = create_stream
+        engine._engine = instance
+
+        async def collect():
+            return [
+                chunk
+                async for chunk in engine.synthesize_stream("Hello there.")
+            ]
+
+        chunks = asyncio.run(collect())
+        self.assertEqual(len(chunks), 2)
+        self.assertTrue(all(chunk.startswith(b"RIFF") for chunk in chunks))
 
     def test_missing_model_is_reported_before_import(self):
         engine = KokoroSpeechEngine(
