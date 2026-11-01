@@ -115,8 +115,8 @@ class KokoroSpeechEngine:
             raise ValueError("Speech text exceeds the 12,000-character limit.")
         if not isinstance(speed, (int, float)) or isinstance(speed, bool):
             raise ValueError("Speech speed must be numeric.")
-        if not math.isfinite(float(speed)) or not 0.5 <= float(speed) <= 1.5:
-            raise ValueError("Speech speed must be between 0.5 and 1.5.")
+        if not math.isfinite(float(speed)) or not 0.5 <= float(speed) <= 2.0:
+            raise ValueError("Speech speed must be between 0.5 and 2.0.")
 
         selected_voice = voice or self.default_voice
         if not isinstance(selected_voice, str) or not selected_voice.strip():
@@ -159,8 +159,8 @@ class KokoroSpeechEngine:
             raise ValueError("Speech text exceeds the 12,000-character limit.")
         if not isinstance(speed, (int, float)) or isinstance(speed, bool):
             raise ValueError("Speech speed must be numeric.")
-        if not math.isfinite(float(speed)) or not 0.5 <= float(speed) <= 1.5:
-            raise ValueError("Speech speed must be between 0.5 and 1.5.")
+        if not math.isfinite(float(speed)) or not 0.5 <= float(speed) <= 2.0:
+            raise ValueError("Speech speed must be between 0.5 and 2.0.")
 
         selected_voice = voice or self.default_voice
         if not isinstance(selected_voice, str) or not selected_voice.strip():
