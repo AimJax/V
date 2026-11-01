@@ -85,6 +85,28 @@ class MemoryBackupTests(unittest.TestCase):
         )
         self.assertEqual(self.target.get_memory(original.id), original)
 
+    def test_backup_round_trip_retains_multiple_episodic_snapshots_with_same_key(self):
+        older = self.source.create_memory(
+            content="The user worked at Site A.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2024-01-15T09:00:00+00:00",
+        )
+        newer = self.source.create_memory(
+            content="The user works at Site B.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2026-10-30T09:00:00+00:00",
+        )
+
+        path, exported = export_backup(self.source, self.backup_path)
+        restored, skipped = import_backup(self.target, path)
+
+        self.assertEqual(exported, 2)
+        self.assertEqual((restored, skipped), (2, 0))
+        self.assertEqual(self.target.get_memory(older.id), older)
+        self.assertEqual(self.target.get_memory(newer.id), newer)
+
     def test_export_refuses_to_overwrite_without_explicit_flag(self):
         self.source.create_memory(content="Backup test.")
         export_backup(self.source, self.backup_path)
