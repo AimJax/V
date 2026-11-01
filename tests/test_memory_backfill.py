@@ -115,6 +115,7 @@ class MemoryBackfillTests(unittest.IsolatedAsyncioTestCase):
             candidates[0]["payload"]["evidence"],
             "I currently work in construction.",
         )
+        self.assertTrue(candidates[0]["payload"]["source_created_at"])
         self.assertEqual(
             candidates[0]["payload"]["model_content"],
             f"Remembered context from message {first_id}.",
