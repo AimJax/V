@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import sqlite3
+import threading
 
 from contextlib import closing
 from datetime import datetime, timezone
@@ -27,6 +29,16 @@ class MemoryBackfillStore:
     def __init__(self, database_path: Path | str) -> None:
         self.database_path = Path(database_path).expanduser().resolve()
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock_path = self.database_path.with_name(
+            self.database_path.name + ".backfill.lock"
+        )
+        self._lock_handle = None
+        self._local_run_lock: threading.Lock | None = None
+        with _LOCAL_LOCKS_GUARD:
+            self._process_lock = _LOCAL_LOCKS.setdefault(
+                str(self._lock_path),
+                threading.Lock(),
+            )
         self._initialize()
         self.recover_interrupted_runs()
 
@@ -90,21 +102,85 @@ class MemoryBackfillStore:
             )
             connection.commit()
 
+    def acquire_run_lock(self) -> bool:
+        """Acquire an exclusive cross-process lock for the historical scanner."""
+        if self._lock_handle is not None:
+            return True
+        if not self._process_lock.acquire(blocking=False):
+            return False
+
+        handle = None
+        try:
+            handle = self._lock_path.open("a+b")
+            handle.seek(0, os.SEEK_END)
+            if handle.tell() == 0:
+                handle.write(b"\\0")
+                handle.flush()
+            handle.seek(0)
+
+            if os.name == "nt":
+                if msvcrt is None:
+                    raise RuntimeError("Windows file-lock support is unavailable.")
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            elif fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            else:
+                raise RuntimeError("No supported file-lock implementation is available.")
+        except (OSError, BlockingIOError):
+            if handle is not None:
+                handle.close()
+            self._process_lock.release()
+            return False
+        except Exception:
+            if handle is not None:
+                handle.close()
+            self._process_lock.release()
+            raise
+
+        self._lock_handle = handle
+        self._local_run_lock = self._process_lock
+        return True
+
+    def release_run_lock(self) -> None:
+        """Release the cross-process scan lock."""
+        handle = self._lock_handle
+        if handle is None:
+            return
+        try:
+            handle.seek(0)
+            if os.name == "nt":
+                if msvcrt is not None:
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            elif fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            handle.close()
+            self._lock_handle = None
+            local_lock = self._local_run_lock
+            self._local_run_lock = None
+            if local_lock is not None:
+                local_lock.release()
+
     def recover_interrupted_runs(self) -> int:
-        """Convert runs left active by a crash into resumable paused runs."""
-        with closing(self._connect()) as connection:
-            with connection:
-                cursor = connection.execute(
-                    """
-                    UPDATE memory_backfill_runs
-                    SET status = 'paused',
-                        last_error = 'Application closed before the scan finished.',
-                        updated_at = ?
-                    WHERE status IN ('queued', 'running')
-                    """,
-                    (_now(),),
-                )
-        return cursor.rowcount
+        """Pause abandoned runs only when no other process owns the scan lock."""
+        if not self.acquire_run_lock():
+            return 0
+        try:
+            with closing(self._connect()) as connection:
+                with connection:
+                    cursor = connection.execute(
+                        """
+                        UPDATE memory_backfill_runs
+                        SET status = 'paused',
+                            last_error = 'Application closed before the scan finished.',
+                            updated_at = ?
+                        WHERE status IN ('queued', 'running')
+                        """,
+                        (_now(),),
+                    )
+            return cursor.rowcount
+        finally:
+            self.release_run_lock()
 
     def create_run(self, *, upper_message_id: int, total_messages: int) -> dict:
         if upper_message_id < 0 or total_messages < 0:
@@ -370,41 +446,46 @@ class MemoryBackfillRunner:
     ) -> dict:
         if self._running:
             raise RuntimeError("A historical memory scan is already running.")
-
-        latest = self.review_store.latest_run()
-        if new_run:
-            upper = self.conversations.max_user_message_id()
-            total = self.conversations.count_user_messages(through_id=upper)
-            run = self.review_store.create_run(
-                upper_message_id=upper,
-                total_messages=total,
-            )
-        elif latest is None:
-            upper = self.conversations.max_user_message_id()
-            total = self.conversations.count_user_messages(through_id=upper)
-            run = self.review_store.create_run(
-                upper_message_id=upper,
-                total_messages=total,
-            )
-        elif latest["status"] in {"queued", "paused", "failed"}:
-            run = latest
-        elif latest["status"] == "completed":
+        if not self.review_store.acquire_run_lock():
             raise RuntimeError(
-                "Historical backfill is already complete. Use --new-run to "
-                "reprocess the full history with the current extraction rules."
+                "A historical memory scan is already active in another V process."
             )
-        else:
-            raise RuntimeError("The latest historical scan is already active.")
 
-        run_id = run["id"]
-        self.review_store.set_run_status(run_id, "running")
         self._running = True
-        if on_progress is not None:
-            active = self.review_store.get_run(run_id)
-            if active is not None:
-                on_progress(active)
-
+        run_id: str | None = None
         try:
+            latest = self.review_store.latest_run()
+            if new_run:
+                upper = self.conversations.max_user_message_id()
+                total = self.conversations.count_user_messages(through_id=upper)
+                run = self.review_store.create_run(
+                    upper_message_id=upper,
+                    total_messages=total,
+                )
+            elif latest is None:
+                upper = self.conversations.max_user_message_id()
+                total = self.conversations.count_user_messages(through_id=upper)
+                run = self.review_store.create_run(
+                    upper_message_id=upper,
+                    total_messages=total,
+                )
+            elif latest["status"] in {"queued", "paused", "failed"}:
+                run = latest
+            elif latest["status"] == "completed":
+                raise RuntimeError(
+                    "Historical backfill is already complete. Use --new-run to "
+                    "reprocess the full history with the current extraction rules."
+                )
+            else:
+                raise RuntimeError("The latest historical scan is already active.")
+
+            run_id = run["id"]
+            self.review_store.set_run_status(run_id, "running")
+            if on_progress is not None:
+                active = self.review_store.get_run(run_id)
+                if active is not None:
+                    on_progress(active)
+
             while True:
                 current = self.review_store.get_run(run_id)
                 if current is None:
@@ -429,19 +510,22 @@ class MemoryBackfillRunner:
                 if on_progress is not None:
                     on_progress(progress)
 
+            result = self.review_store.get_run(run_id)
+            if result is None:
+                raise RuntimeError("Backfill completed but its run record is missing.")
+            return result
+
         except asyncio.CancelledError:
-            self.review_store.set_run_status(run_id, "paused")
+            if run_id is not None:
+                self.review_store.set_run_status(run_id, "paused")
             raise
         except Exception as error:
-            self.review_store.set_run_status(run_id, "failed", error=str(error))
+            if run_id is not None:
+                self.review_store.set_run_status(run_id, "failed", error=str(error))
             raise
         finally:
             self._running = False
-
-        result = self.review_store.get_run(run_id)
-        if result is None:
-            raise RuntimeError("Backfill completed but its run record is missing.")
-        return result
+            self.review_store.release_run_lock()
 
     def approve_candidate(
         self,
