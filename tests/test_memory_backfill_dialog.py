@@ -103,6 +103,27 @@ class MemoryBackfillDialogTests(unittest.TestCase):
         self.assertTrue(self.dialog.approve_button.isEnabled())
         self.assertTrue(self.dialog.reject_button.isEnabled())
 
+    def test_key_conflict_shows_existing_memory_and_requires_key_change(self):
+        candidate = self.candidate()
+        candidate["payload"]["conflict"] = {
+            "existing_memory": {
+                "id": "existing-123",
+                "memory_type": "fact",
+                "content": "The user previously worked in retail.",
+                "memory_key": "user.work_context",
+                "source_created_at": "2024-03-12T09:15:00+00:00",
+            }
+        }
+        self.dialog.set_candidates([candidate])
+        self.application.processEvents()
+
+        details = self.dialog.conflict_details.text()
+        self.assertIn("EXISTING SAVED MEMORY", details)
+        self.assertIn("The user previously worked in retail.", details)
+        self.assertIn("user.work_context", details)
+        self.assertIn("different Memory key", details)
+        self.assertFalse(self.dialog.conflict_details.isHidden())
+
     def test_approval_emits_user_edited_candidate_fields(self):
         self.dialog.set_candidates([self.candidate()])
         self.application.processEvents()

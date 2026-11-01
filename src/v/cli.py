@@ -180,6 +180,17 @@ def _run_memory_review_list(*, status: str, limit: int) -> int:
         print(f"Suggested summary: {proposal['model_content']}")
         print(f"Evidence: {proposal['evidence']}")
         print(f"Memory key: {proposal['memory_key']}")
+        conflict = proposal.get("conflict", {})
+        existing = conflict.get("existing_memory", {}) if isinstance(conflict, dict) else {}
+        if existing:
+            print("Existing saved memory (unchanged):")
+            print(f"  ID: {existing.get('id')}")
+            print(f"  Type: {existing.get('memory_type')}")
+            print(f"  Content: {existing.get('content')}")
+            print(f"  Key: {existing.get('memory_key')}")
+            print(
+                "  To approve both statements, pass --memory-key with a new unique key."
+            )
         print(
             f"Source message: {proposal['source_message_id']} "
             f"({proposal.get('source_created_at', 'timestamp unavailable')})"

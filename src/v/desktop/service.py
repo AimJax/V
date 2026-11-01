@@ -196,6 +196,7 @@ class DesktopService:
                 min_confidence=float(
                     memory_settings.get("minimum_confidence", 0.90)
                 ),
+                conflict_store=self.memory_backfill_store,
             )
             self.memory_backfill_runner = MemoryBackfillRunner(
                 self.conversation_store,

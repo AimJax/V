@@ -6,6 +6,7 @@ from pathlib import Path
 from support import temporary_directory
 
 from v.conversations.store import ConversationStore
+from v.memory.backfill import MemoryBackfillStore
 from v.memory.extractor import MemoryExtractor, _split_text_windows
 from v.memory.queue import ExtractionQueue
 from v.memory.store import MemoryStore
@@ -328,6 +329,86 @@ class MemoryExtractorTests(unittest.IsolatedAsyncioTestCase):
             self.memory.list_memories()[0].content,
             "The user's name is TestUser.",
         )
+
+    async def test_stable_key_conflict_is_queued_for_review_without_overwrite(self):
+        existing = self.memory.create_memory(
+            content="The user worked in retail.",
+            memory_type="fact",
+            subject="User work",
+            memory_key="user.work_context",
+            source_conversation_id="older-conversation",
+            source_message_id=999,
+            evidence="I worked in retail.",
+        )
+        provider = FakeProvider(
+            json.dumps({
+                "memories": [
+                    self.candidate(
+                        memory_type="fact",
+                        subject="User work",
+                        content="The user works in construction.",
+                        memory_key="user.work_context",
+                        evidence="I work in construction",
+                    )
+                ]
+            })
+        )
+        review_store = MemoryBackfillStore(self.memory.database_path)
+        extractor = MemoryExtractor(
+            provider,
+            self.conversations,
+            self.memory,
+            self.queue,
+            conflict_store=review_store,
+        )
+
+        report = await extractor.process_pending()
+
+        self.assertEqual(report.memories_created, 0)
+        self.assertEqual(report.conflicts_queued, 1)
+        self.assertEqual(report.candidates_skipped, 0)
+        self.assertEqual(self.memory.count_memories(), 1)
+        self.assertEqual(self.memory.get_memory(existing.id).content, "The user worked in retail.")
+
+        pending = review_store.list_candidates(status="pending")
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0]["source_kind"], "conflict")
+        self.assertEqual(pending[0]["payload"]["review_kind"], "key_conflict")
+        self.assertEqual(
+            pending[0]["payload"]["conflict"]["existing_memory"]["id"],
+            existing.id,
+        )
+
+    async def test_exact_same_source_conflict_is_not_queued_again(self):
+        source = self.conversations.get_message_record(self.message_id)
+        existing = self.memory.create_memory(
+            content="I'm TestUser",
+            memory_type="profile",
+            subject="User",
+            memory_key="user.name",
+            source_conversation_id=source.conversation_id,
+            source_message_id=source.id,
+            source_created_at=source.created_at,
+            evidence="I'm TestUser",
+        )
+        provider = FakeProvider(
+            json.dumps({"memories": [self.candidate()]})
+        )
+        review_store = MemoryBackfillStore(self.memory.database_path)
+        extractor = MemoryExtractor(
+            provider,
+            self.conversations,
+            self.memory,
+            self.queue,
+            conflict_store=review_store,
+        )
+
+        report = await extractor.process_pending()
+
+        self.assertEqual(report.conflicts_queued, 0)
+        self.assertEqual(report.candidates_skipped, 1)
+        self.assertEqual(review_store.list_candidates(status="pending"), [])
+        self.assertEqual(self.memory.get_memory(existing.id).content, "I'm TestUser")
 
     async def test_invalid_json_fails_jobs_for_retry(self):
         provider = FakeProvider("This is not JSON.")

@@ -165,6 +165,7 @@ class ExtractionReport:
     jobs_failed: int = 0
     memories_created: int = 0
     candidates_skipped: int = 0
+    conflicts_queued: int = 0
 
 
 def _normalize_text(value: str) -> str:
@@ -282,6 +283,7 @@ class MemoryExtractor:
         queue: ExtractionQueue,
         *,
         min_confidence: float = 0.90,
+        conflict_store=None,
     ) -> None:
         if not math.isfinite(min_confidence) or not 0 <= min_confidence <= 1:
             raise ValueError("min_confidence must be between 0 and 1.")
@@ -291,6 +293,7 @@ class MemoryExtractor:
         self.memory_store = memory_store
         self.queue = queue
         self.min_confidence = min_confidence
+        self.conflict_store = conflict_store
 
     async def extract_candidates(
         self,
@@ -515,8 +518,32 @@ class MemoryExtractor:
             return ExtractionReport(jobs_failed=len(source_messages))
 
         created = 0
+        conflicts_queued = 0
         for candidate in candidates:
             try:
+                existing = (
+                    self.memory_store.get_memory_by_key(candidate["memory_key"])
+                    if candidate["memory_type"] != "episodic"
+                    else None
+                )
+                if existing is not None:
+                    same_source = (
+                        existing.source_message_id == candidate["source_message_id"]
+                        and existing.source_conversation_id == candidate["source_conversation_id"]
+                        and existing.source_created_at == candidate["source_created_at"]
+                        and existing.evidence == candidate["evidence"]
+                    )
+                    if same_source:
+                        skipped += 1
+                    elif (
+                        self.conflict_store is not None
+                        and self.conflict_store.create_conflict_candidate(candidate, existing)
+                    ):
+                        conflicts_queued += 1
+                    else:
+                        skipped += 1
+                    continue
+
                 self.memory_store.create_memory(
                     content=candidate["content"],
                     memory_type=candidate["memory_type"],
@@ -532,8 +559,19 @@ class MemoryExtractor:
                 )
                 created += 1
             except (ValueError, TypeError):
-                # Duplicate keys or invalid candidates never overwrite memories.
-                skipped += 1
+                # A concurrent insert may win after the preflight lookup.
+                existing = (
+                    self.memory_store.get_memory_by_key(candidate["memory_key"])
+                    if candidate["memory_type"] != "episodic"
+                    else None
+                )
+                if existing is not None and self.conflict_store is not None:
+                    if self.conflict_store.create_conflict_candidate(candidate, existing):
+                        conflicts_queued += 1
+                    else:
+                        skipped += 1
+                else:
+                    skipped += 1
 
         for message_id in source_messages:
             self.queue.complete(message_id)
@@ -542,4 +580,5 @@ class MemoryExtractor:
             jobs_completed=len(jobs),
             memories_created=created,
             candidates_skipped=skipped,
+            conflicts_queued=conflicts_queued,
         )

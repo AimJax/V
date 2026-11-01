@@ -271,6 +271,83 @@ class MemoryBackfillTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reviewed["status"], "duplicate")
         self.assertEqual(reviewed["approved_memory_id"], existing.id)
 
+    async def test_conflict_review_requires_new_key_and_preserves_existing_memory(self):
+        message_id = self.add_user_message("I now work in construction.")
+        existing = self.memory.create_memory(
+            content="The user previously worked in retail.",
+            memory_type="fact",
+            subject="User work",
+            memory_key="user.work_context",
+            source_conversation_id="older-conversation",
+            source_message_id=999,
+            evidence="I previously worked in retail.",
+        )
+        source = self.conversations.get_message_record(message_id)
+        candidate = {
+            "source_message_id": message_id,
+            "source_conversation_id": self.conversation.id,
+            "source_created_at": source.created_at,
+            "memory_type": "fact",
+            "subject": "User work",
+            "content": "I now work in construction.",
+            "model_content": "The user now works in construction.",
+            "memory_key": "user.work_context",
+            "provenance": "explicit",
+            "confidence": 0.99,
+            "importance": 4,
+            "evidence": "I now work in construction.",
+        }
+        self.assertTrue(self.review.create_conflict_candidate(candidate, existing))
+        proposal = self.review.list_candidates(status="pending")[0]
+        reviewer = MemoryReviewService(self.memory, self.review)
+
+        with self.assertRaisesRegex(ValueError, "different Memory key"):
+            reviewer.approve_candidate(proposal["id"])
+        self.assertEqual(self.review.get_candidate(proposal["id"])["status"], "pending")
+        self.assertEqual(self.memory.count_memories(), 1)
+        self.assertEqual(self.memory.get_memory(existing.id).content, "The user previously worked in retail.")
+
+        accepted = reviewer.approve_candidate(
+            proposal["id"],
+            changes={"memory_key": "user.work_context.new_statement"},
+        )
+        self.assertEqual(self.review.get_candidate(proposal["id"])["status"], "approved")
+        self.assertEqual(accepted.memory_key, "user.work_context.new_statement")
+        self.assertEqual(self.memory.get_memory(existing.id).content, "The user previously worked in retail.")
+        self.assertIn("left unchanged", self.review.get_candidate(proposal["id"])["review_note"])
+
+    async def test_conflict_candidates_are_merged_with_backfill_review_results(self):
+        message_id = self.add_user_message("I now work in construction.")
+        existing = self.memory.create_memory(
+            content="The user previously worked in retail.",
+            memory_type="fact",
+            subject="User work",
+            memory_key="user.work_context",
+            source_conversation_id="older-conversation",
+            source_message_id=999,
+        )
+        source = self.conversations.get_message_record(message_id)
+        candidate = {
+            "source_message_id": message_id,
+            "source_conversation_id": self.conversation.id,
+            "source_created_at": source.created_at,
+            "memory_type": "fact",
+            "subject": "User work",
+            "content": "I now work in construction.",
+            "model_content": "The user now works in construction.",
+            "memory_key": "user.work_context",
+            "provenance": "explicit",
+            "confidence": 0.99,
+            "importance": 4,
+            "evidence": "I now work in construction.",
+        }
+        self.review.create_conflict_candidate(candidate, existing)
+
+        items = self.review.list_candidates(status="pending")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["source_kind"], "conflict")
+        self.assertEqual(self.review.get_candidate(items[0]["id"])["source_kind"], "conflict")
+
     async def test_rejection_is_audited_and_not_deleted(self):
         self.add_user_message("I enjoy quiet coastal walks.")
         await self.make_runner().run()

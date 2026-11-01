@@ -11,6 +11,7 @@ SQLite stores memory records, the extraction queue, and semantic embedding metad
 - Automatic extraction of durable information from user-authored messages.
 - Historical reprocessing of every stored user message, including messages whose original extraction job was already completed.
 - Durable review proposals that can be approved, edited, rejected, or marked as duplicate without changing existing memories.
+- Automatic extraction key conflicts are retained as separate review proposals with a snapshot of the existing record; reviewers can reject them or save the new statement under a different key without overwriting the existing memory.
 - Resumable backfill checkpoints and per-run processing statistics stored in the memory database.
 - Original source timestamps and limited adjacent-conversation context are retained for historically accurate review; evidence still comes only from the quoted source user message.
 - Explicit-only extraction; inferred patterns are not automatically stored.
@@ -80,6 +81,6 @@ The backup format is versioned JSON. Import validates the format, version, field
 - Deleting a memory removes its database row and FTS index entry. It does not erase copies in conversation history or external backups; those are separate data sources.
 - Historical messages are never automatically accepted as new memories: backfill proposals require explicit review.
 - Automatic inferred-pattern extraction is disabled.
-- Memory consolidation and conflict resolution are not implemented.
+- Automatic key conflicts are reviewable, but automatic consolidation and in-place replacement are intentionally not implemented. A reviewer must choose a distinct key to retain both statements; existing memories are never overwritten by conflict approval.
 - The Memory Manager includes historical scan controls and an editable proposal-review window. The CLI remains available for scripted or headless use.
 - Database encryption is not implemented.

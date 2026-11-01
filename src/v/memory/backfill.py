@@ -27,6 +27,7 @@ except ImportError:  # pragma: no cover - Windows uses msvcrt
 
 from v.conversations.store import ConversationStore
 from v.memory.extractor import MemoryExtractor
+from v.memory.models import Memory
 from v.memory.store import MemoryStore
 
 
@@ -112,6 +113,24 @@ class MemoryBackfillStore:
 
                 CREATE INDEX IF NOT EXISTS idx_memory_review_run
                     ON memory_review_candidates(run_id, source_message_id);
+
+                CREATE TABLE IF NOT EXISTS memory_conflict_candidates (
+                    id TEXT PRIMARY KEY,
+                    source_message_id INTEGER NOT NULL,
+                    source_conversation_id TEXT NOT NULL,
+                    memory_key TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending' CHECK (
+                        status IN ('pending', 'approved', 'rejected', 'duplicate')
+                    ),
+                    review_note TEXT,
+                    approved_memory_id TEXT,
+                    created_at TEXT NOT NULL,
+                    reviewed_at TEXT
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_memory_conflict_status
+                    ON memory_conflict_candidates(status, created_at);
                 """
             )
             connection.commit()
@@ -397,16 +416,88 @@ class MemoryBackfillStore:
             raise RuntimeError("Backfill checkpoint could not be retrieved.")
         return result
 
+    def create_conflict_candidate(
+        self,
+        candidate: dict,
+        existing_memory: Memory,
+    ) -> bool:
+        """Queue an occupied stable-key conflict without changing active memory."""
+        payload = dict(candidate)
+        payload["review_kind"] = "key_conflict"
+        payload["conflict"] = {
+            "message": (
+                "A saved non-episodic memory already uses this key. "
+                "Review both statements before deciding what to retain."
+            ),
+            "existing_memory": {
+                "id": existing_memory.id,
+                "memory_type": existing_memory.memory_type,
+                "subject": existing_memory.subject,
+                "content": existing_memory.content,
+                "memory_key": existing_memory.memory_key,
+                "provenance": existing_memory.provenance,
+                "confidence": existing_memory.confidence,
+                "importance": existing_memory.importance,
+                "source_conversation_id": existing_memory.source_conversation_id,
+                "source_message_id": existing_memory.source_message_id,
+                "source_created_at": existing_memory.source_created_at,
+                "evidence": existing_memory.evidence,
+                "created_at": existing_memory.created_at,
+                "updated_at": existing_memory.updated_at,
+            },
+        }
+        identity = json.dumps(
+            {
+                "source_message_id": candidate["source_message_id"],
+                "source_conversation_id": candidate["source_conversation_id"],
+                "memory_key": str(candidate["memory_key"]).casefold(),
+                "evidence": candidate.get("evidence", ""),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        candidate_id = "conflict-" + hashlib.sha256(
+            identity.encode("utf-8")
+        ).hexdigest()[:32]
+        with closing(self._connect()) as connection:
+            with connection:
+                cursor = connection.execute(
+                    """
+                    INSERT OR IGNORE INTO memory_conflict_candidates (
+                        id, source_message_id, source_conversation_id,
+                        memory_key, payload_json, status, created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, 'pending', ?)
+                    """,
+                    (
+                        candidate_id,
+                        int(candidate["source_message_id"]),
+                        str(candidate["source_conversation_id"]),
+                        str(candidate["memory_key"]),
+                        json.dumps(payload, ensure_ascii=False, allow_nan=False),
+                        _now(),
+                    ),
+                )
+        return cursor.rowcount == 1
+
     def get_candidate(self, candidate_id: str) -> dict | None:
         with closing(self._connect()) as connection:
             row = connection.execute(
                 "SELECT * FROM memory_review_candidates WHERE id = ?",
                 (candidate_id,),
             ).fetchone()
+            source_kind = "backfill"
+            if row is None:
+                row = connection.execute(
+                    "SELECT * FROM memory_conflict_candidates WHERE id = ?",
+                    (candidate_id,),
+                ).fetchone()
+                source_kind = "conflict"
         if row is None:
             return None
         result = dict(row)
         result["payload"] = json.loads(result.pop("payload_json"))
+        result["source_kind"] = source_kind
         return result
 
     def list_candidates(
@@ -421,24 +512,46 @@ class MemoryBackfillStore:
         if not 1 <= limit <= 1000 or offset < 0:
             raise ValueError("Invalid memory review pagination.")
         where = "" if status == "all" else "WHERE status = ?"
-        parameters: list[object] = [] if status == "all" else [status]
-        parameters.extend([limit, offset])
+        filter_values: list[object] = [] if status == "all" else [status]
+        query_limit = limit + offset
         with closing(self._connect()) as connection:
-            rows = connection.execute(
+            backfill_rows = connection.execute(
                 f"""
                 SELECT * FROM memory_review_candidates
                 {where}
                 ORDER BY created_at ASC, source_message_id ASC
-                LIMIT ? OFFSET ?
+                LIMIT ?
                 """,
-                parameters,
+                [*filter_values, query_limit],
             ).fetchall()
-        results = []
-        for row in rows:
-            item = dict(row)
-            item["payload"] = json.loads(item.pop("payload_json"))
-            results.append(item)
-        return results
+            conflict_rows = connection.execute(
+                f"""
+                SELECT * FROM memory_conflict_candidates
+                {where}
+                ORDER BY created_at ASC, source_message_id ASC
+                LIMIT ?
+                """,
+                [*filter_values, query_limit],
+            ).fetchall()
+
+        results: list[dict] = []
+        for source_kind, rows in (
+            ("backfill", backfill_rows),
+            ("conflict", conflict_rows),
+        ):
+            for row in rows:
+                item = dict(row)
+                item["payload"] = json.loads(item.pop("payload_json"))
+                item["source_kind"] = source_kind
+                results.append(item)
+        results.sort(
+            key=lambda item: (
+                item["created_at"],
+                item["source_message_id"],
+                item["id"],
+            )
+        )
+        return results[offset:offset + limit]
 
     def mark_candidate(
         self,
@@ -450,6 +563,13 @@ class MemoryBackfillStore:
     ) -> None:
         if status not in {"approved", "rejected", "duplicate"}:
             raise ValueError("Unsupported candidate decision.")
+        values = (
+            status,
+            note[:1000] if note else None,
+            approved_memory_id,
+            _now(),
+            candidate_id,
+        )
         with closing(self._connect()) as connection:
             with connection:
                 cursor = connection.execute(
@@ -459,18 +579,27 @@ class MemoryBackfillStore:
                         reviewed_at = ?
                     WHERE id = ? AND status = 'pending'
                     """,
-                    (
-                        status,
-                        note[:1000] if note else None,
-                        approved_memory_id,
-                        _now(),
-                        candidate_id,
-                    ),
+                    values,
                 )
+                if cursor.rowcount == 0:
+                    cursor = connection.execute(
+                        """
+                        UPDATE memory_conflict_candidates
+                        SET status = ?, review_note = ?, approved_memory_id = ?,
+                            reviewed_at = ?
+                        WHERE id = ? AND status = 'pending'
+                        """,
+                        values,
+                    )
                 if cursor.rowcount != 1:
                     existing = connection.execute(
-                        "SELECT status FROM memory_review_candidates WHERE id = ?",
-                        (candidate_id,),
+                        """
+                        SELECT status FROM memory_review_candidates WHERE id = ?
+                        UNION ALL
+                        SELECT status FROM memory_conflict_candidates WHERE id = ?
+                        LIMIT 1
+                        """,
+                        (candidate_id, candidate_id),
                     ).fetchone()
                     if existing is None:
                         raise KeyError(f"Memory candidate not found: {candidate_id}")
@@ -648,6 +777,21 @@ class MemoryReviewService:
         ):
             raise ValueError("Approved backfill memories require a non-empty memory key.")
 
+        conflict = payload.get("conflict")
+        conflict_key = (
+            str(conflict.get("existing_memory", {}).get("memory_key") or "")
+            if isinstance(conflict, dict)
+            else ""
+        )
+        if conflict_key and payload["memory_key"].casefold() == conflict_key.casefold():
+            current = self.memory_store.get_memory_by_key(conflict_key)
+            if current is not None and current.memory_type != "episodic":
+                raise ValueError(
+                    "This proposal conflicts with the saved memory shown in the review. "
+                    "Assign a different Memory key to keep both statements. "
+                    "The saved memory is unchanged and this proposal remains pending."
+                )
+
         try:
             memory = self.memory_store.create_memory(
                 content=str(payload.get("content") or payload["evidence"]).strip(),
@@ -665,6 +809,11 @@ class MemoryReviewService:
         except ValueError as error:
             if "already exists with key" not in str(error):
                 raise
+            if conflict_key:
+                raise ValueError(
+                    "The edited Memory key is already in use. Choose another key; "
+                    "no saved memory was changed and this proposal remains pending."
+                ) from error
             existing = self.memory_store.get_memory_by_key(payload["memory_key"])
             if existing is not None:
                 same_source = (
@@ -696,6 +845,12 @@ class MemoryReviewService:
         self.review_store.mark_candidate(
             candidate_id,
             "approved",
+            note=(
+                f"Saved separately under key '{payload['memory_key']}'. "
+                "The previously saved memory was left unchanged."
+                if conflict_key
+                else None
+            ),
             approved_memory_id=memory.id,
         )
         return memory

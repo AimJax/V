@@ -11,6 +11,7 @@ from v.core.config import load_settings, project_root
 from v.core.network import NetworkPolicy
 from v.conversations.store import Conversation, ConversationStore
 from v.memory.embedding_provider import LMStudioEmbeddingProvider
+from v.memory.backfill import MemoryBackfillStore
 from v.memory.embedding_store import EmbeddingStore
 from v.memory.extractor import MemoryExtractor
 from v.memory.hybrid_retrieval import HybridMemoryRetriever
@@ -244,6 +245,7 @@ async def run_chat() -> int:
 
         memory_store = None
         extraction_queue = None
+        memory_review_store = None
         retriever = None
 
         if memory_enabled:
@@ -254,6 +256,7 @@ async def run_chat() -> int:
 
             memory_store = MemoryStore(memory_database)
             extraction_queue = ExtractionQueue(memory_database)
+            memory_review_store = MemoryBackfillStore(memory_database)
 
         network_policy = NetworkPolicy.from_settings(settings)
         inference_base_url = network_policy.authorize_local_endpoint(
@@ -288,6 +291,7 @@ async def run_chat() -> int:
                 min_confidence=float(
                     memory_settings.get("minimum_confidence", 0.90)
                 ),
+                conflict_store=memory_review_store,
             )
 
             memory_worker = MemoryWorker(
@@ -479,6 +483,7 @@ async def run_chat() -> int:
                                 f"{report.jobs_completed} completed, "
                                 f"{report.jobs_failed} failed, "
                                 f"{report.memories_created} memories saved, "
+                                f"{report.conflicts_queued} conflicts queued for review, "
                                 f"{report.candidates_skipped} candidates skipped"
                             )
 

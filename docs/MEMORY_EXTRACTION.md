@@ -22,6 +22,7 @@
 - Candidates below the configured confidence threshold are rejected.
 - Sensitive candidates are rejected.
 - Duplicate memory keys cannot silently overwrite existing memories.
+- A new non-episodic statement that reuses an occupied key is saved as a durable conflict proposal. The current memory is snapshotted into the proposal and remains unchanged until the user reviews it.
 
 ## Commands
 
@@ -43,6 +44,7 @@ Default minimum extraction confidence: 0.90.
 
 - Existing historical conversations are not automatically accepted into memory. Use the separate historical backfill workflow to scan them into a review queue.
 - Inferred pattern extraction is intentionally disabled.
+- Automatic key-conflict proposals appear alongside historical backfill proposals in the same Memory Review window and CLI review list. Approval requires assigning a different unique key; approval never overwrites the conflicting record.
 - Historical proposals must be explicitly approved or rejected. Approval can include user edits; rejection records remain available for audit.
 - Semantic retrieval is implemented separately and uses local Nomic embeddings with FTS5 fallback.
 - Data is stored locally in SQLite without database encryption.

@@ -207,6 +207,13 @@ class MemoryBackfillDialog(QDialog):
         self.suggested_summary.setWordWrap(True)
         detail_layout.addWidget(self.suggested_summary)
 
+        self.conflict_details = QLabel()
+        self.conflict_details.setObjectName("muted")
+        self.conflict_details.setWordWrap(True)
+        self.conflict_details.setMaximumHeight(120)
+        self.conflict_details.hide()
+        detail_layout.addWidget(self.conflict_details)
+
         evidence_label = QLabel("Verbatim source evidence")
         evidence_label.setStyleSheet("font-weight: 650;")
         detail_layout.addWidget(evidence_label)
@@ -354,6 +361,25 @@ class MemoryBackfillDialog(QDialog):
         self.suggested_summary.setText(
             "Model suggestion: " + payload.get("model_content", "")
         )
+        conflict = payload.get("conflict")
+        existing = (
+            conflict.get("existing_memory", {})
+            if isinstance(conflict, dict)
+            else {}
+        )
+        if existing:
+            self.conflict_details.setText(
+                "EXISTING SAVED MEMORY — UNCHANGED\n"
+                f"{existing.get('content', '')}\n"
+                f"Type: {existing.get('memory_type', 'unknown')} · "
+                f"Key: {existing.get('memory_key', 'unknown')}\n"
+                f"Original source date: {existing.get('source_created_at') or 'unknown'}\n"
+                "To save both statements, assign this proposal a different Memory key."
+            )
+            self.conflict_details.show()
+        else:
+            self.conflict_details.clear()
+            self.conflict_details.hide()
         self.evidence_text.setPlainText(payload["evidence"])
         self.memory_type.setCurrentIndex(
             max(0, self.memory_type.findData(payload["memory_type"]))
@@ -367,6 +393,11 @@ class MemoryBackfillDialog(QDialog):
         note = candidate.get("review_note")
         if note:
             self.detail_status.setText(note)
+        elif existing:
+            self.detail_status.setText(
+                "This is a key conflict. Approval will not overwrite the saved record. "
+                "Change Memory key to save this statement separately, or reject it."
+            )
         else:
             self.detail_status.setText(
                 "The content field defaults to the verbatim evidence. "
@@ -384,6 +415,8 @@ class MemoryBackfillDialog(QDialog):
         self.suggested_summary.setText(
             "The model's suggested summary will appear here."
         )
+        self.conflict_details.clear()
+        self.conflict_details.hide()
         self.evidence_text.clear()
         self.memory_type.setCurrentIndex(0)
         self.subject_input.clear()
