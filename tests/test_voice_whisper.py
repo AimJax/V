@@ -17,7 +17,7 @@ class WhisperCommandTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         root = Path(self.temp.name)
         self.executable = root / "whisper-server.exe"
-        self.model = root / "ggml-base.bin"
+        self.model = root / "ggml-small.bin"
         self.vad = root / "ggml-silero-v6.2.0.bin"
         for path in (self.executable, self.model, self.vad):
             path.write_bytes(b"test")
@@ -85,7 +85,7 @@ class WhisperTranscriptionTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             executable = root / "whisper-server.exe"
-            model = root / "ggml-base.bin"
+            model = root / "ggml-small.bin"
             vad = root / "ggml-silero.bin"
             for path in (executable, model, vad):
                 path.write_bytes(b"test")
@@ -136,7 +136,7 @@ class WhisperTranscriptionTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             executable = root / "whisper-server.exe"
-            model = root / "ggml-base.bin"
+            model = root / "ggml-small.bin"
             vad = root / "ggml-silero.bin"
             for path in (executable, model, vad):
                 path.write_bytes(b"test")
