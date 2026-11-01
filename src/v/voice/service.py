@@ -52,10 +52,21 @@ class LocalVoiceService:
             return self.server
 
         voice = self.config
+        device = str(voice.get("stt_device", "cpu")).casefold()
+        if device not in {"cpu", "cuda"}:
+            raise ValueError("Speech recognition device must be cpu or cuda.")
+        executable_key = (
+            "whisper_cuda_server_path" if device == "cuda" else "whisper_server_path"
+        )
+        executable_label = (
+            "Whisper CUDA server executable"
+            if device == "cuda"
+            else "Whisper CPU server executable"
+        )
         executable = _project_path(
             self.root,
-            str(voice.get("whisper_server_path", "")),
-            "Whisper server path",
+            str(voice.get(executable_key, "")),
+            executable_label,
         )
         model = _project_path(
             self.root,
@@ -86,7 +97,7 @@ class LocalVoiceService:
                     voice.get("max_utterance_seconds", 30)
                 ),
             ),
-            log_path=self.root / "logs" / "voice" / "whisper-server.log",
+            log_path=self.root / "logs" / "voice" / f"whisper-server-{device}.log",
         )
         return self.server
 
