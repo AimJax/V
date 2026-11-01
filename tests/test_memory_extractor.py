@@ -16,9 +16,11 @@ class FakeProvider:
     def __init__(self, response):
         self.response = response
         self.calls = 0
+        self.last_messages = None
 
     async def chat(self, messages, **kwargs):
         self.calls += 1
+        self.last_messages = list(messages)
 
         if isinstance(self.response, Exception):
             raise self.response
@@ -73,6 +75,37 @@ class MemoryExtractorTests(unittest.IsolatedAsyncioTestCase):
             self.memory,
             self.queue,
         )
+
+    async def test_extraction_receives_limited_surrounding_context(self):
+        self.conversations.add_message(
+            self.conversation.id,
+            "assistant",
+            "Are you still working in that construction role?",
+        )
+        provider = FakeProvider(
+            json.dumps({"memories": [self.candidate()]})
+        )
+
+        report = await self.extractor(provider).process_pending()
+
+        self.assertEqual(report.memories_created, 1)
+        source_payload = json.loads(provider.last_messages[1].content)[0]
+        self.assertEqual(source_payload["source_message_id"], self.message_id)
+        self.assertEqual(
+            source_payload["user_message"],
+            "Hi, I'm TestUser. I work in construction.",
+        )
+        self.assertEqual(
+            source_payload["surrounding_context"][0]["role"],
+            "assistant",
+        )
+        self.assertEqual(
+            source_payload["surrounding_context"][0]["content"],
+            "Are you still working in that construction role?",
+        )
+        saved = self.memory.list_memories()[0]
+        self.assertEqual(saved.evidence, "I'm TestUser")
+        self.assertEqual(saved.source_message_id, self.message_id)
 
     async def test_valid_explicit_memory_is_saved(self):
         provider = FakeProvider(
