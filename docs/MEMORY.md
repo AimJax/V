@@ -9,6 +9,9 @@ SQLite stores memory records, the extraction queue, and semantic embedding metad
 ## Current implementation
 
 - Automatic extraction of durable information from user-authored messages.
+- Historical reprocessing of every stored user message, including messages whose original extraction job was already completed.
+- Durable review proposals that can be approved, edited, rejected, or marked as duplicate without changing existing memories.
+- Resumable backfill checkpoints and per-run processing statistics stored in the memory database.
 - Explicit-only extraction; inferred patterns are not automatically stored.
 - Verbatim evidence excerpts are stored instead of model-generated paraphrases.
 - Background extraction after a configurable idle period.
@@ -37,7 +40,10 @@ SQLite stores memory records, the extraction queue, and semantic embedding metad
 - `/memory status` — inspect saved-memory and extraction-queue status.
 - `/memory correct ID FIELD VALUE` — correct one field on a saved memory.
 - `/memory delete ID` — permanently delete a memory.
-- `/memory retry` — retry failed extraction jobs.
+- `/memory retry` — retry failed automatic extraction jobs.
+- `python -m v memory backfill` — reprocess historical user messages into a review queue.
+- `python -m v memory backfill --status` — inspect the latest backfill run.
+- `python -m v memory review list` — inspect pending historical proposals.
 
 Correction fields: `content`, `subject`, `type`, `key`, `confidence`, `importance`, and `evidence`. Quote values containing spaces. Use `--clear` to clear an optional `key` or `evidence`. Corrections preserve the original creation timestamp and source conversation/message references.
 
@@ -71,8 +77,8 @@ The backup format is versioned JSON. Import validates the format, version, field
 - JSON exports are also unencrypted and may contain personal data. Store them in a protected location.
 - The database, WAL files, and backups must never be committed to Git.
 - Deleting a memory removes its database row and FTS index entry. It does not erase copies in conversation history or external backups; those are separate data sources.
-- Existing historical conversations are not automatically imported.
+- Historical messages are never automatically accepted as new memories: backfill proposals require explicit review.
 - Automatic inferred-pattern extraction is disabled.
 - Memory consolidation and conflict resolution are not implemented.
-- A graphical memory manager is not implemented.
+- Backfill progress and proposal review are available through the CLI; a dedicated graphical review workflow is a separate UI milestone.
 - Database encryption is not implemented.
