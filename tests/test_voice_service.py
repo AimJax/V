@@ -90,7 +90,7 @@ class LocalVoiceServiceTests(unittest.IsolatedAsyncioTestCase):
         config = factory.call_args.args[0]
         self.assertEqual(
             config.executable,
-            self.root / "apps/whisper/whisper-server-cuda.exe",
+            (self.root / "apps/whisper/whisper-server-cuda.exe").resolve(),
         )
         self.assertIn("whisper-server-cuda.log", str(factory.call_args.kwargs["log_path"]))
 
@@ -103,7 +103,7 @@ class LocalVoiceServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             factory.call_args.args[0].executable,
-            self.root / "apps/whisper/whisper-server.exe",
+            (self.root / "apps/whisper/whisper-server.exe").resolve(),
         )
 
     async def test_synthesize_runs_kokoro_off_the_async_event_loop(self):
