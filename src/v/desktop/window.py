@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from v.desktop.service import DesktopSnapshot, DesktopTurnResult
 from v.desktop.settings_dialog import SettingsDialog
 from v.desktop.memory_manager import MemoryManagerDialog
+from v.desktop.memory_backfill_dialog import MemoryBackfillDialog
 from v.desktop.thread import DesktopRuntimeThread
 from v.providers.base import ChatMessage
 from v.voice.recorder import PushToTalkRecorder
@@ -202,6 +203,7 @@ class DesktopWindow(QMainWindow):
         self._assistant_text = ""
         self._last_snapshot: DesktopSnapshot | None = None
         self.memory_manager_dialog: MemoryManagerDialog | None = None
+        self.memory_backfill_dialog: MemoryBackfillDialog | None = None
         self.settings_dialog: SettingsDialog | None = None
         self._voice_recorder: PushToTalkRecorder | None = None
         self._speech_player = None
@@ -536,6 +538,7 @@ class DesktopWindow(QMainWindow):
 
         if self.memory_manager_dialog is None:
             dialog = MemoryManagerDialog(self)
+            dialog.backfill_requested.connect(self._open_memory_backfill)
             dialog.refresh_requested.connect(self.runtime.list_memories)
             dialog.update_requested.connect(self.runtime.update_memory)
             dialog.delete_requested.connect(self.runtime.delete_memory)
@@ -557,6 +560,48 @@ class DesktopWindow(QMainWindow):
         self.memory_manager_dialog.raise_()
         self.memory_manager_dialog.activateWindow()
         self.memory_manager_dialog.refresh()
+
+    def _open_memory_backfill(self) -> None:
+        if not self._ready:
+            return
+
+        if self.memory_backfill_dialog is None:
+            dialog = MemoryBackfillDialog(self)
+            dialog.start_requested.connect(self.runtime.start_memory_backfill)
+            dialog.pause_requested.connect(self.runtime.cancel_memory_backfill)
+            dialog.status_requested.connect(
+                self.runtime.get_memory_backfill_status
+            )
+            dialog.candidates_requested.connect(
+                lambda status: self.runtime.list_memory_review_candidates(
+                    status=status
+                )
+            )
+            dialog.approve_requested.connect(
+                self.runtime.approve_memory_candidate
+            )
+            dialog.reject_requested.connect(
+                self.runtime.reject_memory_candidate
+            )
+            self.runtime.memory_backfill_progress.connect(dialog.set_progress)
+            self.runtime.memory_backfill_completed.connect(
+                dialog.on_backfill_completed
+            )
+            self.runtime.memory_backfill_paused.connect(dialog.on_backfill_paused)
+            self.runtime.memory_backfill_failed.connect(
+                dialog.on_operation_failed
+            )
+            self.runtime.memory_review_ready.connect(dialog.set_candidates)
+            self.runtime.memory_review_changed.connect(dialog.on_review_changed)
+            self.memory_backfill_dialog = dialog
+
+        self.memory_backfill_dialog.show()
+        self.memory_backfill_dialog.raise_()
+        self.memory_backfill_dialog.activateWindow()
+        self.runtime.get_memory_backfill_status()
+        self.runtime.list_memory_review_candidates(
+            status=str(self.memory_backfill_dialog.review_filter.currentData() or "pending")
+        )
 
     def _new_conversation(self) -> None:
         if self._ready and not self._busy:
