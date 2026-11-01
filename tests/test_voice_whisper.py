@@ -34,7 +34,7 @@ class WhisperCommandTests(unittest.TestCase):
         self.assertIn("--host", command)
         self.assertEqual(command[command.index("--host") + 1], "127.0.0.1")
         self.assertEqual(command[command.index("--port") + 1], "8178")
-        self.assertIn("--no-gpu", command)
+        self.assertNotIn("--no-gpu", command)
         self.assertIn("--vad", command)
         self.assertEqual(
             command[command.index("--vad-model") + 1],
@@ -44,6 +44,10 @@ class WhisperCommandTests(unittest.TestCase):
             command[command.index("--vad-threshold") + 1],
             "0.5",
         )
+
+    def test_cuda_is_not_disabled_by_default(self):
+        command = build_whisper_server_command(self.config, port=8178)
+        self.assertNotIn("--no-gpu", command)
 
     def test_rejects_non_loopback_host(self):
         with self.assertRaisesRegex(ValueError, "loopback"):
