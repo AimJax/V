@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDoubleSpinBox,
     QFormLayout,
+    QHeaderView,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -131,11 +132,9 @@ class MemoryBackfillDialog(QDialog):
             ("All proposals", "all"),
         ):
             self.review_filter.addItem(label, value)
-        self.start_button.clicked.connect(
-            lambda: self.start_requested.emit(False)
-        )
+        self.start_button.clicked.connect(self._start_scan)
         self.new_run_button.clicked.connect(self._start_new_run)
-        self.pause_button.clicked.connect(self.pause_requested.emit)
+        self.pause_button.clicked.connect(self._pause_scan)
         self.refresh_button.clicked.connect(self._request_candidates)
         self.review_filter.currentIndexChanged.connect(
             lambda _index: self._request_candidates()
@@ -170,11 +169,11 @@ class MemoryBackfillDialog(QDialog):
         header = self.candidate_table.horizontalHeader()
         header.setSectionResizeMode(
             0,
-            self.candidate_table.horizontalHeader().ResizeMode.ResizeToContents,
+            QHeaderView.ResizeMode.ResizeToContents,
         )
         header.setSectionResizeMode(
             1,
-            self.candidate_table.horizontalHeader().ResizeMode.Stretch,
+            QHeaderView.ResizeMode.Stretch,
         )
         header.setSectionResizeMode(
             2,
@@ -272,6 +271,19 @@ class MemoryBackfillDialog(QDialog):
         self._set_candidate_editor_enabled(False)
         self._update_controls()
 
+    def _start_scan(self) -> None:
+        if self._scan_running:
+            return
+        self._scan_running = True
+        self.detail_status.setText("Starting or resuming the historical scan…")
+        self._update_controls()
+        self.start_requested.emit(False)
+
+    def _pause_scan(self) -> None:
+        if not self._scan_running:
+            return
+        self.pause_requested.emit()
+
     def _start_new_run(self) -> None:
         answer = QMessageBox.question(
             self,
@@ -283,6 +295,9 @@ class MemoryBackfillDialog(QDialog):
             QMessageBox.StandardButton.Cancel,
         )
         if answer == QMessageBox.StandardButton.Yes:
+            self._scan_running = True
+            self.detail_status.setText("Starting a new full-history scan…")
+            self._update_controls()
             self.start_requested.emit(True)
 
     def _request_candidates(self) -> None:
@@ -497,6 +512,7 @@ class MemoryBackfillDialog(QDialog):
 
     def on_operation_failed(self, message: str) -> None:
         self._review_pending = False
+        self.status_requested.emit()
         self.detail_status.setText(f"Operation failed: {message}")
         self._set_candidate_editor_enabled(
             self._selected_candidate_id is not None
