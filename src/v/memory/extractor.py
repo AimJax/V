@@ -26,9 +26,17 @@ Only extract information that is likely to be useful in future conversations:
 - Ongoing projects, goals, and learning activities.
 - Important relationships the user explicitly described.
 - Significant personal events worth remembering.
+- Ongoing or materially relevant current circumstances, even when they may change:
+  work conditions, living arrangements, family responsibilities, financial pressures,
+  practical constraints, sustained difficulties, and plans that affect future advice.
+  Store these as episodic/current-context memories rather than permanent profile facts.
+- The concrete circumstances behind a user's venting when those circumstances are
+  ongoing and useful for continuity. Preserve the facts and context, not the raw rant
+  or a guessed emotional diagnosis.
 
 Do NOT extract:
-- Casual greetings, small talk, weather, or temporary circumstances.
+- Casual greetings, small talk, weather, or fleeting one-off circumstances that have
+  no likely value after the immediate conversation.
 - Hypothetical statements, wishes, questions, roleplay, fiction, or quotes
   attributed to somebody else.
 - Claims made by the assistant.
@@ -268,7 +276,7 @@ class MemoryExtractor:
                     ),
                 ],
                 temperature=0.1,
-                max_tokens=800,
+                max_tokens=1200,
             )
 
             candidates = _parse_response(result.content)
@@ -385,7 +393,7 @@ class MemoryExtractor:
             self.queue.complete(message_id)
 
         return ExtractionReport(
-            jobs_completed=len(source_messages),
+            jobs_completed=len(jobs),
             memories_created=created,
             candidates_skipped=skipped,
         )
