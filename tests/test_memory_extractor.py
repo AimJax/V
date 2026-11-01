@@ -379,6 +379,45 @@ class MemoryExtractorTests(unittest.IsolatedAsyncioTestCase):
             existing.id,
         )
 
+    async def test_episodic_update_conflicting_with_stable_key_is_queued(self):
+        existing = self.memory.create_memory(
+            content="The user worked in retail.",
+            memory_type="fact",
+            subject="User work",
+            memory_key="user.work_context",
+            source_conversation_id="older-conversation",
+            source_message_id=999,
+            evidence="I worked in retail.",
+        )
+        provider = FakeProvider(
+            json.dumps({
+                "memories": [
+                    self.candidate(
+                        memory_type="episodic",
+                        subject="User work",
+                        content="The user currently works in construction.",
+                        memory_key="user.work_context",
+                        evidence="I work in construction",
+                    )
+                ]
+            })
+        )
+        review_store = MemoryBackfillStore(self.memory.database_path)
+        extractor = MemoryExtractor(
+            provider,
+            self.conversations,
+            self.memory,
+            self.queue,
+            conflict_store=review_store,
+        )
+
+        report = await extractor.process_pending()
+
+        self.assertEqual(report.conflicts_queued, 1)
+        self.assertEqual(self.memory.count_memories(), 1)
+        self.assertEqual(self.memory.get_memory(existing.id).content, "The user worked in retail.")
+        self.assertEqual(len(review_store.list_candidates(status="pending")), 1)
+
     async def test_exact_same_source_conflict_is_not_queued_again(self):
         source = self.conversations.get_message_record(self.message_id)
         existing = self.memory.create_memory(

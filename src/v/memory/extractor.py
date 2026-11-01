@@ -521,12 +521,11 @@ class MemoryExtractor:
         conflicts_queued = 0
         for candidate in candidates:
             try:
-                existing = (
-                    self.memory_store.get_memory_by_key(candidate["memory_key"])
-                    if candidate["memory_type"] != "episodic"
-                    else None
-                )
-                if existing is not None:
+                existing = self.memory_store.get_memory_by_key(candidate["memory_key"])
+                if existing is not None and not (
+                    candidate["memory_type"] == "episodic"
+                    and existing.memory_type == "episodic"
+                ):
                     same_source = (
                         existing.source_message_id == candidate["source_message_id"]
                         and existing.source_conversation_id == candidate["source_conversation_id"]
@@ -560,12 +559,15 @@ class MemoryExtractor:
                 created += 1
             except (ValueError, TypeError):
                 # A concurrent insert may win after the preflight lookup.
-                existing = (
-                    self.memory_store.get_memory_by_key(candidate["memory_key"])
-                    if candidate["memory_type"] != "episodic"
-                    else None
-                )
-                if existing is not None and self.conflict_store is not None:
+                existing = self.memory_store.get_memory_by_key(candidate["memory_key"])
+                if (
+                    existing is not None
+                    and not (
+                        candidate["memory_type"] == "episodic"
+                        and existing.memory_type == "episodic"
+                    )
+                    and self.conflict_store is not None
+                ):
                     if self.conflict_store.create_conflict_candidate(candidate, existing):
                         conflicts_queued += 1
                     else:
