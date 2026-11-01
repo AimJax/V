@@ -12,6 +12,9 @@
 - Each normal worker extraction call processes up to five user messages.
 - Automatic extraction and historical backfill use the same candidate validation rules.
 - Only user-authored messages belonging to the queued conversation are accepted.
+- Each user message is evaluated with at most one adjacent message before and after it for reference and chronology context.
+- Adjacent messages can clarify intent but are never accepted as evidence; evidence must be an exact quote from the specific source user message.
+- Original message timestamps accompany extraction so historical statements are not mistaken for present-day facts.
 - Memories require an exact source quotation.
 - Evidence matching is whitespace-normalized and case-insensitive.
 - The stored memory content is the verbatim evidence excerpt, not an LLM-generated paraphrase.
