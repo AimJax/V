@@ -255,7 +255,7 @@ if ($BuildWhisperCuda) {
     Write-Host "CUDA Whisper server: $cudaServerPath" -ForegroundColor Green
     Write-Host "In V Settings > Voice, set Speech recognition device to NVIDIA GPU (CUDA)." -ForegroundColor Yellow
     Write-Host "Set Whisper CUDA server executable to this path:" -ForegroundColor Yellow
-    Write-Host "  $($cudaExecutable.FullName)"
+    Write-Host "  $cudaServerPath"
 }
 
 if (-not $SkipModelDownloads) {
