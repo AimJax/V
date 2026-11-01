@@ -88,6 +88,23 @@ class MemoryBackfillTests(unittest.IsolatedAsyncioTestCase):
             batch_size=batch_size,
         )
 
+    async def test_status_open_does_not_pause_a_live_scan_owner(self):
+        self.add_user_message("I currently work in construction.")
+        self.assertTrue(self.review.acquire_run_lock())
+        run = self.review.create_run(
+            upper_message_id=self.conversations.max_user_message_id(),
+            total_messages=1,
+        )
+        self.review.set_run_status(run["id"], "running")
+
+        second_view = MemoryBackfillStore(self.memory.database_path)
+        self.assertEqual(second_view.latest_run()["status"], "running")
+        self.assertFalse(second_view.acquire_run_lock())
+
+        self.review.release_run_lock()
+        recovered_view = MemoryBackfillStore(self.memory.database_path)
+        self.assertEqual(recovered_view.latest_run()["status"], "paused")
+
     async def test_backfill_creates_review_proposals_without_saving_memories(self):
         first_id = self.add_user_message("I currently work in construction.")
         self.conversations.add_message(
