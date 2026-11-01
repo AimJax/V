@@ -36,7 +36,9 @@ SETTING_FIELDS = {
     "voice_output_device_id",
     "voice_sample_rate",
     "voice_stt_language",
+    "voice_stt_device",
     "voice_stt_threads",
+    "voice_whisper_cuda_server_path",
     "voice_whisper_server_path",
     "voice_whisper_model_path",
     "voice_silero_vad_model_path",
@@ -228,12 +230,19 @@ def validate_desktop_settings(
     if normalized["voice_stt_language"] not in {"auto", "en", "id"}:
         raise ValueError("Speech recognition language must be auto, en, or id.")
 
+    normalized["voice_stt_device"] = _require_string(
+        normalized["voice_stt_device"], "Speech recognition device", maximum=8
+    ).casefold()
+    if normalized["voice_stt_device"] not in {"cpu", "cuda"}:
+        raise ValueError("Speech recognition device must be cpu or cuda.")
+
     normalized["voice_stt_threads"] = _require_int(
         normalized["voice_stt_threads"], "Speech recognition threads", 1, 8
     )
 
     for field, name in (
-        ("voice_whisper_server_path", "Whisper server path"),
+        ("voice_whisper_server_path", "Whisper CPU server path"),
+        ("voice_whisper_cuda_server_path", "Whisper CUDA server path"),
         ("voice_whisper_model_path", "Whisper model path"),
         ("voice_silero_vad_model_path", "Silero VAD model path"),
         ("voice_kokoro_model_path", "Kokoro ONNX model path"),
@@ -270,8 +279,18 @@ def validate_desktop_settings(
     )
 
     if normalized["voice_enabled"]:
+        selected_server_field = (
+            "voice_whisper_cuda_server_path"
+            if normalized["voice_stt_device"] == "cuda"
+            else "voice_whisper_server_path"
+        )
+        selected_server_label = (
+            "Whisper CUDA server executable"
+            if normalized["voice_stt_device"] == "cuda"
+            else "Whisper CPU server executable"
+        )
         required_voice_assets = [
-            ("voice_whisper_server_path", "Whisper server executable"),
+            (selected_server_field, selected_server_label),
             ("voice_whisper_model_path", "Whisper model"),
             ("voice_silero_vad_model_path", "Silero VAD model"),
         ]
@@ -378,8 +397,10 @@ def save_local_desktop_settings(
         "output_device_id": normalized["voice_output_device_id"],
         "sample_rate": normalized["voice_sample_rate"],
         "stt_language": normalized["voice_stt_language"],
+        "stt_device": normalized["voice_stt_device"],
         "stt_threads": normalized["voice_stt_threads"],
         "whisper_server_path": normalized["voice_whisper_server_path"],
+        "whisper_cuda_server_path": normalized["voice_whisper_cuda_server_path"],
         "whisper_model_path": normalized["voice_whisper_model_path"],
         "silero_vad_model_path": normalized["voice_silero_vad_model_path"],
         "vad_threshold": normalized["voice_vad_threshold"],
