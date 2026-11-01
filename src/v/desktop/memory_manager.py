@@ -437,15 +437,16 @@ class MemoryManagerDialog(QDialog):
         self.provenance_label.setText(
             f"Provenance: {memory.provenance} (read-only)"
         )
+        source_reference = (
+            f"conversation {memory.source_conversation_id}, "
+            f"message {memory.source_message_id}"
+            if memory.source_conversation_id is not None
+            or memory.source_message_id is not None
+            else "not recorded"
+        )
+        source_date = memory.source_created_at or "unknown"
         self.source_label.setText(
-            "Source reference: "
-            + (
-                f"conversation {memory.source_conversation_id}, "
-                f"message {memory.source_message_id}"
-                if memory.source_conversation_id is not None
-                or memory.source_message_id is not None
-                else "not recorded"
-            )
+            f"Source reference: {source_reference} · Original message date: {source_date}"
         )
         self.created_label.setText(f"Created: {memory.created_at}")
         self.updated_label.setText(f"Updated: {memory.updated_at}")
