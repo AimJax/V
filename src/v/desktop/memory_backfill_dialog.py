@@ -177,7 +177,7 @@ class MemoryBackfillDialog(QDialog):
         )
         header.setSectionResizeMode(
             2,
-            self.candidate_table.horizontalHeader().ResizeMode.ResizeToContents,
+            QHeaderView.ResizeMode.ResizeToContents,
         )
         header.setSectionResizeMode(
             3,
@@ -346,9 +346,10 @@ class MemoryBackfillDialog(QDialog):
             f"Proposal · {candidate['status'].title()}"
         )
         self.candidate_id_label.setText(
-            f"Proposal ID: {candidate['id']} · "
-            f"Conversation: {payload['source_conversation_id']} · "
-            f"Message: {payload['source_message_id']}"
+            f"Proposal ID: {candidate['id']}\n"
+            f"Conversation: {payload['source_conversation_id']}\n"
+            f"Source message: {payload['source_message_id']} · "
+            f"{payload.get('source_created_at', 'timestamp unavailable')}"
         )
         self.suggested_summary.setText(
             "Model suggestion: " + payload.get("model_content", "")
