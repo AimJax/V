@@ -169,14 +169,14 @@ class SettingsDialog(QDialog):
         memory_form.addRow("Embedding model", self.embedding_model)
         memory_form.addRow("Minimum extraction confidence", self.minimum_confidence)
         memory_form.addRow("Idle delay before extraction", self.idle_delay)
-        memory_form.addRow("Maximum extraction jobs per cycle", self.jobs_per_cycle)
+        memory_form.addRow("Maximum extraction batches per idle cycle", self.jobs_per_cycle)
         memory_form.addRow("Semantic similarity threshold", self.semantic_threshold)
         memory_form.addRow("Maximum retrieved memories", self.retrieval_limit)
         memory_form.addRow("Maximum memory context characters", self.retrieval_characters)
         memory_layout.addLayout(memory_form)
 
         memory_note = QLabel(
-            "Memory extraction stores only explicit, validated statements. "
+            "Memory extraction stores explicit, validated facts and useful ongoing context. Each batch examines up to five user messages. "
             "Disabling retrieval does not delete saved memories. "
             "The embedding model must be loaded in LM Studio when semantic retrieval is enabled."
         )
