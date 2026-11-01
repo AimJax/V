@@ -315,6 +315,7 @@ class MemoryManagerDialog(QDialog):
         self._dirty = True
         self.dirty_label.setText("Unsaved changes")
         self.save_button.setEnabled(not self._operation_pending)
+        self.confirm_button.setEnabled(False)
     
     def refresh(self) -> None:
         if self._dirty:

@@ -59,7 +59,11 @@ def _run_memory_import(source: str) -> int:
 
 
 def _run_memory_confirm(memory_id: str) -> int:
-    memory = _memory_store().confirm_memory(memory_id)
+    try:
+        memory = _memory_store().confirm_memory(memory_id)
+    except KeyError:
+        print(f"Memory ID not found: {memory_id}", file=sys.stderr)
+        return 1
     print(f"Confirmed memory: {memory.id}")
     print(f"Last confirmed: {memory.last_confirmed_at}")
     print(f"Original source date: {memory.source_created_at or 'unknown'}")

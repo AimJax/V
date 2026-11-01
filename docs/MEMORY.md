@@ -42,6 +42,7 @@ SQLite stores memory records, the extraction queue, and semantic embedding metad
 - `/memory status` — inspect saved-memory and extraction-queue status.
 - `/memory correct ID FIELD VALUE` — correct one field on a saved memory.
 - `/memory confirm ID` — explicitly confirm a saved memory is still true without changing its original source date or evidence.
+- `python -m v memory confirm ID` — perform the same confirmation from PowerShell.
 - `/memory delete ID` — permanently delete a memory.
 - `/memory retry` — retry failed automatic extraction jobs.
 - `python -m v memory backfill` — reprocess historical user messages into a review queue.

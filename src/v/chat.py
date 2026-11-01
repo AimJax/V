@@ -512,17 +512,17 @@ async def run_chat() -> int:
 
                 if subcommand == "confirm":
                     if len(parts) != 3:
-                        print("Usage: /memory confirm FULL_MEMORY_ID\\n")
+                        print("Usage: /memory confirm FULL_MEMORY_ID\n")
                     else:
                         try:
                             memory = memory_store.confirm_memory(parts[2].strip())
                         except KeyError:
-                            print("Memory ID not found.\\n")
+                            print("Memory ID not found.\n")
                         else:
                             print(
                                 "Memory confirmed at "
                                 f"{memory.last_confirmed_at}. Original source date "
-                                f"remains {memory.source_created_at or 'unknown'}.\\n"
+                                f"remains {memory.source_created_at or 'unknown'}.\n"
                             )
                     continue
 
