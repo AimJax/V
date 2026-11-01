@@ -10,6 +10,7 @@ V retrieves relevant saved memories for each user turn.
 - Exact keyword matches can provide a small ranking adjustment.
 - At most five memories are included by default.
 - Memory context is capped at 2,400 characters.
+- Context distinguishes original source dates from explicit user-confirmation timestamps. Unconfirmed memories remain available but are not treated as freshly confirmed.
 
 ## Integration
 - Retrieval occurs before the chat completion request.

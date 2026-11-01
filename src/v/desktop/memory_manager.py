@@ -305,6 +305,9 @@ class MemoryManagerDialog(QDialog):
             self.delete_button,
         ):
             widget.setEnabled(enabled and not self._operation_pending)
+        self.confirm_button.setEnabled(
+            enabled and not self._operation_pending and not self._dirty
+        )
 
     def _mark_dirty(self, *_args) -> None:
         if self._loading or self._selected_memory_id is None:

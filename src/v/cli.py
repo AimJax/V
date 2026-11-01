@@ -58,6 +58,15 @@ def _run_memory_import(source: str) -> int:
     return 0
 
 
+def _run_memory_confirm(memory_id: str) -> int:
+    memory = _memory_store().confirm_memory(memory_id)
+    print(f"Confirmed memory: {memory.id}")
+    print(f"Last confirmed: {memory.last_confirmed_at}")
+    print(f"Original source date: {memory.source_created_at or 'unknown'}")
+    print("Original evidence, source references, and memory content were preserved.")
+    return 0
+
+
 def _conversation_store() -> ConversationStore:
     settings = load_settings()
     root = project_root().resolve()
@@ -271,6 +280,12 @@ def main() -> int:
     )
     import_parser.add_argument("source", help="Source JSON backup file path.")
 
+    confirm_parser = memory_actions.add_parser(
+        "confirm",
+        help="Record that a saved memory is still true, preserving its source.",
+    )
+    confirm_parser.add_argument("memory_id", help="Full memory ID.")
+
     backfill_parser = memory_actions.add_parser(
         "backfill",
         help="Reprocess historical conversations into a review queue.",
@@ -395,6 +410,9 @@ def main() -> int:
                     )
                 review_parser.print_help()
                 return 0
+
+            if args.memory_action == "confirm":
+                return _run_memory_confirm(args.memory_id)
 
             if args.memory_action == "export":
                 return _run_memory_export(

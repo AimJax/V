@@ -28,6 +28,7 @@ class DesktopRuntimeThread(QThread):
     session_changed = Signal(object)
     memory_list_ready = Signal(object)
     memory_updated = Signal(object)
+    memory_confirmed = Signal(object)
     memory_deleted = Signal(str)
     memory_backup_completed = Signal(str)
     memory_operation_failed = Signal(str)
@@ -300,6 +301,14 @@ class DesktopRuntimeThread(QThread):
                     self.memory_operation_failed.emit(str(error))
                 continue
 
+            if command == "memory_confirm":
+                try:
+                    memory = service.confirm_memory(str(payload))
+                    self.memory_confirmed.emit(memory)
+                except Exception as error:
+                    self.memory_operation_failed.emit(str(error))
+                continue
+
             if command == "memory_delete":
                 try:
                     deleted = service.delete_memory(str(payload))
@@ -413,6 +422,9 @@ class DesktopRuntimeThread(QThread):
 
     def update_memory(self, memory_id: str, changes: dict) -> None:
         self._post("memory_update", (memory_id, changes))
+
+    def confirm_memory(self, memory_id: str) -> None:
+        self._post("memory_confirm", memory_id)
 
     def delete_memory(self, memory_id: str) -> None:
         self._post("memory_delete", memory_id)

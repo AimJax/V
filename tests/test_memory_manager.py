@@ -136,6 +136,34 @@ class MemoryManagerDialogTests(unittest.TestCase):
         self.assertEqual(changes["provenance"] if "provenance" in changes else None, None)
         self.assertNotIn("source_message_id", changes)
 
+    def test_confirm_button_emits_selected_memory_id(self):
+        memory = self._memory()
+        self.dialog.set_memories([memory])
+        self.application.processEvents()
+        emitted = []
+        self.dialog.confirm_requested.connect(emitted.append)
+
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QMessageBox
+        with patch(
+            "v.desktop.memory_manager.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ):
+            self.dialog.confirm_button.click()
+
+        self.assertEqual(emitted, [memory.id])
+        self.assertTrue(self.dialog._operation_pending)
+
+    def test_confirm_button_is_disabled_when_editor_has_unsaved_changes(self):
+        self.dialog.set_memories([self._memory()])
+        self.application.processEvents()
+        self.assertTrue(self.dialog.confirm_button.isEnabled())
+
+        self.dialog.content_input.setPlainText("Unsaved correction")
+
+        self.assertTrue(self.dialog._dirty)
+        self.assertFalse(self.dialog.confirm_button.isEnabled())
+
     def test_backfill_button_requests_historical_review(self):
         emitted = []
         self.dialog.backfill_requested.connect(lambda: emitted.append(True))

@@ -33,7 +33,7 @@ SQLite stores memory records, the extraction queue, and semantic embedding metad
 - Importance from 1 to 5.
 - Source conversation ID and source message ID.
 - Optional supporting evidence.
-- Creation, modification, and last-confirmation timestamps.
+- Creation, modification, and last-confirmation timestamps. Explicit confirmation updates only `last_confirmed_at`; original source timestamps and evidence remain unchanged.
 
 ## Chat commands
 
@@ -41,6 +41,7 @@ SQLite stores memory records, the extraction queue, and semantic embedding metad
 - `/memory search TEXT` — search saved memories.
 - `/memory status` — inspect saved-memory and extraction-queue status.
 - `/memory correct ID FIELD VALUE` — correct one field on a saved memory.
+- `/memory confirm ID` — explicitly confirm a saved memory is still true without changing its original source date or evidence.
 - `/memory delete ID` — permanently delete a memory.
 - `/memory retry` — retry failed automatic extraction jobs.
 - `python -m v memory backfill` — reprocess historical user messages into a review queue.
@@ -80,6 +81,7 @@ The backup format is versioned JSON. Import validates the format, version, field
 - The database, WAL files, and backups must never be committed to Git.
 - Deleting a memory removes its database row and FTS index entry. It does not erase copies in conversation history or external backups; those are separate data sources.
 - Historical messages are never automatically accepted as new memories: backfill proposals require explicit review.
+- Memories are not automatically expired or deleted. An explicit confirmation records when the user last reaffirmed a memory; missing confirmation does not mean the memory is false.
 - Automatic inferred-pattern extraction is disabled.
 - Automatic key conflicts are reviewable, but automatic consolidation and in-place replacement are intentionally not implemented. A reviewer must choose a distinct key to retain both statements; existing memories are never overwritten by conflict approval.
 - The Memory Manager includes historical scan controls and an editable proposal-review window. The CLI remains available for scripted or headless use.

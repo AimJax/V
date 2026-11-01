@@ -304,6 +304,32 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual(len(explicit), 1)
         self.assertEqual(len(inferred), 1)
 
+    def test_confirm_memory_updates_only_confirmation_and_audit_timestamps(self):
+        memory = self.store.create_memory(
+            content="The user currently works in construction.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_conversation_id="conversation-confirm",
+            source_message_id=77,
+            source_created_at="2024-03-12T09:15:00+00:00",
+            evidence="I currently work in construction.",
+        )
+
+        confirmed = self.store.confirm_memory(memory.id)
+
+        self.assertIsNotNone(confirmed.last_confirmed_at)
+        self.assertTrue(confirmed.last_confirmed_at.endswith("+00:00"))
+        self.assertEqual(confirmed.source_created_at, "2024-03-12T09:15:00+00:00")
+        self.assertEqual(confirmed.source_conversation_id, "conversation-confirm")
+        self.assertEqual(confirmed.source_message_id, 77)
+        self.assertEqual(confirmed.evidence, "I currently work in construction.")
+        self.assertEqual(confirmed.content, memory.content)
+        self.assertEqual(confirmed.created_at, memory.created_at)
+
+    def test_confirm_missing_memory_raises_key_error(self):
+        with self.assertRaises(KeyError):
+            self.store.confirm_memory("missing-memory-id")
+
     def test_update_preserves_original_source(self):
         memory = self.store.create_memory(
             content="The user enjoys rock.",

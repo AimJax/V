@@ -542,11 +542,13 @@ class DesktopWindow(QMainWindow):
             dialog.refresh_requested.connect(self.runtime.list_memories)
             dialog.update_requested.connect(self.runtime.update_memory)
             dialog.delete_requested.connect(self.runtime.delete_memory)
+            dialog.confirm_requested.connect(self.runtime.confirm_memory)
             dialog.export_requested.connect(self.runtime.export_memories)
             dialog.import_requested.connect(self.runtime.import_memories)
 
             self.runtime.memory_list_ready.connect(dialog.set_memories)
             self.runtime.memory_updated.connect(dialog.on_memory_updated)
+            self.runtime.memory_confirmed.connect(dialog.on_memory_confirmed)
             self.runtime.memory_deleted.connect(dialog.on_memory_deleted)
             self.runtime.memory_backup_completed.connect(
                 dialog.on_backup_completed

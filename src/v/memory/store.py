@@ -465,6 +465,10 @@ class MemoryStore:
             ).fetchone()
         return self._from_row(row)
 
+    def confirm_memory(self, memory_id: str) -> Memory:
+        """Record an explicit user confirmation without changing source evidence."""
+        return self.update_memory(memory_id, last_confirmed_at=_timestamp())
+
     def get_memory(self, memory_id: str) -> Memory | None:
         with closing(self._connect()) as connection:
             row = connection.execute(

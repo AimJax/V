@@ -421,6 +421,7 @@ async def run_chat() -> int:
                 print("  /memory search TEXT   - Search saved memories")
                 print("  /memory status        - Show memory counts")
                 print("  /memory correct ID FIELD VALUE - Correct a saved memory")
+                print("  /memory confirm ID    - Confirm a saved memory is still true")
                 print("  /memory delete ID     - Permanently delete a memory")
                 print("  /memory retry         - Retry failed extraction jobs")
                 print("  /exit                 - Exit V\n")
@@ -507,6 +508,22 @@ async def run_chat() -> int:
                         print("  Semantic retrieval: unavailable")
 
                     print()
+                    continue
+
+                if subcommand == "confirm":
+                    if len(parts) != 3:
+                        print("Usage: /memory confirm FULL_MEMORY_ID\\n")
+                    else:
+                        try:
+                            memory = memory_store.confirm_memory(parts[2].strip())
+                        except KeyError:
+                            print("Memory ID not found.\\n")
+                        else:
+                            print(
+                                "Memory confirmed at "
+                                f"{memory.last_confirmed_at}. Original source date "
+                                f"remains {memory.source_created_at or 'unknown'}.\\n"
+                            )
                     continue
 
                 if subcommand == "delete":

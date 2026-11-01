@@ -71,6 +71,16 @@ class DesktopServiceMemoryTests(unittest.TestCase):
         self.assertEqual(updated.evidence, "one step at a time")
         self.assertEqual(updated.created_at, self.preference.created_at)
 
+    def test_memory_confirmation_preserves_original_source(self):
+        confirmed = self.service.confirm_memory(self.preference.id)
+
+        self.assertIsNotNone(confirmed.last_confirmed_at)
+        self.assertEqual(confirmed.source_created_at, self.preference.source_created_at)
+        self.assertEqual(confirmed.source_conversation_id, "conversation-1")
+        self.assertEqual(confirmed.source_message_id, 9)
+        self.assertEqual(confirmed.evidence, "one step at a time")
+        self.assertEqual(confirmed.content, self.preference.content)
+
     def test_memory_delete_removes_record(self):
         self.assertTrue(self.service.delete_memory(self.fact.id))
         self.assertIsNone(self.store.get_memory(self.fact.id))

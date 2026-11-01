@@ -122,6 +122,22 @@ class MemoryRetrievalTests(unittest.TestCase):
         self.assertIn("2024-03-12T09:15:00+00:00", context)
         self.assertIn("2026-10-30T09:15:00+00:00", context)
 
+    def test_context_distinguishes_source_date_from_confirmation_date(self):
+        memory = self.store.create_memory(
+            content="The user currently works in construction.",
+            memory_type="episodic",
+            source_created_at="2024-03-12T09:15:00+00:00",
+        )
+
+        unconfirmed = build_memory_context([memory])
+        self.assertIn("source_date=2024-03-12T09:15:00+00:00", unconfirmed)
+        self.assertIn("last_confirmed=never", unconfirmed)
+
+        confirmed = self.store.confirm_memory(memory.id)
+        context = build_memory_context([confirmed])
+        self.assertIn(f"last_confirmed={confirmed.last_confirmed_at}", context)
+        self.assertIn("source_date=2024-03-12T09:15:00+00:00", context)
+
     def test_empty_results_produce_no_context(self):
         self.assertIsNone(build_memory_context([]))
 

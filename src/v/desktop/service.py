@@ -744,6 +744,12 @@ class DesktopService:
 
         return self.memory_store.update_memory(memory_id, **changes)
 
+    def confirm_memory(self, memory_id: str) -> Memory:
+        """Record the user's explicit re-confirmation of one saved memory."""
+        if self.memory_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        return self.memory_store.confirm_memory(memory_id)
+
     def delete_memory(self, memory_id: str) -> bool:
         """Permanently delete one memory record."""
         if self.memory_store is None:
