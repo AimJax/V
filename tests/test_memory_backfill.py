@@ -123,7 +123,8 @@ class MemoryBackfillTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["processed_messages"], 2)
         self.assertEqual(result["candidates_found"], 2)
         self.assertEqual(self.memory.count_memories(), 0)
-        self.assertEqual(len(progress), 2)
+        self.assertEqual(len(progress), 3)
+        self.assertEqual(progress[0]["status"], "running")
 
         candidates = self.review.list_candidates(status="pending")
         self.assertEqual(len(candidates), 2)
