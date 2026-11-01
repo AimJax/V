@@ -70,6 +70,12 @@ class SpeechTextSegmenterTests(unittest.TestCase):
             "First item Second item Third item",
         )
 
+    def test_preserves_underscores_inside_identifiers(self):
+        self.assertEqual(
+            clean_speech_text("The CPU is i7_4770K and path uses snake_case."),
+            "The CPU is i7_4770K and path uses snake_case.",
+        )
+
     def test_default_segmenter_releases_shorter_clauses(self):
         segmenter = SpeechTextSegmenter()
         self.assertEqual(
