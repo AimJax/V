@@ -84,6 +84,22 @@ class MemoryRetrievalTests(unittest.TestCase):
         self.assertIn(self.preference.id, context)
         self.assertIn("software development", context)
 
+    def test_historical_snapshot_date_is_explicit_in_memory_context(self):
+        historical = self.store.create_memory(
+            content="The user worked in a construction role.",
+            memory_type="episodic",
+            source_created_at="2024-03-12T09:15:00+00:00",
+        )
+
+        context = build_memory_context([historical])
+
+        self.assertIn("source_date=2024-03-12T09:15:00+00:00", context)
+        self.assertIn("historical_snapshot", context)
+        self.assertIn(
+            "not when it is necessarily still true",
+            context,
+        )
+
     def test_empty_results_produce_no_context(self):
         self.assertIsNone(build_memory_context([]))
 
