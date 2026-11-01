@@ -11,14 +11,30 @@ def clean_speech_text(text: str) -> str:
         raise TypeError("Speech text must be a string.")
 
     cleaned = text
-    cleaned = re.sub(r"(?ms)^[ \t]*```[^\n]*\n.*?^[ \t]*```[ \t]*$", " ", cleaned)
-    cleaned = re.sub(r"(?ms)^[ \t]*~~~[^\n]*\n.*?^[ \t]*~~~[ \t]*$", " ", cleaned)
-    cleaned = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", lambda match: match.group(1), cleaned)
+    cleaned = re.sub(
+        r"(?ms)^[ \t]*```[^\n]*\n.*?^[ \t]*```[ \t]*$",
+        " ",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"(?ms)^[ \t]*~~~[^\n]*\n.*?^[ \t]*~~~[ \t]*$",
+        " ",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"!?\[([^\]]*)\]\([^)]*\)",
+        lambda match: match.group(1),
+        cleaned,
+    )
     cleaned = re.sub(r"https?://\S+", " ", cleaned)
     cleaned = re.sub(r"(?m)^\s{0,3}#{1,6}\s+", "", cleaned)
     cleaned = re.sub(r"(?m)^\s{0,3}>\s?", "", cleaned)
     cleaned = re.sub(r"(?m)^\s*(?:[-+*]|\d+[.)])\s+", "", cleaned)
-    cleaned = re.sub(r"(?m)^\s*(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$", " ", cleaned)
+    cleaned = re.sub(
+        r"(?m)^\s*(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$",
+        " ",
+        cleaned,
+    )
     cleaned = re.sub(
         r"(?<!\w)(?:\*{1,3}|_{1,3}|~~)(?=\S)|"
         r"(?<=\S)(?:\*{1,3}|_{1,3}|~~)(?!\w)",
@@ -29,6 +45,7 @@ def clean_speech_text(text: str) -> str:
     cleaned = cleaned.replace("|", " ")
     cleaned = re.sub(r"\\([\\`*_{}\[\]()#+\-.!>])", r"\1", cleaned)
     return re.sub(r"\s+", " ", cleaned).strip()
+
 
 class SpeechTextSegmenter:
     """Release complete, natural-sounding text segments as streamed tokens arrive."""
