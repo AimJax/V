@@ -124,6 +124,73 @@ class ConversationStoreTests(unittest.TestCase):
             "Return the persistent ID.",
         )
 
+    def test_surrounding_context_is_limited_to_same_conversation_and_excludes_target(self):
+        conversation = self.store.create_conversation("Context")
+        other = self.store.create_conversation("Other")
+
+        before_id = self.store.add_message(
+            conversation.id,
+            "user",
+            "Earlier user context.",
+        )
+        self.store.add_message(
+            conversation.id,
+            "assistant",
+            "Assistant clarification.",
+        )
+        target_id = self.store.add_message(
+            conversation.id,
+            "user",
+            "The actual source statement.",
+        )
+        self.store.add_message(
+            conversation.id,
+            "assistant",
+            "Follow-up clarification.",
+        )
+        self.store.add_message(
+            conversation.id,
+            "user",
+            "Later user context that is longer than the cap.",
+        )
+        self.store.add_message(
+            other.id,
+            "user",
+            "Must never leak across conversations.",
+        )
+
+        context = self.store.get_surrounding_messages(
+            target_id,
+            before=1,
+            after=1,
+            max_chars_per_message=24,
+        )
+
+        self.assertEqual([item.id for item in context], [
+            before_id + 1,
+            target_id + 1,
+        ])
+        self.assertEqual(
+            [item.role for item in context],
+            ["assistant", "assistant"],
+        )
+        self.assertEqual(
+            [item.content for item in context],
+            ["Assistant clarification.", "Follow-up clarifi"],
+        )
+        self.assertNotIn(
+            "Must never leak across conversations",
+            " ".join(item.content for item in context),
+        )
+
+    def test_surrounding_context_validates_bounds(self):
+        conversation = self.store.create_conversation("Bounds")
+        target_id = self.store.add_message(conversation.id, "user", "Target.")
+        with self.assertRaises(ValueError):
+            self.store.get_surrounding_messages(target_id, before=6)
+        with self.assertRaises(ValueError):
+            self.store.get_surrounding_messages(target_id, max_chars_per_message=0)
+
     def test_recent_message_limit(self):
         conversation = self.store.create_conversation()
 
