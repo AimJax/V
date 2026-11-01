@@ -6,7 +6,7 @@ from pathlib import Path
 from support import temporary_directory
 
 from v.conversations.store import ConversationStore
-from v.memory.extractor import MemoryExtractor
+from v.memory.extractor import MemoryExtractor, _split_text_windows
 from v.memory.queue import ExtractionQueue
 from v.memory.store import MemoryStore
 from v.providers.base import ChatResult
@@ -75,6 +75,87 @@ class MemoryExtractorTests(unittest.IsolatedAsyncioTestCase):
             self.memory,
             self.queue,
         )
+
+    def test_long_message_windows_overlap_without_dropping_source_text(self):
+        source = (
+            "Opening statement. "
+            + ("A detailed historical circumstance with exact context. " * 260)
+            + "Final statement."
+        )
+        windows = _split_text_windows(
+            source,
+            max_characters=1200,
+            overlap_characters=100,
+        )
+
+        self.assertGreater(len(windows), 1)
+        self.assertTrue(all(len(window) <= 1200 for window in windows))
+        self.assertTrue(
+            all(
+                windows[index][-100:] == windows[index + 1][:100]
+                for index in range(len(windows) - 1)
+            )
+        )
+        reconstructed = windows[0] + "".join(
+            window[100:] for window in windows[1:]
+        )
+        self.assertEqual(reconstructed, source)
+
+    async def test_long_message_extraction_deduplicates_overlapping_windows(self):
+        class WindowProvider:
+            def __init__(self):
+                self.calls = 0
+                self.request_sizes = []
+
+            async def chat(self, messages, **kwargs):
+                self.calls += 1
+                payload = json.loads(messages[1].content)
+                self.request_sizes.append(
+                    sum(len(item["user_message"]) for item in payload)
+                )
+                return ChatResult(
+                    content=json.dumps({
+                        "memories": [
+                            {
+                                "source_message_id": item["source_message_id"],
+                                "memory_type": "profile",
+                                "subject": "User",
+                                "content": "The user's name is TestUser.",
+                                "memory_key": "user.name",
+                                "provenance": "explicit",
+                                "confidence": 0.99,
+                                "importance": 5,
+                                "evidence": "I'm TestUser",
+                            }
+                            for item in payload
+                        ]
+                    }),
+                    model="test-model",
+                )
+
+        long_text = (
+            "Hi, I'm TestUser. "
+            + ("A detailed account of an important long-term circumstance. " * 500)
+        )
+        message_id = self.conversations.add_message(
+            self.conversation.id,
+            "user",
+            long_text,
+        )
+        message = self.conversations.get_message_record(message_id)
+        provider = WindowProvider()
+
+        candidates, skipped = await self.extractor(provider).extract_candidates(
+            [message]
+        )
+
+        self.assertGreater(provider.calls, 1)
+        self.assertTrue(all(size <= 10000 for size in provider.request_sizes))
+        self.assertEqual(len(candidates), 1)
+        self.assertGreater(skipped, 0)
+        self.assertEqual(candidates[0]["evidence"], "I'm TestUser")
+        self.assertEqual(candidates[0]["source_message_id"], message_id)
+        self.assertEqual(candidates[0]["source_created_at"], message.created_at)
 
     async def test_extraction_receives_limited_surrounding_context(self):
         self.conversations.add_message(
