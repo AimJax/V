@@ -117,8 +117,8 @@ class KokoroSpeechEngineTests(unittest.TestCase):
         module, _instance = self._mock_kokoro_module()
         engine = KokoroSpeechEngine(self.model, self.voices)
         with patch.dict(sys.modules, {"kokoro_onnx": module}):
-            with self.assertRaisesRegex(ValueError, "between 0.5 and 1.5"):
-                engine.synthesize_wav("Hello", speed=1.6)
+            with self.assertRaisesRegex(ValueError, "between 0.5 and 2.0"):
+                engine.synthesize_wav("Hello", speed=2.1)
 
     def test_rejects_unsupported_language(self):
         module, _instance = self._mock_kokoro_module()
