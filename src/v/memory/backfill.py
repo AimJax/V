@@ -399,6 +399,10 @@ class MemoryBackfillRunner:
         run_id = run["id"]
         self.review_store.set_run_status(run_id, "running")
         self._running = True
+        if on_progress is not None:
+            active = self.review_store.get_run(run_id)
+            if active is not None:
+                on_progress(active)
 
         try:
             while True:
