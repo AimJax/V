@@ -39,6 +39,32 @@ function Invoke-Native {
     }
 }
 
+function Invoke-DeveloperBatch {
+    param(
+        [string[]]$Commands,
+        [string]$Description
+    )
+
+    $commandFile = Join-Path ([IO.Path]::GetTempPath()) (
+        "v-whisper-build-" + [Guid]::NewGuid().ToString("N") + ".cmd"
+    )
+    try {
+        Set-Content -LiteralPath $commandFile -Value $Commands -Encoding ASCII
+        Write-Host ""
+        Write-Host "== $Description ==" -ForegroundColor Cyan
+        $arguments = '/d /c "' + $commandFile + '"'
+        $process = Start-Process -FilePath $env:ComSpec -ArgumentList $arguments -NoNewWindow -Wait -PassThru
+        if ($process.ExitCode -ne 0) {
+            throw "$Description failed with exit code $($process.ExitCode)."
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $commandFile) {
+            Remove-Item -LiteralPath $commandFile -Force
+        }
+    }
+}
+
 function Assert-DownloadedFile {
     param(
         [string]$Path,
@@ -179,6 +205,15 @@ if ($BuildWhisperCuda) {
     if (-not $msvcToolset) {
         throw "MSVC 14.38 was not found under $msvcRoot. Install the v14.38-17.8 x64/x86 build tools component, then retry."
     }
+    $msvcCompiler = Join-Path $msvcToolset.FullName "bin\Hostx64\x64\cl.exe"
+    if (-not (Test-Path -LiteralPath $msvcCompiler -PathType Leaf)) {
+        throw "The MSVC 14.38 x64 compiler was not found: $msvcCompiler"
+    }
+    $vcvarsall = Join-Path $installation "VC\Auxiliary\Build\vcvarsall.bat"
+    if (-not (Test-Path -LiteralPath $vcvarsall -PathType Leaf)) {
+        throw "Visual Studio vcvarsall.bat was not found: $vcvarsall"
+    }
+
     $cudaRoot = [Environment]::GetEnvironmentVariable("CUDA_PATH")
     if (-not $cudaRoot -or -not (Test-Path -LiteralPath $cudaRoot -PathType Container)) {
         throw "CUDA_PATH is missing or invalid. Set CUDA_PATH to the CUDA 12.8 Toolkit directory, then reopen PowerShell."
@@ -192,27 +227,20 @@ if ($BuildWhisperCuda) {
         throw "CUDA cuBLAS import library was not found: $cudaCublas"
     }
 
-    Invoke-Native "cmake" @(
-        "-S", $WhisperSource,
-        "-B", $WhisperCudaBuild,
-        "-G", "Visual Studio 17 2022",
-        "-A", "x64",
-        "-T", "version=14.38",
-        "-DWHISPER_BUILD_SERVER=ON",
-        "-DWHISPER_BUILD_EXAMPLES=ON",
-        "-DWHISPER_BUILD_TESTS=OFF",
-        "-DGGML_CUDA=ON",
-        "-DCMAKE_CUDA_ARCHITECTURES=75",
-        "-DCUDAToolkit_ROOT=$cudaRoot",
-        "-DCMAKE_CUDA_COMPILER=$cudaCompiler"
-    ) "Configure CUDA whisper.cpp server for RTX 2060 Super (sm_75)"
-
-    Invoke-Native "cmake" @(
-        "--build", $WhisperCudaBuild,
-        "--config", "Release",
-        "--target", "whisper-server",
-        "--parallel", "$BuildThreads"
-    ) "Build CUDA whisper-server"
+    $cudaBuildCommands = @(
+        "@echo off",
+        ('call "{0}" x64 -vcvars_ver={1}' -f $vcvarsall, $msvcToolset.Name),
+        "if errorlevel 1 exit /b %errorlevel%",
+        ('set "CUDA_PATH={0}"' -f $cudaRoot),
+        'set "PATH=%CUDA_PATH%\bin;%PATH%"',
+        'echo MSVC toolset selected by vcvarsall: %VCToolsVersion%',
+        'where cl',
+        ('cmake -S "{0}" -B "{1}" -G "NMake Makefiles" -DWHISPER_BUILD_SERVER=ON -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_TESTS=OFF -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 -DCUDAToolkit_ROOT="{2}" -DCMAKE_CUDA_COMPILER="{3}" -DCMAKE_C_COMPILER="{4}" -DCMAKE_CXX_COMPILER="{4}" -DCMAKE_CUDA_HOST_COMPILER="{4}"' -f $WhisperSource, $WhisperCudaBuild, $cudaRoot, $cudaCompiler, $msvcCompiler),
+        "if errorlevel 1 exit /b %errorlevel%",
+        ('cmake --build "{0}" --config Release --target whisper-server --parallel {1}' -f $WhisperCudaBuild, $BuildThreads),
+        "if errorlevel 1 exit /b %errorlevel%"
+    )
+    Invoke-DeveloperBatch $cudaBuildCommands "Configure and build CUDA whisper-server using MSVC $($msvcToolset.Name)"
 
     $cudaServerCandidates = @(
         (Join-Path $WhisperCudaBuild "bin\Release\whisper-server.exe"),
