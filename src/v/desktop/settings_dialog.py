@@ -217,14 +217,21 @@ class SettingsDialog(QDialog):
         voice_form.addRow(self.audio_device_note)
 
         self.whisper_server_path = QLineEdit()
+        self.whisper_cuda_server_path = QLineEdit()
         self.whisper_model_path = QLineEdit()
         self.silero_vad_model_path = QLineEdit()
         self.kokoro_model_path = QLineEdit()
         self.kokoro_voices_path = QLineEdit()
         self._add_path_picker(
             voice_form,
-            "Whisper server executable",
+            "Whisper CPU server executable",
             self.whisper_server_path,
+            "Executables (*.exe)",
+        )
+        self._add_path_picker(
+            voice_form,
+            "Whisper CUDA server executable",
+            self.whisper_cuda_server_path,
             "Executables (*.exe)",
         )
         self._add_path_picker(
@@ -252,6 +259,10 @@ class SettingsDialog(QDialog):
             "Kokoro voice files (*.bin)",
         )
 
+        self.stt_device = QComboBox()
+        self.stt_device.addItem("CPU", "cpu")
+        self.stt_device.addItem("NVIDIA GPU (CUDA)", "cuda")
+
         self.stt_language = QComboBox()
         self.stt_language.addItem("Automatic detection", "auto")
         self.stt_language.addItem("English", "en")
@@ -260,6 +271,7 @@ class SettingsDialog(QDialog):
         self.stt_threads = QSpinBox()
         self.stt_threads.setRange(1, 8)
 
+        voice_form.addRow("Speech recognition device", self.stt_device)
         voice_form.addRow("Speech recognition language", self.stt_language)
         voice_form.addRow("Whisper CPU threads", self.stt_threads)
 
@@ -514,9 +526,11 @@ class SettingsDialog(QDialog):
             self.offline_mode,
             self.input_device,
             self.output_device,
+            self.stt_device,
             self.stt_language,
             self.stt_threads,
             self.whisper_server_path,
+            self.whisper_cuda_server_path,
             self.whisper_model_path,
             self.silero_vad_model_path,
             self.kokoro_model_path,
@@ -595,6 +609,12 @@ class SettingsDialog(QDialog):
         self._populate_audio_devices(voice)
         self.whisper_server_path.setText(
             str(voice.get("whisper_server_path", ""))
+        )
+        self.whisper_cuda_server_path.setText(
+            str(voice.get("whisper_cuda_server_path", ""))
+        )
+        self.stt_device.setCurrentIndex(
+            max(0, self.stt_device.findData(str(voice.get("stt_device", "cpu"))))
         )
         self.whisper_model_path.setText(
             str(voice.get("whisper_model_path", ""))
@@ -702,8 +722,10 @@ class SettingsDialog(QDialog):
                 self._snapshot.voice.get("sample_rate", 16000)
             ),
             "voice_stt_language": str(self.stt_language.currentData()),
+            "voice_stt_device": str(self.stt_device.currentData()),
             "voice_stt_threads": self.stt_threads.value(),
             "voice_whisper_server_path": self.whisper_server_path.text().strip(),
+            "voice_whisper_cuda_server_path": self.whisper_cuda_server_path.text().strip(),
             "voice_whisper_model_path": self.whisper_model_path.text().strip(),
             "voice_silero_vad_model_path": self.silero_vad_model_path.text().strip(),
             "voice_vad_threshold": self.vad_threshold.value(),
