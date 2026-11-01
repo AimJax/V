@@ -1,5 +1,6 @@
 import unittest
 
+from contextlib import closing
 from pathlib import Path
 
 from support import temporary_directory
@@ -122,20 +123,20 @@ class MemoryStoreTests(unittest.TestCase):
             content="An existing memory.",
             memory_key="existing",
         )
-        with self.store._connect() as connection:
-            connection.execute(
-                "ALTER TABLE memories DROP COLUMN source_created_at"
-            )
-            connection.execute("DROP INDEX idx_memories_key")
-            connection.execute(
-                """
-                CREATE UNIQUE INDEX idx_memories_key
-                ON memories(memory_key)
-                WHERE memory_key IS NOT NULL
-                """
-            )
-            connection.execute("PRAGMA user_version = 1")
-            connection.commit()
+        with closing(self.store._connect()) as connection:
+            with connection:
+                connection.execute(
+                    "ALTER TABLE memories DROP COLUMN source_created_at"
+                )
+                connection.execute("DROP INDEX idx_memories_key")
+                connection.execute(
+                    """
+                    CREATE UNIQUE INDEX idx_memories_key
+                    ON memories(memory_key)
+                    WHERE memory_key IS NOT NULL
+                    """
+                )
+                connection.execute("PRAGMA user_version = 1")
 
         migrated = MemoryStore(self.database_path)
         restored = migrated.get_memory(original.id)
