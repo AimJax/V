@@ -185,6 +185,50 @@ def _contains_sensitive_content(*values: str) -> bool:
     return False
 
 
+def _split_text_windows(
+    text: str,
+    *,
+    max_characters: int = 5000,
+    overlap_characters: int = 250,
+) -> list[str]:
+    """Split a long message into bounded overlapping windows without losing text."""
+    if max_characters < 100 or overlap_characters < 0:
+        raise ValueError("Invalid long-message window settings.")
+    if len(text) <= max_characters:
+        return [text]
+
+    windows: list[str] = []
+    start = 0
+    while start < len(text):
+        hard_end = min(len(text), start + max_characters)
+        end = hard_end
+
+        if hard_end < len(text):
+            floor = start + max_characters // 2
+            boundaries = (
+                text.rfind("\n\n", floor, hard_end),
+                text.rfind("\n", floor, hard_end),
+                text.rfind(". ", floor, hard_end),
+                text.rfind("; ", floor, hard_end),
+                text.rfind(" ", floor, hard_end),
+            )
+            boundary = max(boundaries)
+            if boundary > floor:
+                marker = text[boundary:boundary + 2]
+                end = boundary + (2 if marker in {"\n\n", ". ", "; "} else 1)
+
+        window = text[start:end]
+        if window:
+            windows.append(window)
+
+        if end >= len(text):
+            break
+
+        start = max(start + 1, end - overlap_characters)
+
+    return windows
+
+
 def _parse_response(raw: str) -> list[dict]:
     """Parse JSON, tolerating a surrounding Markdown code fence."""
     content = raw.strip()
@@ -250,9 +294,10 @@ class MemoryExtractor:
     ) -> tuple[list[dict], int]:
         """Extract and strictly validate proposals without writing memories.
 
-        This shared path is used by both automatic extraction and historical
-        backfill. Backfill proposals are stored for human review; normal
-        extraction continues to save only validated verbatim evidence.
+        Long user messages are split into overlapping, bounded windows so one
+        unusually large rant cannot exhaust the local model's context window.
+        Every proposed quotation is still verified against the complete,
+        original source message before it can become a memory.
         """
         source_messages = {
             message.id: message
@@ -262,7 +307,7 @@ class MemoryExtractor:
         if not source_messages:
             return [], 0
 
-        source_payload = []
+        requests: list[dict] = []
         for message_id, message in source_messages.items():
             context_messages = self.conversation_store.get_surrounding_messages(
                 message_id,
@@ -270,37 +315,66 @@ class MemoryExtractor:
                 after=1,
                 max_chars_per_message=1200,
             )
-            source_payload.append(
+            context_payload = [
                 {
-                    "source_message_id": message_id,
-                    "source_conversation_id": message.conversation_id,
-                    "source_created_at": message.created_at,
-                    "user_message": message.content,
-                    "surrounding_context": [
-                        {
-                            "message_id": item.id,
-                            "role": item.role,
-                            "created_at": item.created_at,
-                            "content": item.content,
-                        }
-                        for item in context_messages
-                    ],
+                    "message_id": item.id,
+                    "role": item.role,
+                    "created_at": item.created_at,
+                    "content": item.content,
                 }
+                for item in context_messages
+            ]
+            for window_index, window in enumerate(
+                _split_text_windows(message.content)
+            ):
+                requests.append(
+                    {
+                        "source_message_id": message_id,
+                        "source_conversation_id": message.conversation_id,
+                        "source_created_at": message.created_at,
+                        "window_index": window_index,
+                        "user_message": window,
+                        "surrounding_context": context_payload,
+                    }
+                )
+
+        # Keep each request small enough for local models with modest context
+        # limits. Context is bounded separately from each source text window.
+        request_groups: list[list[dict]] = []
+        group: list[dict] = []
+        group_characters = 0
+        for entry in requests:
+            entry_characters = (
+                len(entry["user_message"])
+                + sum(len(item["content"]) for item in entry["surrounding_context"])
             )
-        result = await self.provider.chat(
-            [
-                ChatMessage(role="system", content=EXTRACTION_SYSTEM_PROMPT),
-                ChatMessage(
-                    role="user",
-                    content=json.dumps(source_payload, ensure_ascii=False),
-                ),
-            ],
-            temperature=0.1,
-            max_tokens=1200,
-        )
-        raw_candidates = _parse_response(result.content)
+            if group and group_characters + entry_characters > 10000:
+                request_groups.append(group)
+                group = []
+                group_characters = 0
+            group.append(entry)
+            group_characters += entry_characters
+        if group:
+            request_groups.append(group)
+
+        raw_candidates: list[dict] = []
+        for request_group in request_groups:
+            result = await self.provider.chat(
+                [
+                    ChatMessage(role="system", content=EXTRACTION_SYSTEM_PROMPT),
+                    ChatMessage(
+                        role="user",
+                        content=json.dumps(request_group, ensure_ascii=False),
+                    ),
+                ],
+                temperature=0.1,
+                max_tokens=1200,
+            )
+            raw_candidates.extend(_parse_response(result.content))
+
         validated: list[dict] = []
         skipped = 0
+        seen_candidates: set[tuple[int, str, str]] = set()
 
         for candidate in raw_candidates:
             message_id = candidate.get("source_message_id")
@@ -335,6 +409,7 @@ class MemoryExtractor:
                 or len(memory_key) > 160
                 or not isinstance(evidence, str)
                 or not evidence.strip()
+                or len(evidence.strip()) > 600
             ):
                 skipped += 1
                 continue
@@ -373,6 +448,16 @@ class MemoryExtractor:
             ):
                 skipped += 1
                 continue
+
+            dedupe_key = (
+                message_id,
+                memory_key.strip().casefold(),
+                normalized_evidence,
+            )
+            if dedupe_key in seen_candidates:
+                skipped += 1
+                continue
+            seen_candidates.add(dedupe_key)
 
             validated.append(
                 {
