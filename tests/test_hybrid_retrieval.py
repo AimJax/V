@@ -25,7 +25,13 @@ class FakeEmbeddingProvider:
         if self.fail:
             raise ProviderConnectionError("Test offline.")
 
-        return [[1.0, 0.0] for _ in texts]
+        # Keep the baseline preference separate from episodic work timelines.
+        return [
+            [0.0, 0.0, 1.0, 0.0]
+            if ("work at" in text.casefold() or "work in" in text.casefold())
+            else [1.0, 0.0, 0.0, 0.0]
+            for text in texts
+        ]
 
     async def embed_queries(self, texts):
         self.query_calls += 1
@@ -39,15 +45,15 @@ class FakeEmbeddingProvider:
             lowered = text.casefold()
 
             if any(term in lowered for term in ("work", "job", "employment")):
-                results.append([1.0, 0.0])
+                results.append([0.0, 0.0, 1.0, 0.0])
             elif "programming" in lowered or "coding" in lowered:
-                results.append([0.8, 0.6])
+                results.append([0.8, 0.0, 0.0, 0.6])
             elif "weather" in lowered or "movie" in lowered:
-                results.append([0.5, 0.8660254])
+                results.append([0.5, 0.8660254, 0.0, 0.0])
             elif "software" in lowered or "technical" in lowered:
-                results.append([0.95, 0.31225])
+                results.append([0.95, 0.0, 0.0, 0.31225])
             else:
-                results.append([0.5, 0.8660254])
+                results.append([0.5, 0.8660254, 0.0, 0.0])
 
         return results
 
