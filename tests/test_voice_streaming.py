@@ -1,6 +1,6 @@
 import unittest
 
-from v.voice.streaming import SpeechTextSegmenter
+from v.voice.streaming import SpeechTextSegmenter, clean_speech_text
 
 
 class SpeechTextSegmenterTests(unittest.TestCase):
@@ -50,6 +50,32 @@ class SpeechTextSegmenterTests(unittest.TestCase):
         segmenter = SpeechTextSegmenter()
         with self.assertRaisesRegex(TypeError, "must be strings"):
             segmenter.feed(b"audio")
+
+    def test_cleans_markdown_before_speech(self):
+        text = (
+            "## Important\n"
+            "**This is bold** and *this is italic*. "
+            "Use `git pull` and [the documentation](https://example.com).\n\n"
+            "```python\nprint('do not read this code')\n```"
+        )
+        self.assertEqual(
+            clean_speech_text(text),
+            "Important This is bold and this is italic. "
+            "Use git pull and the documentation.",
+        )
+
+    def test_removes_markdown_list_markers_without_removing_words(self):
+        self.assertEqual(
+            clean_speech_text("* First item\n- Second item\n1. Third item"),
+            "First item Second item Third item",
+        )
+
+    def test_default_segmenter_releases_shorter_clauses(self):
+        segmenter = SpeechTextSegmenter()
+        self.assertEqual(
+            segmenter.feed("Here are eight useful words before the comma, and more."),
+            ["Here are eight useful words before the comma,"],
+        )
 
 
 if __name__ == "__main__":
