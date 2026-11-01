@@ -180,7 +180,10 @@ def _run_memory_review_list(*, status: str, limit: int) -> int:
         print(f"Suggested summary: {proposal['model_content']}")
         print(f"Evidence: {proposal['evidence']}")
         print(f"Memory key: {proposal['memory_key']}")
-        print(f"Source message: {proposal['source_message_id']}")
+        print(
+            f"Source message: {proposal['source_message_id']} "
+            f"({proposal.get('source_created_at', 'timestamp unavailable')})"
+        )
         if item["review_note"]:
             print(f"Review note: {item['review_note']}")
     print()
