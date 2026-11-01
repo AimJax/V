@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QScrollArea
 
 from v.desktop.audio_devices import AudioDeviceOption
@@ -125,6 +126,32 @@ class SettingsDialogTests(unittest.TestCase):
         self.dialog.voice_enabled.setChecked(False)
         self.assertFalse(self.dialog.speak_replies.isChecked())
         self.assertFalse(self.dialog.speak_replies.isEnabled())
+
+    def test_window_has_native_controls_and_fits_available_screen(self):
+        flags = self.dialog.windowFlags()
+        for flag in (
+            Qt.WindowType.WindowTitleHint,
+            Qt.WindowType.WindowSystemMenuHint,
+            Qt.WindowType.WindowCloseButtonHint,
+            Qt.WindowType.WindowMinimizeButtonHint,
+            Qt.WindowType.WindowMaximizeButtonHint,
+        ):
+            self.assertTrue(flags & flag)
+
+        self.assertTrue(self.dialog.isSizeGripEnabled())
+        self.dialog.show()
+        self.application.processEvents()
+
+        screen = self.dialog.screen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            frame = self.dialog.frameGeometry()
+            self.assertLessEqual(frame.width(), available.width())
+            self.assertLessEqual(frame.height(), available.height())
+            self.assertGreaterEqual(frame.left(), available.left())
+            self.assertGreaterEqual(frame.top(), available.top())
+            self.assertLessEqual(frame.right(), available.right())
+            self.assertLessEqual(frame.bottom(), available.bottom())
 
     def test_settings_pages_are_scrollable_and_footer_remains_available(self):
         self.assertTrue(self.dialog.isSizeGripEnabled())
