@@ -266,7 +266,10 @@ def import_backup(
     keys = [
         record["memory_key"]
         for record in validated
-        if record["memory_key"] is not None
+        if (
+            record["memory_key"] is not None
+            and record["memory_type"] != "episodic"
+        )
     ]
     if len(keys) != len(set(keys)):
         raise ValueError("Backup contains duplicate memory keys.")
