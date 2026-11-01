@@ -125,7 +125,7 @@ class MemoryBackfillDialogTests(unittest.TestCase):
 
     def test_rejection_emits_reason_and_candidate_id(self):
         self.dialog.set_candidates([self.candidate()])
-        self.dialog.application.processEvents()
+        self.application.processEvents()
         self.dialog.review_note_input.setText("Too temporary.")
         emitted = []
         self.dialog.reject_requested.connect(
