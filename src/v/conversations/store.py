@@ -94,6 +94,10 @@ class ConversationStore:
                 ON messages(conversation_id, id);
 
                 CREATE INDEX IF NOT EXISTS
+                    idx_messages_role_id
+                ON messages(role, id);
+
+                CREATE INDEX IF NOT EXISTS
                     idx_conversations_updated_at
                 ON conversations(updated_at DESC);
                 """
@@ -200,7 +204,7 @@ class ConversationStore:
         conversation_id: str,
         role: str,
         content: str,
-    ) -> None:
+    ) -> int:
         if role not in {"user", "assistant"}:
             raise ValueError(f"Unsupported stored message role: {role}")
 
@@ -283,6 +287,79 @@ class ConversationStore:
             content=row["content"],
             created_at=row["created_at"],
         )
+    def max_user_message_id(self) -> int:
+        """Return the highest user-message ID in the historical snapshot."""
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT COALESCE(MAX(id), 0) FROM messages WHERE role = 'user'"
+            ).fetchone()
+        return int(row[0])
+
+    def count_user_messages(self, *, through_id: int | None = None) -> int:
+        """Count user messages up to an optional stable ID boundary."""
+        with closing(self._connect()) as connection:
+            if through_id is None:
+                row = connection.execute(
+                    "SELECT COUNT(*) FROM messages WHERE role = 'user'"
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """
+                    SELECT COUNT(*) FROM messages
+                    WHERE role = 'user' AND id <= ?
+                    """,
+                    (through_id,),
+                ).fetchone()
+        return int(row[0])
+
+    def list_user_messages(
+        self,
+        *,
+        after_id: int = 0,
+        through_id: int | None = None,
+        limit: int = 5,
+    ) -> list[StoredMessage]:
+        """Read a bounded, ordered page for durable historical reprocessing."""
+        if after_id < 0:
+            raise ValueError("after_id cannot be negative.")
+        if through_id is not None and through_id < after_id:
+            return []
+        if not 1 <= limit <= 1000:
+            raise ValueError("User-message page size must be between 1 and 1000.")
+
+        if through_id is None:
+            sql = """
+                SELECT id, conversation_id, role, content, created_at
+                FROM messages
+                WHERE role = 'user' AND id > ?
+                ORDER BY id ASC
+                LIMIT ?
+            """
+            parameters = (after_id, limit)
+        else:
+            sql = """
+                SELECT id, conversation_id, role, content, created_at
+                FROM messages
+                WHERE role = 'user' AND id > ? AND id <= ?
+                ORDER BY id ASC
+                LIMIT ?
+            """
+            parameters = (after_id, through_id, limit)
+
+        with closing(self._connect()) as connection:
+            rows = connection.execute(sql, parameters).fetchall()
+
+        return [
+            StoredMessage(
+                id=row["id"],
+                conversation_id=row["conversation_id"],
+                role=row["role"],
+                content=row["content"],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+
     def get_recent_messages(
         self,
         conversation_id: str,
