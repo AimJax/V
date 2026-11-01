@@ -17,6 +17,7 @@ class Memory:
     importance: int
     source_conversation_id: str | None
     source_message_id: int | None
+    source_created_at: str | None
     evidence: str | None
     created_at: str
     updated_at: str
