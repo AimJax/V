@@ -272,7 +272,7 @@ if (-not $SkipModelDownloads) {
     Write-Host "== Download multilingual Whisper small model ==" -ForegroundColor Cyan
     & $whisperDownload "small" $ModelDirectory
     if ($LASTEXITCODE -ne 0) {
-        throw "Whisper base model download failed with exit code $LASTEXITCODE."
+        throw "Whisper Small model download failed with exit code $LASTEXITCODE."
     }
     Assert-DownloadedFile (Join-Path $ModelDirectory "ggml-small.bin") 400000000 "Whisper small model"
 
