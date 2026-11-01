@@ -35,6 +35,20 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result, 0)
         restore.assert_called_once_with("G:/V/backups/memories.json")
 
+    def test_memory_evaluate_dispatches_local_benchmark(self):
+        with patch.object(
+            sys,
+            "argv",
+            ["v", "memory", "evaluate"],
+        ), patch(
+            "v.cli._run_memory_evaluation",
+            new=AsyncMock(return_value=0),
+        ) as evaluate:
+            result = main()
+
+        self.assertEqual(result, 0)
+        evaluate.assert_awaited_once_with()
+
     def test_memory_backfill_dispatches_batch_and_new_run_options(self):
         with patch.object(
             sys,

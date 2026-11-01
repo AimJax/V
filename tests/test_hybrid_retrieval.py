@@ -8,6 +8,7 @@ from v.memory.embedding_store import EmbeddingStore
 from v.memory.hybrid_retrieval import (
     HybridMemoryRetriever,
     cosine_similarity,
+    rank_memory_candidates,
 )
 from v.memory.store import MemoryStore
 from v.providers.errors import ProviderConnectionError
@@ -215,6 +216,30 @@ class HybridRetrievalTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([item.id for item in results], [newer.id])
         self.assertIsNotNone(self.retriever.last_fallback_reason)
+
+    async def test_shared_ranking_preserves_lexical_recall_allowance(self):
+        vector = [0.5, 0.8660254, 0.0, 0.0]
+
+        without_keyword = rank_memory_candidates(
+            [self.preference],
+            vector,
+            {self.preference.id: (1.0, 0.0, 0.0, 0.0)},
+            set(),
+            semantic_threshold=0.60,
+        )
+        with_keyword = rank_memory_candidates(
+            [self.preference],
+            vector,
+            {self.preference.id: (1.0, 0.0, 0.0, 0.0)},
+            {self.preference.id},
+            semantic_threshold=0.60,
+        )
+
+        self.assertEqual(without_keyword, [])
+        self.assertEqual(
+            [item.id for item in with_keyword],
+            [self.preference.id],
+        )
 
     async def test_cosine_similarity(self):
         result = cosine_similarity(

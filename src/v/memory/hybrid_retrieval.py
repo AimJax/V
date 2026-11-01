@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime
-
 from v.memory.embedding_provider import LMStudioEmbeddingProvider
 from v.memory.embedding_store import EmbeddingStore
 from v.memory.models import Memory
@@ -44,6 +42,56 @@ def memory_document(memory: Memory) -> str:
         f"{memory.memory_type}. {memory.subject}.{temporal} "
         f"{memory.content}"
     )
+
+
+def rank_memory_candidates(
+    memories: list[Memory],
+    query_vector: tuple[float, ...] | list[float],
+    stored_vectors: dict[str, tuple[float, ...]],
+    lexical_ids: set[str],
+    *,
+    semantic_threshold: float,
+) -> list[Memory]:
+    """Apply V's production eligibility and ranking rules to one query vector."""
+    if (
+        not math.isfinite(semantic_threshold)
+        or not 0 <= semantic_threshold <= 1
+    ):
+        raise ValueError("Semantic threshold must be between 0 and 1.")
+
+    ranked = []
+    for memory in memories:
+        vector = stored_vectors.get(memory.id)
+        if vector is None:
+            continue
+
+        similarity = cosine_similarity(query_vector, vector)
+        lexical_match = memory.id in lexical_ids
+        eligible = (
+            similarity >= semantic_threshold
+            or (
+                lexical_match
+                and similarity >= semantic_threshold - 0.15
+            )
+        )
+        if not eligible:
+            continue
+
+        ranked.append((
+            similarity + (0.025 if lexical_match else 0.0),
+            memory.importance,
+            source_timestamp_key(memory.source_created_at),
+            memory.source_message_id or 0,
+            memory.id,
+            memory,
+        ))
+
+    # Relevance remains primary. Metadata only breaks ranking ties.
+    ranked.sort(
+        key=lambda item: (item[0], item[1], item[2], item[3], item[4]),
+        reverse=True,
+    )
+    return [item[5] for item in ranked]
 
 
 class HybridMemoryRetriever:
@@ -163,54 +211,16 @@ class HybridMemoryRetriever:
                 raise ValueError("Embedding provider returned an invalid query count.")
 
             stored_vectors = self.embedding_store.get_valid(self.model)
-            query_vector = query_vectors[0]
-
-            ranked: list[tuple[float, int, tuple[int, datetime], int, str, Memory]] = []
-
-            for memory in memories:
-                vector = stored_vectors.get(memory.id)
-
-                if vector is None:
-                    continue
-
-                similarity = cosine_similarity(query_vector, vector)
-                lexical_match = memory.id in lexical_ids
-
-                # Semantic match is primary. Exact keyword evidence provides
-                # a modest recall allowance, not an unrestricted bypass.
-                eligible = (
-                    similarity >= self.semantic_threshold
-                    or (
-                        lexical_match
-                        and similarity >= self.semantic_threshold - 0.15
-                    )
-                )
-
-                if not eligible:
-                    continue
-
-                adjusted_score = similarity + (
-                    0.025 if lexical_match else 0.0
-                )
-
-                ranked.append((
-                    adjusted_score,
-                    memory.importance,
-                    source_timestamp_key(memory.source_created_at),
-                    memory.source_message_id or 0,
-                    memory.id,
-                    memory,
-                ))
-
-            # Relevance remains primary. Chronology only breaks ranking ties;
-            # recency never makes an otherwise ineligible memory relevant.
-            ranked.sort(
-                key=lambda item: (item[0], item[1], item[2], item[3], item[4]),
-                reverse=True,
+            ranked = rank_memory_candidates(
+                memories,
+                query_vectors[0],
+                stored_vectors,
+                lexical_ids,
+                semantic_threshold=self.semantic_threshold,
             )
 
             return resolve_temporal_memories(
-                [item[5] for item in ranked],
+                ranked,
                 memories,
                 query,
                 limit=selected_limit,

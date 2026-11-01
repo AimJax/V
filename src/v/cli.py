@@ -14,6 +14,8 @@ from v.core.network import NetworkPolicy
 from v.conversations.store import ConversationStore
 from v.diagnostics import main as run_diagnostics
 from v.memory.backup import export_backup, import_backup
+from v.memory.embedding_provider import LMStudioEmbeddingProvider
+from v.memory.evaluation import DEFAULT_THRESHOLDS, evaluate_memory_retrieval
 from v.memory.backfill import (
     MemoryBackfillRunner,
     MemoryBackfillStore,
@@ -22,6 +24,7 @@ from v.memory.backfill import (
 from v.memory.extractor import MemoryExtractor
 from v.memory.queue import ExtractionQueue
 from v.memory.store import MemoryStore
+from v.providers.errors import ProviderError
 from v.providers.lm_studio import LMStudioProvider
 
 
@@ -55,6 +58,84 @@ def _run_memory_import(source: str) -> int:
     print(f"Restored: {restored} memory record(s)")
     print(f"Skipped identical records: {skipped}")
     print("Import mode: merge; existing memories are never overwritten or deleted.")
+    return 0
+
+
+
+async def _run_memory_evaluation() -> int:
+    """Run a local retrieval threshold sweep on an isolated synthetic corpus."""
+    settings = load_settings()
+    memory_settings = settings.get("memory", {})
+    llm_settings = settings.get("llm", {})
+    model = str(
+        memory_settings.get(
+            "embedding_model",
+            "text-embedding-nomic-embed-text-v1.5",
+        )
+    ).strip()
+    if not model:
+        raise ValueError("No memory embedding model is configured.")
+
+    policy = NetworkPolicy.from_settings(settings)
+    endpoint = policy.authorize_local_endpoint(
+        str(llm_settings.get("base_url", ""))
+    )
+    provider = LMStudioEmbeddingProvider(
+        base_url=endpoint,
+        model=model,
+        timeout_seconds=float(llm_settings.get("request_timeout_seconds", 120)),
+    )
+    configured_threshold = float(
+        memory_settings.get("semantic_threshold", 0.60)
+    )
+    thresholds = tuple(sorted(set(DEFAULT_THRESHOLDS) | {configured_threshold}))
+    try:
+        report = await evaluate_memory_retrieval(
+            provider,
+            model=model,
+            thresholds=thresholds,
+        )
+    except ProviderError as error:
+        print(f"Memory evaluation failed: {error}", file=sys.stderr)
+        return 1
+    finally:
+        await provider.aclose()
+
+    fts = report["fts_baseline"]
+    print("\nV memory retrieval benchmark")
+    print("============================")
+    print(f"Embedding model: {report['model']}")
+    print(f"Current configured threshold: {configured_threshold:.2f}")
+    print(
+        f"Isolated corpus: {report['corpus_size']} synthetic memories; "
+        f"{report['query_count']} queries "
+        f"({report['positive_queries']} answerable, "
+        f"{report['negative_queries']} no-answer)"
+    )
+    print(
+        "FTS5-only baseline: "
+        f"P={fts['precision']:.3f}  R={fts['recall']:.3f}  "
+        f"MRR={fts['mrr']:.3f}  "
+        f"no-answer FP={fts['false_positive_rate']:.3f}"
+    )
+    print()
+    print("Threshold  Precision  Recall  MRR     No-answer FP  Score")
+    for item in report["thresholds"]:
+        print(
+            f"{item['threshold']:>9.2f}  "
+            f"{item['precision']:>9.3f}  "
+            f"{item['recall']:>6.3f}  "
+            f"{item['mrr']:>5.3f}  "
+            f"{item['false_positive_rate']:>13.3f}  "
+            f"{item['selection_score']:>5.3f}"
+        )
+    print()
+    print(
+        "Top-scoring calibration candidate: "
+        f"{report['best_scoring_threshold']:.2f}"
+    )
+    print(report["selection_note"])
+    print("No real memories were read or modified. Configuration was not changed.")
     return 0
 
 
@@ -263,7 +344,7 @@ def main() -> int:
 
     memory_parser = subparsers.add_parser(
         "memory",
-        help="Export or restore long-term memories.",
+        help="Manage and evaluate local long-term memories.",
     )
     memory_actions = memory_parser.add_subparsers(dest="memory_action")
 
@@ -283,6 +364,11 @@ def main() -> int:
         help="Restore memories from a JSON backup using merge semantics.",
     )
     import_parser.add_argument("source", help="Source JSON backup file path.")
+
+    memory_actions.add_parser(
+        "evaluate",
+        help="Benchmark local memory retrieval without touching saved memories.",
+    )
 
     confirm_parser = memory_actions.add_parser(
         "confirm",
@@ -370,6 +456,9 @@ def main() -> int:
             return run_desktop()
 
         if args.command == "memory":
+            if args.memory_action == "evaluate":
+                return asyncio.run(_run_memory_evaluation())
+
             if args.memory_action == "backfill":
                 if args.status:
                     if args.new_run:
