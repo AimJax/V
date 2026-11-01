@@ -68,6 +68,11 @@ For every proposed memory:
   Never attribute an assistant's words, suggestions, or assumptions to the user.
   Every candidate's evidence must be an exact quotation from that candidate's own
   `user_message`, not from surrounding context.
+  The source message itself must contain enough of the user's assertion to support
+  the proposed memory. If it only says "yes", "exactly", "that one", or otherwise
+  depends entirely on another message for the underlying claim, return no memory
+  for that source message. Do not convert an assistant suggestion into a user fact
+  merely because the user is responding to it.
 - Interpret each message using its supplied original timestamp, not the date of reprocessing.
 - A statement such as "currently", "now", or "this year" describes the user's circumstances
   at the source message timestamp. Do not present old circumstances as current today.
