@@ -47,13 +47,13 @@ class MemoryWorker:
             await asyncio.sleep(self.idle_delay_seconds)
 
             for _ in range(self.max_jobs_per_cycle):
-                report = await self.extractor.process_pending(limit=1)
+                report = await self.extractor.process_pending(limit=5)
                 self.last_report = report
 
                 if report.jobs_failed:
                     break
 
-                if report.jobs_completed == 0:
+                if report.jobs_completed < 5:
                     break
 
         except asyncio.CancelledError:
