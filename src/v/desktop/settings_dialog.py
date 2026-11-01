@@ -42,8 +42,14 @@ class SettingsDialog(QDialog):
         self._saving = False
 
         self.setWindowTitle("V — Settings")
-        self.resize(780, 720)
-        self.setMinimumSize(420, 320)
+        self.setWindowFlags(
+            Qt.WindowType.Dialog
+            | Qt.WindowType.WindowTitleHint
+            | Qt.WindowType.WindowSystemMenuHint
+            | Qt.WindowType.WindowCloseButtonHint
+            | Qt.WindowType.WindowMinimizeButtonHint
+            | Qt.WindowType.WindowMaximizeButtonHint
+        )
         self.setSizeGripEnabled(True)
         self.setModal(False)
 
@@ -379,9 +385,8 @@ class SettingsDialog(QDialog):
             return
 
         available = screen.availableGeometry()
-        margin = 32
-        max_width = max(420, available.width() - margin * 2)
-        max_height = max(320, int(available.height() * 0.90))
+        max_width = max(1, int(available.width() * 0.92))
+        max_height = max(1, int(available.height() * 0.92))
         min_width = min(560, max_width)
         min_height = min(420, max_height)
         self.setMinimumSize(min_width, min_height)
