@@ -27,7 +27,7 @@ from v.providers.base import ChatMessage
 from v.providers.errors import ProviderError, ProviderProtocolError
 from v.providers.lm_studio import LMStudioProvider
 from v.voice.service import LocalVoiceService
-from v.voice.streaming import SpeechTextSegmenter
+from v.voice.streaming import SpeechTextSegmenter, clean_speech_text
 
 
 @dataclass(frozen=True, slots=True)
@@ -470,7 +470,11 @@ class DesktopService:
         on_speech_error: Callable[[str], None] | None,
     ) -> None:
         try:
-            async for wav_data in voice_service.synthesize_stream(text):
+            speech_text = clean_speech_text(text)
+            if not speech_text:
+                return
+
+            async for wav_data in voice_service.synthesize_stream(speech_text):
                 if generation != self._speech_generation:
                     return
                 on_audio(wav_data)
