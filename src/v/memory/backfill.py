@@ -104,7 +104,7 @@ class MemoryBackfillStore:
                     created_at TEXT NOT NULL,
                     reviewed_at TEXT,
                     FOREIGN KEY (run_id) REFERENCES memory_backfill_runs(id)
-                        ON DELETE RESTRICT,
+                        ON DELETE RESTRICT
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_memory_review_status
