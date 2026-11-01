@@ -156,7 +156,7 @@ class HybridMemoryRetriever:
             stored_vectors = self.embedding_store.get_valid(self.model)
             query_vector = query_vectors[0]
 
-            ranked: list[tuple[float, int, Memory]] = []
+            ranked: list[tuple[float, int, str, Memory]] = []
 
             for memory in memories:
                 vector = stored_vectors.get(memory.id)
@@ -187,6 +187,7 @@ class HybridMemoryRetriever:
                 ranked.append((
                     adjusted_score,
                     memory.importance,
+                    memory.source_created_at or "",
                     memory,
                 ))
 
@@ -196,7 +197,7 @@ class HybridMemoryRetriever:
             )
 
             return [
-                item[2]
+                item[3]
                 for item in ranked[:selected_limit]
             ]
 
