@@ -395,6 +395,22 @@ class MemoryStore:
 
         return result
 
+    def get_memory_by_key(self, memory_key: str) -> Memory | None:
+        """Look up a memory by its normalized, unique key."""
+        normalized = _normalize_key(memory_key)
+        if normalized is None:
+            return None
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                f"""
+                SELECT {self._memory_columns()}
+                FROM memories
+                WHERE memory_key = ?
+                """,
+                (normalized,),
+            ).fetchone()
+        return self._from_row(row)
+
     def get_memory(self, memory_id: str) -> Memory | None:
         with closing(self._connect()) as connection:
             row = connection.execute(
