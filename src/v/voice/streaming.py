@@ -19,7 +19,13 @@ def clean_speech_text(text: str) -> str:
     cleaned = re.sub(r"(?m)^\s{0,3}>\s?", "", cleaned)
     cleaned = re.sub(r"(?m)^\s*(?:[-+*]|\d+[.)])\s+", "", cleaned)
     cleaned = re.sub(r"(?m)^\s*(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$", " ", cleaned)
-    cleaned = re.sub(r"[*_~`]{1,3}", "", cleaned)
+    cleaned = re.sub(
+        r"(?<!\\w)(?:\\*{1,3}|_{1,3}|~~)(?=\\S)|"
+        r"(?<=\\S)(?:\\*{1,3}|_{1,3}|~~)(?!\\w)",
+        "",
+        cleaned,
+    )
+    cleaned = cleaned.replace("`", "")
     cleaned = cleaned.replace("|", " ")
     cleaned = re.sub(r"\\([\\`*_{}\[\]()#+\-.!>])", r"\1", cleaned)
     return re.sub(r"\s+", " ", cleaned).strip()
