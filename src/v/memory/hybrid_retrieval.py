@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import math
+from datetime import datetime
 
 from v.memory.embedding_provider import LMStudioEmbeddingProvider
 from v.memory.embedding_store import EmbeddingStore
 from v.memory.models import Memory
-from v.memory.retrieval import meaningful_terms
+from v.memory.retrieval import (
+    meaningful_terms,
+    resolve_temporal_memories,
+    source_timestamp_key,
+)
 from v.memory.store import MemoryStore
 from v.providers.errors import ProviderError
 
@@ -107,16 +112,6 @@ class HybridMemoryRetriever:
                     vector,
                 )
 
-    def _lexical_fallback(self, query: str) -> list[Memory]:
-        terms = meaningful_terms(query)
-
-        if not terms:
-            return []
-
-        return self.memory_store.search_memories_any(
-            " ".join(terms),
-            limit=self.limit,
-        )
 
     async def retrieve(
         self,
@@ -138,8 +133,22 @@ class HybridMemoryRetriever:
         if not memories:
             return []
 
-        lexical_results = self._lexical_fallback(query)
-        lexical_ids = {memory.id for memory in lexical_results}
+        query_terms = meaningful_terms(query)
+        raw_lexical_results = (
+            self.memory_store.search_memories_any(
+                " ".join(query_terms),
+                limit=max(selected_limit * 4, selected_limit),
+            )
+            if query_terms
+            else []
+        )
+        lexical_ids = {memory.id for memory in raw_lexical_results}
+        lexical_results = resolve_temporal_memories(
+            raw_lexical_results,
+            memories,
+            query,
+            limit=selected_limit,
+        )
 
         self.last_fallback_reason = None
 
@@ -156,7 +165,7 @@ class HybridMemoryRetriever:
             stored_vectors = self.embedding_store.get_valid(self.model)
             query_vector = query_vectors[0]
 
-            ranked: list[tuple[float, int, str, Memory]] = []
+            ranked: list[tuple[float, int, tuple[int, datetime], int, str, Memory]] = []
 
             for memory in memories:
                 vector = stored_vectors.get(memory.id)
@@ -187,19 +196,25 @@ class HybridMemoryRetriever:
                 ranked.append((
                     adjusted_score,
                     memory.importance,
-                    memory.source_created_at or "",
+                    source_timestamp_key(memory.source_created_at),
+                    memory.source_message_id or 0,
+                    memory.id,
                     memory,
                 ))
 
+            # Relevance remains primary. Chronology only breaks ranking ties;
+            # recency never makes an otherwise ineligible memory relevant.
             ranked.sort(
-                key=lambda item: (item[0], item[1]),
+                key=lambda item: (item[0], item[1], item[2], item[3], item[4]),
                 reverse=True,
             )
 
-            return [
-                item[3]
-                for item in ranked[:selected_limit]
-            ]
+            return resolve_temporal_memories(
+                [item[5] for item in ranked],
+                memories,
+                query,
+                limit=selected_limit,
+            )
 
         except ProviderError as error:
             self.last_fallback_reason = str(error)

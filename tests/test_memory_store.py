@@ -105,6 +105,34 @@ class MemoryStoreTests(unittest.TestCase):
                 memory_key="user.name",
             )
 
+
+    def test_episodic_timeline_orders_instants_across_utc_offsets(self):
+        lexically_later_but_earlier = self.store.create_memory(
+            content="The user worked at the first site.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2026-01-01T00:30:00+02:00",
+        )
+        chronologically_later = self.store.create_memory(
+            content="The user worked at the second site.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2025-12-31T23:00:00+00:00",
+        )
+
+        self.assertEqual(
+            self.store.get_memory_by_key("user.work_context"),
+            chronologically_later,
+        )
+        timeline = [
+            item for item in self.store.list_memories(memory_type="episodic")
+            if item.memory_key == "user.work_context"
+        ]
+        self.assertEqual(
+            [item.id for item in timeline],
+            [chronologically_later.id, lexically_later_but_earlier.id],
+        )
+
     def test_invalid_original_source_date_is_rejected(self):
         for value in (
             "not-a-date",

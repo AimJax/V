@@ -100,6 +100,28 @@ class MemoryRetrievalTests(unittest.TestCase):
             context,
         )
 
+
+    def test_context_distinguishes_latest_and_historical_timeline_entries(self):
+        older = self.store.create_memory(
+            content="The user worked at an earlier construction site.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2024-03-12T09:15:00+00:00",
+        )
+        newer = self.store.create_memory(
+            content="The user works at a later construction site.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2026-10-30T09:15:00+00:00",
+        )
+
+        context = build_memory_context([newer, older])
+
+        self.assertIn("latest_recorded_snapshot", context)
+        self.assertIn("historical_snapshot", context)
+        self.assertIn("2024-03-12T09:15:00+00:00", context)
+        self.assertIn("2026-10-30T09:15:00+00:00", context)
+
     def test_empty_results_produce_no_context(self):
         self.assertIsNone(build_memory_context([]))
 

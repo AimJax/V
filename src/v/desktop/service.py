@@ -24,7 +24,7 @@ from v.memory.embedding_store import EmbeddingStore
 from v.memory.extractor import MemoryExtractor
 from v.memory.hybrid_retrieval import HybridMemoryRetriever
 from v.memory.queue import ExtractionQueue
-from v.memory.retrieval import build_memory_context, meaningful_terms
+from v.memory.retrieval import build_memory_context, retrieve_relevant_memories
 from v.memory.store import MemoryStore
 from v.memory.worker import MemoryWorker
 from v.desktop.settings_store import save_local_desktop_settings
@@ -350,14 +350,10 @@ class DesktopService:
                         limit=self.retrieval_limit,
                     )
                 else:
-                    terms = meaningful_terms(user_text)
-                    memories = (
-                        self.memory_store.search_memories_any(
-                            " ".join(terms),
-                            limit=self.retrieval_limit,
-                        )
-                        if terms
-                        else []
+                    memories = retrieve_relevant_memories(
+                        self.memory_store,
+                        user_text,
+                        limit=self.retrieval_limit,
                     )
                 memory_context = build_memory_context(
                     memories,

@@ -456,7 +456,7 @@ class MemoryStore:
                 WHERE memory_key = ?
                 ORDER BY
                     CASE WHEN memory_type = 'episodic' THEN 1 ELSE 0 END,
-                    source_created_at DESC,
+                    julianday(source_created_at) DESC,
                     importance DESC,
                     updated_at DESC
                 LIMIT 1
@@ -522,7 +522,7 @@ class MemoryStore:
                 ORDER BY
                     CASE WHEN memory_type = 'episodic' THEN 1 ELSE 0 END,
                     CASE WHEN memory_type = 'episodic'
-                         THEN source_created_at END DESC,
+                         THEN julianday(source_created_at) END DESC,
                     importance DESC,
                     updated_at DESC
                 LIMIT ?

@@ -38,7 +38,9 @@ class FakeEmbeddingProvider:
         for text in texts:
             lowered = text.casefold()
 
-            if "programming" in lowered or "coding" in lowered:
+            if any(term in lowered for term in ("work", "job", "employment")):
+                results.append([1.0, 0.0])
+            elif "programming" in lowered or "coding" in lowered:
                 results.append([0.8, 0.6])
             elif "weather" in lowered or "movie" in lowered:
                 results.append([0.5, 0.8660254])
@@ -146,6 +148,67 @@ class HybridRetrievalTests(unittest.IsolatedAsyncioTestCase):
             ),
             {},
         )
+
+
+    async def test_present_query_uses_latest_recorded_timeline_snapshot(self):
+        older = self.memories.create_memory(
+            content="The user had work at a coastal industrial site.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2024-03-12T09:15:00+00:00",
+        )
+        newer = self.memories.create_memory(
+            content="The user has work in a different construction role.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2026-10-30T09:15:00+00:00",
+        )
+
+        results = await self.retriever.retrieve("Where do I work now?")
+
+        self.assertEqual([item.id for item in results], [newer.id])
+        self.assertNotIn(older.id, [item.id for item in results])
+
+    async def test_historical_query_preserves_the_full_timeline(self):
+        older = self.memories.create_memory(
+            content="The user had work at a coastal industrial site.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2024-03-12T09:15:00+00:00",
+        )
+        newer = self.memories.create_memory(
+            content="The user has work in a different construction role.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2026-10-30T09:15:00+00:00",
+        )
+
+        results = await self.retriever.retrieve("Where did I work in 2024?")
+
+        self.assertEqual(
+            [item.id for item in results],
+            [older.id, newer.id],
+        )
+
+    async def test_offline_keyword_fallback_uses_latest_snapshot(self):
+        self.memories.create_memory(
+            content="The user had work at a coastal industrial site.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2024-03-12T09:15:00+00:00",
+        )
+        newer = self.memories.create_memory(
+            content="The user has work in a different construction role.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2026-10-30T09:15:00+00:00",
+        )
+        self.provider.fail = True
+
+        results = await self.retriever.retrieve("Where do I work now?")
+
+        self.assertEqual([item.id for item in results], [newer.id])
+        self.assertIsNotNone(self.retriever.last_fallback_reason)
 
     async def test_cosine_similarity(self):
         result = cosine_similarity(
