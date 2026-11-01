@@ -319,7 +319,7 @@ class SettingsDialog(QDialog):
         voice_layout.addLayout(voice_form)
 
         voice_note = QLabel(
-            "Audio format: 16 kHz mono. Whisper.cpp uses the Silero VAD model before transcription. "
+            "Audio format: 16 kHz mono. Choose CPU or NVIDIA GPU (CUDA) for Whisper.cpp; V uses only the selected executable and never silently falls back. Silero VAD runs before transcription. "
             "Kokoro ONNX supports V's Python 3.13 environment; install the optional voice extra separately. "
             "The selected voice ID is provisional until local voice audition is implemented. "
             "Voice is disabled by default. When enabled, microphone capture starts only while you hold the Push to Talk button. Wake-word listening is not active yet."
