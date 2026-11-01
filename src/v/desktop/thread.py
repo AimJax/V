@@ -31,6 +31,12 @@ class DesktopRuntimeThread(QThread):
     memory_deleted = Signal(str)
     memory_backup_completed = Signal(str)
     memory_operation_failed = Signal(str)
+    memory_backfill_progress = Signal(object)
+    memory_backfill_completed = Signal(object)
+    memory_backfill_paused = Signal()
+    memory_backfill_failed = Signal(str)
+    memory_review_ready = Signal(object)
+    memory_review_changed = Signal()
     settings_ready = Signal(object)
     settings_saved = Signal(str)
     settings_operation_failed = Signal(str)
@@ -40,6 +46,7 @@ class DesktopRuntimeThread(QThread):
         self._loop: asyncio.AbstractEventLoop | None = None
         self._commands: asyncio.Queue | None = None
         self._active_task: asyncio.Task | None = None
+        self._backfill_task: asyncio.Task | None = None
         self._shutdown_requested = False
         self._memory_filters = ("", "", "")
 
@@ -66,6 +73,17 @@ class DesktopRuntimeThread(QThread):
             self._loop = None
             self._commands = None
             self._active_task = None
+            self._backfill_task = None
+
+    async def _cancel_backfill(self) -> None:
+        task = self._backfill_task
+        if task is None or task.done():
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
     async def _serve(self) -> None:
         service = DesktopService()
@@ -89,9 +107,11 @@ class DesktopRuntimeThread(QThread):
             command, payload = await self._commands.get()
 
             if command == "shutdown":
+                await self._cancel_backfill()
                 break
 
             if command == "send":
+                await self._cancel_backfill()
                 self._active_task = asyncio.create_task(
                     service.send_message(
                         payload,
@@ -113,6 +133,7 @@ class DesktopRuntimeThread(QThread):
                 continue
 
             if command == "voice_turn":
+                await self._cancel_backfill()
                 self._active_task = asyncio.create_task(
                     service.send_voice_message(
                         payload,
@@ -169,6 +190,92 @@ class DesktopRuntimeThread(QThread):
                     self.settings_saved.emit(message)
                 except Exception as error:
                     self.settings_operation_failed.emit(str(error))
+                continue
+
+            if command == "memory_backfill_start":
+                if self._backfill_task is not None and not self._backfill_task.done():
+                    self.memory_backfill_failed.emit(
+                        "A historical memory scan is already running."
+                    )
+                    continue
+
+                async def run_backfill(new_run: bool) -> None:
+                    try:
+                        result = await service.run_memory_backfill(
+                            new_run=new_run,
+                            on_progress=self.memory_backfill_progress.emit,
+                        )
+                    except asyncio.CancelledError:
+                        self.memory_backfill_paused.emit()
+                        raise
+                    except Exception as error:
+                        self.memory_backfill_failed.emit(str(error))
+                    else:
+                        self.memory_backfill_completed.emit(result)
+                    finally:
+                        self._backfill_task = None
+                        if (
+                            service.memory_worker is not None
+                            and service.extraction_queue is not None
+                            and service.extraction_queue.count("pending")
+                        ):
+                            await service.memory_worker.schedule()
+
+                self._backfill_task = asyncio.create_task(
+                    run_backfill(bool(payload))
+                )
+                continue
+
+            if command == "memory_backfill_cancel":
+                await self._cancel_backfill()
+                continue
+
+            if command == "memory_backfill_status":
+                try:
+                    self.memory_backfill_progress.emit(
+                        service.memory_backfill_status() or {"status": "not_started"}
+                    )
+                except Exception as error:
+                    self.memory_backfill_failed.emit(str(error))
+                continue
+
+            if command == "memory_review_list":
+                try:
+                    status, limit = payload
+                    self.memory_review_ready.emit(
+                        service.list_memory_review_candidates(
+                            status=status,
+                            limit=limit,
+                        )
+                    )
+                except Exception as error:
+                    self.memory_backfill_failed.emit(str(error))
+                continue
+
+            if command == "memory_review_approve":
+                try:
+                    candidate_id, changes = payload
+                    service.approve_memory_candidate(candidate_id, changes)
+                    self.memory_review_changed.emit()
+                    self.memory_review_ready.emit(
+                        service.list_memory_review_candidates(status="pending")
+                    )
+                    # Keep the main Memory Manager table in sync with approvals.
+                    self.memory_list_ready.emit(service.list_memories())
+                except Exception as error:
+                    self.memory_backfill_failed.emit(str(error))
+                continue
+
+            if command == "memory_review_reject":
+                try:
+                    candidate_id, reason = payload
+                    service.reject_memory_candidate(candidate_id, reason)
+                    self.memory_review_changed.emit()
+                    self.memory_review_ready.emit(
+                        service.list_memory_review_candidates(status="pending")
+                    )
+                except Exception as error:
+                    self.memory_backfill_failed.emit(str(error))
                 continue
 
             if command == "memory_list":
@@ -272,6 +379,37 @@ class DesktopRuntimeThread(QThread):
     ) -> None:
         self._memory_filters = (query, memory_type, provenance)
         self._post("memory_list", self._memory_filters)
+
+    def start_memory_backfill(self, *, new_run: bool = False) -> None:
+        self._post("memory_backfill_start", new_run)
+
+    def cancel_memory_backfill(self) -> None:
+        self._post("memory_backfill_cancel")
+
+    def get_memory_backfill_status(self) -> None:
+        self._post("memory_backfill_status")
+
+    def list_memory_review_candidates(
+        self,
+        *,
+        status: str = "pending",
+        limit: int = 100,
+    ) -> None:
+        self._post("memory_review_list", (status, limit))
+
+    def approve_memory_candidate(
+        self,
+        candidate_id: str,
+        changes: dict | None = None,
+    ) -> None:
+        self._post("memory_review_approve", (candidate_id, changes or {}))
+
+    def reject_memory_candidate(
+        self,
+        candidate_id: str,
+        reason: str = "",
+    ) -> None:
+        self._post("memory_review_reject", (candidate_id, reason))
 
     def update_memory(self, memory_id: str, changes: dict) -> None:
         self._post("memory_update", (memory_id, changes))
