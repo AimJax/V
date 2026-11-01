@@ -9,12 +9,14 @@ from v.memory.worker import MemoryWorker
 class FakeExtractor:
     def __init__(self):
         self.calls = 0
+        self.limits = []
         self.started = asyncio.Event()
         self.block = False
         self.cancelled = False
 
     async def process_pending(self, limit=1):
         self.calls += 1
+        self.limits.append(limit)
         self.started.set()
 
         if self.block:
@@ -25,7 +27,7 @@ class FakeExtractor:
                 raise
 
         return SimpleNamespace(
-            jobs_completed=1,
+            jobs_completed=limit,
             jobs_failed=0,
             memories_created=0,
         )
@@ -112,6 +114,7 @@ class MemoryWorkerTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0.05)
 
         self.assertEqual(extractor.calls, 3)
+        self.assertEqual(extractor.limits, [5, 5, 5])
         await worker.close()
 
     async def test_validates_worker_settings(self):
