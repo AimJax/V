@@ -17,7 +17,7 @@ class LocalVoiceServiceTests(unittest.IsolatedAsyncioTestCase):
             "whisper_server_path": "apps/whisper/whisper-server.exe",
             "whisper_cuda_server_path": "apps/whisper/whisper-server-cuda.exe",
             "stt_device": "cpu",
-            "whisper_model_path": "models/whisper/ggml-base.bin",
+            "whisper_model_path": "models/whisper/ggml-small.bin",
             "silero_vad_model_path": "models/whisper/ggml-silero.bin",
             "kokoro_model_path": "models/kokoro/kokoro.onnx",
             "kokoro_voices_path": "models/kokoro/voices.bin",
@@ -30,7 +30,7 @@ class LocalVoiceServiceTests(unittest.IsolatedAsyncioTestCase):
         for relative in (
             "apps/whisper/whisper-server.exe",
             "apps/whisper/whisper-server-cuda.exe",
-            "models/whisper/ggml-base.bin",
+            "models/whisper/ggml-small.bin",
             "models/whisper/ggml-silero.bin",
             "models/kokoro/kokoro.onnx",
             "models/kokoro/voices.bin",
