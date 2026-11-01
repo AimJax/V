@@ -1,7 +1,6 @@
 from collections import deque
 from unittest.mock import patch
 
-from PySide6.QtCore import QUrl
 from PySide6.QtMultimedia import QMediaPlayer
 
 from v.voice.playback import SpeechPlayback
