@@ -109,6 +109,30 @@ class MemoryExtractorTests(unittest.IsolatedAsyncioTestCase):
 
         saved = self.memory.list_memories()[0]
         self.assertEqual(saved.content, "I work in construction")
+    async def test_ongoing_context_can_be_saved_as_episodic_memory(self):
+        provider = FakeProvider(
+            json.dumps({
+                "memories": [
+                    self.candidate(
+                        memory_type="episodic",
+                        subject="User's current work context",
+                        content="The user currently works in construction.",
+                        memory_key="user.current_work_context",
+                        confidence=0.96,
+                        importance=3,
+                        evidence="I work in construction",
+                    )
+                ]
+            })
+        )
+
+        report = await self.extractor(provider).process_pending()
+
+        self.assertEqual(report.memories_created, 1)
+        saved = self.memory.list_memories()[0]
+        self.assertEqual(saved.memory_type, "episodic")
+        self.assertEqual(saved.content, "I work in construction")
+
     async def test_unverifiable_evidence_is_rejected(self):
         provider = FakeProvider(
             json.dumps({
