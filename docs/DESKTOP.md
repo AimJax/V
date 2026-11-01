@@ -59,11 +59,20 @@ The voice runtime is optional and does not affect text-only use. Voice assets ar
    .\scripts\install_voice_assets.ps1
    ```
 
-   The script clones whisper.cpp v1.9.5, builds the CPU whisper-server, and downloads the multilingual Whisper base model, Silero VAD v6.2.0, and Kokoro ONNX model/voices files. It prints SHA-256 values for downloaded assets. It does not start the server or activate the microphone.
+   The script clones whisper.cpp v1.9.5, builds the CPU whisper-server, and downloads the multilingual Whisper Small model (`ggml-small.bin`, approximately 466 MB), Silero VAD v6.2.0, and Kokoro ONNX model/voices files. It prints SHA-256 values for downloaded assets. It does not start the server or activate the microphone.
+
+   If the CPU and CUDA servers are already built and you only need the Whisper model, skip the builds:
+
+   ```powershell
+   Set-Location G:\V
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\install_voice_assets.ps1" -SkipWhisperBuild
+   ```
+
+   Existing VAD and Kokoro assets are reused when already present.
 
    To also build the optional CUDA server for an NVIDIA GPU, run the installer with `-BuildWhisperCuda`. The CUDA build targets architecture 75 (RTX 20-series), uses the configured CUDA Toolkit and MSVC toolset, and is written separately under `apps/whisper.cpp/build-cuda`. The installer prints the resulting executable path. The CPU build remains available as an independent fallback.
 
-4. Open Settings > Voice, press **Refresh devices**, and confirm the microphone and output device. Choose **CPU** or **NVIDIA GPU (CUDA)** under **Speech recognition device**. Set the CPU and CUDA Whisper executable paths to the corresponding build outputs; only the selected backend must exist to enable voice. Enable **Enable local voice interaction (push-to-talk)**. Enable **Speak V's replies** only when the Kokoro ONNX model and voices file are present. Save settings and restart V.
+4. Open Settings > Voice, press **Refresh devices**, and confirm the microphone and output device. Choose **CPU** or **NVIDIA GPU (CUDA)** under **Speech recognition device**. Set the CPU and CUDA Whisper executable paths to the corresponding build outputs; set **Whisper model (multilingual)** to `models/whisper/ggml-small.bin`. Only the selected backend must exist to enable voice. Enable **Enable local voice interaction (push-to-talk)**. Enable **Speak V's replies** only when the Kokoro ONNX model and voices file are present. Save settings and restart V.
 
 The voice implementation supports explicit push-to-talk only. It sends audio through the selected local Whisper.cpp backend and Silero VAD, then the existing Gemma chat and memory pipeline. Choose CPU for the CPU-only executable or NVIDIA GPU (CUDA) for the CUDA-enabled executable. V does not silently fall back between them: if the selected executable is missing or fails to start, transcription reports an error. Optional replies are spoken with Kokoro ONNX and played from memory without writing audio to disk.
 
