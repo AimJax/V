@@ -43,6 +43,7 @@ class MemoryStoreTests(unittest.TestCase):
         memory = self.store.create_memory(
             content="The user was working in a construction role.",
             memory_type="episodic",
+            memory_key="user.work_context",
             source_conversation_id="conversation-old",
             source_message_id=24,
             source_created_at=source_date,
@@ -56,6 +57,58 @@ class MemoryStoreTests(unittest.TestCase):
             self.store.get_memory_by_key(memory.memory_key),
             loaded,
         )
+
+    def test_episodic_records_can_share_a_key_and_form_a_timeline(self):
+        older = self.store.create_memory(
+            content="The user worked at a coastal industrial site.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2024-03-12T09:15:00+00:00",
+            importance=4,
+        )
+        newer = self.store.create_memory(
+            content="The user now works in a different construction role.",
+            memory_type="episodic",
+            memory_key="user.work_context",
+            source_created_at="2026-10-30T09:15:00+00:00",
+            importance=4,
+        )
+
+        self.assertNotEqual(older.id, newer.id)
+        self.assertEqual(
+            self.store.get_memory_by_key("user.work_context"),
+            newer,
+        )
+        timeline = self.store.list_memories(memory_type="episodic")
+        matching = [
+            item for item in timeline
+            if item.memory_key == "user.work_context"
+        ]
+        self.assertEqual(
+            [item.source_created_at for item in matching],
+            [
+                "2026-10-30T09:15:00+00:00",
+                "2024-03-12T09:15:00+00:00",
+            ],
+        )
+
+        with self.assertRaises(ValueError):
+            self.store.create_memory(
+                content="A second permanent profile statement.",
+                memory_type="profile",
+                memory_key="user.name",
+            )
+        self.store.create_memory(
+            content="Another stable profile statement.",
+            memory_type="profile",
+            memory_key="user.name",
+        )
+        with self.assertRaises(ValueError):
+            self.store.create_memory(
+                content="Conflicting stable profile statement.",
+                memory_type="profile",
+                memory_key="user.name",
+            )
 
     def test_invalid_original_source_date_is_rejected(self):
         for value in (
@@ -79,6 +132,14 @@ class MemoryStoreTests(unittest.TestCase):
             connection.execute(
                 "ALTER TABLE memories DROP COLUMN source_created_at"
             )
+            connection.execute("DROP INDEX idx_memories_key")
+            connection.execute(
+                """
+                CREATE UNIQUE INDEX idx_memories_key
+                ON memories(memory_key)
+                WHERE memory_key IS NOT NULL
+                """
+            )
             connection.execute("PRAGMA user_version = 1")
             connection.commit()
 
@@ -94,7 +155,14 @@ class MemoryStoreTests(unittest.TestCase):
             }
             version = connection.execute("PRAGMA user_version").fetchone()[0]
         self.assertIn("source_created_at", columns)
-        self.assertEqual(version, 2)
+        self.assertEqual(version, 3)
+        migrated.create_memory(
+            content="A dated episodic snapshot sharing the old fact key.",
+            memory_type="episodic",
+            memory_key="existing",
+            source_created_at="2026-10-31T10:00:00+00:00",
+        )
+        self.assertEqual(migrated.count_memories(), 2)
 
     def test_inferred_memory_has_distinct_provenance(self):
         memory = self.store.create_memory(
