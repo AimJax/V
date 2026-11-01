@@ -5,6 +5,25 @@ from __future__ import annotations
 import re
 
 
+def clean_speech_text(text: str) -> str:
+    """Remove Markdown presentation syntax before sending text to TTS."""
+    if not isinstance(text, str):
+        raise TypeError("Speech text must be a string.")
+
+    cleaned = text
+    cleaned = re.sub(r"(?ms)^[ \t]*```[^\n]*\n.*?^[ \t]*```[ \t]*$", " ", cleaned)
+    cleaned = re.sub(r"(?ms)^[ \t]*~~~[^\n]*\n.*?^[ \t]*~~~[ \t]*$", " ", cleaned)
+    cleaned = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", lambda match: match.group(1), cleaned)
+    cleaned = re.sub(r"https?://\S+", " ", cleaned)
+    cleaned = re.sub(r"(?m)^\s{0,3}#{1,6}\s+", "", cleaned)
+    cleaned = re.sub(r"(?m)^\s{0,3}>\s?", "", cleaned)
+    cleaned = re.sub(r"(?m)^\s*(?:[-+*]|\d+[.)])\s+", "", cleaned)
+    cleaned = re.sub(r"(?m)^\s*(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$", " ", cleaned)
+    cleaned = re.sub(r"[*_~`]{1,3}", "", cleaned)
+    cleaned = cleaned.replace("|", " ")
+    cleaned = re.sub(r"\\([\\`*_{}\[\]()#+\-.!>])", r"\1", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
 class SpeechTextSegmenter:
     """Release complete, natural-sounding text segments as streamed tokens arrive."""
 
@@ -19,7 +38,7 @@ class SpeechTextSegmenter:
     )
     _CLOSING = " \t\r\n\"'”’)]}*_~\x60"
 
-    def __init__(self, *, minimum_clause_words: int = 10) -> None:
+    def __init__(self, *, minimum_clause_words: int = 8) -> None:
         if isinstance(minimum_clause_words, bool) or not isinstance(
             minimum_clause_words, int
         ):
