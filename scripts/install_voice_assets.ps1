@@ -253,7 +253,9 @@ if ($BuildWhisperCuda) {
         throw "CUDA build completed but whisper-server.exe was not found under $WhisperCudaBuild."
     }
     Write-Host "CUDA Whisper server: $cudaServerPath" -ForegroundColor Green
-    Write-Host "In V Settings > Voice, set Whisper server path to this CUDA executable." -ForegroundColor Yellow
+    Write-Host "In V Settings > Voice, set Speech recognition device to NVIDIA GPU (CUDA)." -ForegroundColor Yellow
+    Write-Host "Set Whisper CUDA server executable to this path:" -ForegroundColor Yellow
+    Write-Host "  $($cudaExecutable.FullName)"
 }
 
 if (-not $SkipModelDownloads) {
