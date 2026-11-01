@@ -137,7 +137,7 @@ class MemoryStore:
     This initial implementation does not retain a hidden deletion archive.
     """
 
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 3
 
     def __init__(self, database_path: Path | str) -> None:
         self.database_path = Path(database_path).expanduser().resolve()
@@ -213,7 +213,8 @@ class MemoryStore:
 
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_key
                     ON memories(memory_key)
-                    WHERE memory_key IS NOT NULL;
+                    WHERE memory_key IS NOT NULL
+                      AND memory_type != 'episodic';
 
                 CREATE INDEX IF NOT EXISTS idx_memories_type
                     ON memories(memory_type);
@@ -286,6 +287,19 @@ class MemoryStore:
                 connection.execute(
                     "ALTER TABLE memories ADD COLUMN source_created_at TEXT"
                 )
+
+            # Episodic records are dated snapshots, not a single mutable
+            # current-value slot. Preserve uniqueness for stable/profile keys
+            # while allowing a timeline of episodic memories under one key.
+            connection.execute("DROP INDEX IF EXISTS idx_memories_key")
+            connection.execute(
+                """
+                CREATE UNIQUE INDEX idx_memories_key
+                ON memories(memory_key)
+                WHERE memory_key IS NOT NULL
+                  AND memory_type != 'episodic'
+                """
+            )
 
             connection.execute(
                 f"PRAGMA user_version = {self.SCHEMA_VERSION}"
@@ -440,6 +454,12 @@ class MemoryStore:
                 SELECT {self._memory_columns()}
                 FROM memories
                 WHERE memory_key = ?
+                ORDER BY
+                    CASE WHEN memory_type = 'episodic' THEN 1 ELSE 0 END,
+                    source_created_at DESC,
+                    importance DESC,
+                    updated_at DESC
+                LIMIT 1
                 """,
                 (normalized,),
             ).fetchone()
@@ -499,7 +519,12 @@ class MemoryStore:
                 SELECT {self._memory_columns()}
                 FROM memories
                 {where}
-                ORDER BY importance DESC, updated_at DESC
+                ORDER BY
+                    CASE WHEN memory_type = 'episodic' THEN 1 ELSE 0 END,
+                    CASE WHEN memory_type = 'episodic'
+                         THEN source_created_at END DESC,
+                    importance DESC,
+                    updated_at DESC
                 LIMIT ?
                 """,
                 parameters,
