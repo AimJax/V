@@ -307,7 +307,7 @@ class SettingsDialog(QDialog):
         self.speak_replies = QCheckBox(
             "Speak V's replies using the selected Kokoro voice"
         )
-        self.tts_speed.setRange(0.5, 1.5)
+        self.tts_speed.setRange(0.5, 2.0)
         self.tts_speed.setDecimals(2)
         self.tts_speed.setSingleStep(0.05)
 
