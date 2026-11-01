@@ -13,6 +13,11 @@ from v.core.config import load_settings, project_root
 from v.core.network import NetworkPolicy
 from v.conversations.store import Conversation, ConversationStore
 from v.memory.backup import export_backup, import_backup
+from v.memory.backfill import (
+    MemoryBackfillRunner,
+    MemoryBackfillStore,
+    MemoryReviewService,
+)
 from v.memory.embedding_provider import LMStudioEmbeddingProvider
 from v.memory.models import Memory
 from v.memory.embedding_store import EmbeddingStore
@@ -101,6 +106,8 @@ class DesktopService:
         self.memory_store: MemoryStore | None = None
         self.extraction_queue: ExtractionQueue | None = None
         self.memory_worker: MemoryWorker | None = None
+        self.memory_backfill_store: MemoryBackfillStore | None = None
+        self.memory_backfill_runner: MemoryBackfillRunner | None = None
         self.retriever: HybridMemoryRetriever | None = None
         self.voice_service: LocalVoiceService | None = None
         self.conversation: Conversation | None = None
@@ -178,8 +185,9 @@ class DesktopService:
             memory_path = _configured_data_path(self.settings, "memory_db")
             self.memory_store = MemoryStore(memory_path)
             self.extraction_queue = ExtractionQueue(memory_path)
+            self.memory_backfill_store = MemoryBackfillStore(memory_path)
 
-        if automatic_memory and self.memory_store and self.extraction_queue:
+        if self.memory_store is not None and self.extraction_queue is not None:
             extractor = MemoryExtractor(
                 self.provider,
                 self.conversation_store,
@@ -189,15 +197,23 @@ class DesktopService:
                     memory_settings.get("minimum_confidence", 0.90)
                 ),
             )
-            self.memory_worker = MemoryWorker(
+            self.memory_backfill_runner = MemoryBackfillRunner(
+                self.conversation_store,
                 extractor,
-                idle_delay_seconds=float(
-                    memory_settings.get("idle_delay_seconds", 20)
-                ),
-                max_jobs_per_cycle=int(
-                    memory_settings.get("max_jobs_per_idle_cycle", 3)
-                ),
+                self.memory_store,
+                self.memory_backfill_store,
+                batch_size=5,
             )
+            if automatic_memory:
+                self.memory_worker = MemoryWorker(
+                    extractor,
+                    idle_delay_seconds=float(
+                        memory_settings.get("idle_delay_seconds", 20)
+                    ),
+                    max_jobs_per_cycle=int(
+                        memory_settings.get("max_jobs_per_idle_cycle", 3)
+                    ),
+                )
 
         if memory_retrieval and self.memory_store is not None:
             embedding_model = str(
@@ -644,6 +660,63 @@ class DesktopService:
             ]
 
         return memories
+
+    async def run_memory_backfill(
+        self,
+        *,
+        new_run: bool = False,
+        on_progress: Callable[[dict], None] | None = None,
+    ) -> dict:
+        if self.memory_backfill_runner is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        if self.memory_worker is not None:
+            await self.memory_worker.cancel()
+        return await self.memory_backfill_runner.run(
+            new_run=new_run,
+            on_progress=on_progress,
+        )
+
+    def memory_backfill_status(self) -> dict | None:
+        if self.memory_backfill_runner is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        return self.memory_backfill_runner.status()
+
+    def list_memory_review_candidates(
+        self,
+        *,
+        status: str = "pending",
+        limit: int = 100,
+    ) -> list[dict]:
+        if self.memory_backfill_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        return self.memory_backfill_store.list_candidates(
+            status=status,
+            limit=limit,
+        )
+
+    def approve_memory_candidate(
+        self,
+        candidate_id: str,
+        changes: dict | None = None,
+    ) -> Memory:
+        if self.memory_store is None or self.memory_backfill_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        return MemoryReviewService(
+            self.memory_store,
+            self.memory_backfill_store,
+        ).approve_candidate(candidate_id, changes=changes)
+
+    def reject_memory_candidate(
+        self,
+        candidate_id: str,
+        reason: str = "",
+    ) -> None:
+        if self.memory_store is None or self.memory_backfill_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        MemoryReviewService(
+            self.memory_store,
+            self.memory_backfill_store,
+        ).reject_candidate(candidate_id, reason=reason)
 
     def update_memory(
         self,
