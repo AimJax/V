@@ -143,7 +143,7 @@ class MemoryStoreTests(unittest.TestCase):
 
         self.assertEqual(restored.content, "An existing memory.")
         self.assertIsNone(restored.source_created_at)
-        with migrated._connect() as connection:
+        with closing(migrated._connect()) as connection:
             columns = {
                 row["name"]
                 for row in connection.execute("PRAGMA table_info(memories)")
