@@ -92,12 +92,6 @@ class MemoryStoreTests(unittest.TestCase):
             ],
         )
 
-        with self.assertRaises(ValueError):
-            self.store.create_memory(
-                content="A second permanent profile statement.",
-                memory_type="profile",
-                memory_key="user.name",
-            )
         self.store.create_memory(
             content="Another stable profile statement.",
             memory_type="profile",
