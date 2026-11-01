@@ -80,5 +80,5 @@ The backup format is versioned JSON. Import validates the format, version, field
 - Historical messages are never automatically accepted as new memories: backfill proposals require explicit review.
 - Automatic inferred-pattern extraction is disabled.
 - Memory consolidation and conflict resolution are not implemented.
-- Backfill progress and proposal review are available through the CLI; a dedicated graphical review workflow is a separate UI milestone.
+- The Memory Manager includes historical scan controls and an editable proposal-review window. The CLI remains available for scripted or headless use.
 - Database encryption is not implemented.
