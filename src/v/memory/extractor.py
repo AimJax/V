@@ -53,7 +53,9 @@ Be conservative. Returning no memory is better than storing a guess.
 
 For every proposed memory:
 - source_message_id must identify the exact supplied user message.
-- evidence must be a verbatim excerpt from that message.
+- evidence must be a verbatim excerpt from that message, no more than 600 characters.
+- Choose a concise quotation that directly supports the memory, rather than copying
+  the whole message or an entire extraction window.
 - content must preserve what the user actually asserted.
 - provenance must always be "explicit".
 - confidence must reflect extraction certainty.
@@ -76,8 +78,10 @@ For every proposed memory:
 - Interpret each message using its supplied original timestamp, not the date of reprocessing.
 - A statement such as "currently", "now", or "this year" describes the user's circumstances
   at the source message timestamp. Do not present old circumstances as current today.
-- When a circumstance changes over time, preserve distinct dated episodic snapshots
-  rather than collapsing them into one timeless profile fact.
+- When a circumstance, preference, role, plan, or relationship changes over time,
+  preserve distinct dated episodic snapshots rather than overwriting the earlier state.
+  Episodic records may reuse a stable memory_key to form a timeline. Do not label an
+  older snapshot as current merely because it was reprocessed later.
 - If a date or timeframe is not explicit in the message, do not invent one.
 - Never turn a temporary statement into a permanent profile fact.
 
