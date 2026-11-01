@@ -62,6 +62,12 @@ For every proposed memory:
   profile, preference, episodic, relationship, project, fact.
 - importance must be an integer from 1 to 5.
 - Use importance 3 or higher only for information genuinely worth retaining.
+- Each source user message may include a small surrounding conversation context.
+  Use that context only to understand references, chronology, and what the user is responding to.
+  Context messages are not source statements and must never be used as evidence.
+  Never attribute an assistant's words, suggestions, or assumptions to the user.
+  Every candidate's evidence must be an exact quotation from that candidate's own
+  `user_message`, not from surrounding context.
 - Interpret each message using its supplied original timestamp, not the date of reprocessing.
 - A statement such as "currently", "now", or "this year" describes the user's circumstances
   at the source message timestamp. Do not present old circumstances as current today.
@@ -251,15 +257,31 @@ class MemoryExtractor:
         if not source_messages:
             return [], 0
 
-        source_payload = [
-            {
-                "source_message_id": message_id,
-                "source_conversation_id": message.conversation_id,
-                "source_created_at": message.created_at,
-                "user_message": message.content,
-            }
-            for message_id, message in source_messages.items()
-        ]
+        source_payload = []
+        for message_id, message in source_messages.items():
+            context_messages = self.conversation_store.get_surrounding_messages(
+                message_id,
+                before=1,
+                after=1,
+                max_chars_per_message=1200,
+            )
+            source_payload.append(
+                {
+                    "source_message_id": message_id,
+                    "source_conversation_id": message.conversation_id,
+                    "source_created_at": message.created_at,
+                    "user_message": message.content,
+                    "surrounding_context": [
+                        {
+                            "message_id": item.id,
+                            "role": item.role,
+                            "created_at": item.created_at,
+                            "content": item.content,
+                        }
+                        for item in context_messages
+                    ],
+                }
+            )
         result = await self.provider.chat(
             [
                 ChatMessage(role="system", content=EXTRACTION_SYSTEM_PROMPT),
