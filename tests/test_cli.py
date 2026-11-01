@@ -35,6 +35,71 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result, 0)
         restore.assert_called_once_with("G:/V/backups/memories.json")
 
+    def test_memory_backfill_dispatches_batch_and_new_run_options(self):
+        with patch.object(
+            sys,
+            "argv",
+            ["v", "memory", "backfill", "--batch-size", "7", "--new-run"],
+        ), patch("v.cli._run_memory_backfill", return_value=0) as backfill:
+            result = main()
+
+        self.assertEqual(result, 0)
+        backfill.assert_not_called()
+
+    def test_memory_backfill_status_does_not_contact_the_model(self):
+        with patch.object(
+            sys,
+            "argv",
+            ["v", "memory", "backfill", "--status"],
+        ), patch("v.cli._print_backfill_status", return_value=0) as status:
+            result = main()
+
+        self.assertEqual(result, 0)
+        status.assert_called_once_with()
+
+    def test_memory_review_list_dispatches_status_and_limit(self):
+        with patch.object(
+            sys,
+            "argv",
+            ["v", "memory", "review", "list", "--status", "rejected", "--limit", "25"],
+        ), patch("v.cli._run_memory_review_list", return_value=0) as listing:
+            result = main()
+
+        self.assertEqual(result, 0)
+        listing.assert_called_once_with(status="rejected", limit=25)
+
+    def test_memory_review_approve_dispatches_edits(self):
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "v", "memory", "review", "approve", "candidate-1",
+                "--content", "Edited content",
+                "--importance", "5",
+            ],
+        ), patch("v.cli._run_memory_review_approve", return_value=0) as approve:
+            result = main()
+
+        self.assertEqual(result, 0)
+        approve.assert_called_once_with(
+            "candidate-1",
+            {"content": "Edited content", "importance": 5},
+        )
+
+    def test_memory_review_reject_dispatches_reason(self):
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "v", "memory", "review", "reject", "candidate-2",
+                "--reason", "Temporary information",
+            ],
+        ), patch("v.cli._run_memory_review_reject", return_value=0) as reject:
+            result = main()
+
+        self.assertEqual(result, 0)
+        reject.assert_called_once_with("candidate-2", "Temporary information")
+
     def test_memory_database_path_cannot_escape_project_root(self):
         with temporary_directory() as temp:
             root = Path(temp).resolve()
