@@ -29,7 +29,7 @@ class MemoryManagerDialogTests(unittest.TestCase):
         ):
             self.assertTrue(flags & flag)
 
-        self.assertTrue(self.dialog.sizeGripEnabled())
+        self.assertTrue(self.dialog.isSizeGripEnabled())
         screen = self.dialog.screen()
         if screen is not None:
             available = screen.availableGeometry()
