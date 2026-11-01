@@ -53,7 +53,7 @@ def build_whisper_server_command(
     port: int,
     host: str = "127.0.0.1",
 ) -> list[str]:
-    """Build arguments for a CPU-only server bound exclusively to loopback."""
+    """Build arguments for a local server bound to loopback; CUDA is used when present in the binary."""
     host = _validate_loopback_host(host)
 
     if not 1 <= port <= 65535:
@@ -86,7 +86,6 @@ def build_whisper_server_command(
         "--model", str(config.model_path),
         "--threads", str(config.threads),
         "--language", config.language,
-        "--no-gpu",
         "--vad",
         "--vad-model", str(config.vad_model_path),
         "--vad-threshold", str(config.vad_threshold),
