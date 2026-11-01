@@ -176,7 +176,7 @@ class ConversationStoreTests(unittest.TestCase):
         )
         self.assertEqual(
             [item.content for item in context],
-            ["Assistant clarification.", "Follow-up clarifi"],
+            ["Assistant clarification.", "Follow-up clarification."],
         )
         self.assertNotIn(
             "Must never leak across conversations",
