@@ -53,6 +53,18 @@ A completed run is not silently repeated. To deliberately scan the entire curren
 
 Runs and their proposal history are retained. New runs do not erase previous approvals, rejections, or review records.
 
+## Desktop workflow
+
+Open **Memory Manager → Reprocess history…**. The window shows the latest scan checkpoint, processed-message count, proposal count, and skipped-candidate count.
+
+**Start / Resume scan** creates a first scan or resumes an interrupted one. **Pause** stops after the current committed batch. **New full scan…** explicitly creates a new run over the historical message snapshot; previous runs, review decisions, and active memories remain intact.
+
+The proposal list can be filtered by pending, approved, rejected, duplicate, or all. Selecting a pending proposal shows the exact source evidence and the model-suggested summary separately. You can edit the memory type, subject, content, unique key, confidence, and importance before approving it. Rejection is confirmed and retained with an optional reason. Accepted records become normal searchable/retrievable memories.
+
+Chat and voice turns take priority over backfill. A new turn pauses the scan at its last committed batch; it does not delay the conversation.
+
+The desktop controls run through V's runtime thread. SQLite and local-model calls do not execute on the Qt GUI thread.
+
 ## Review proposals
 
 List pending proposals:
