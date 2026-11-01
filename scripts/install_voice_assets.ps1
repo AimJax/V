@@ -235,9 +235,9 @@ if ($BuildWhisperCuda) {
         'set "PATH=%CUDA_PATH%\bin;%PATH%"',
         'echo MSVC toolset selected by vcvarsall: %VCToolsVersion%',
         'where cl',
-        ('cmake -S "{0}" -B "{1}" -G "NMake Makefiles" -DWHISPER_BUILD_SERVER=ON -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_TESTS=OFF -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 -DCUDAToolkit_ROOT="{2}" -DCMAKE_CUDA_COMPILER="{3}" -DCMAKE_C_COMPILER="{4}" -DCMAKE_CXX_COMPILER="{4}" -DCMAKE_CUDA_HOST_COMPILER="{4}"' -f $WhisperSource, $WhisperCudaBuild, $cudaRoot, $cudaCompiler, $msvcCompiler),
+        ('cmake -S "{0}" -B "{1}" -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_SERVER=ON -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_TESTS=OFF -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 -DCUDAToolkit_ROOT="{2}" -DCMAKE_CUDA_COMPILER="{3}" -DCMAKE_C_COMPILER="{4}" -DCMAKE_CXX_COMPILER="{4}" -DCMAKE_CUDA_HOST_COMPILER="{4}"' -f $WhisperSource, $WhisperCudaBuild, $cudaRoot, $cudaCompiler, $msvcCompiler),
         "if errorlevel 1 exit /b %errorlevel%",
-        ('cmake --build "{0}" --config Release --target whisper-server --parallel {1}' -f $WhisperCudaBuild, $BuildThreads),
+        ('cmake --build "{0}" --target whisper-server' -f $WhisperCudaBuild),
         "if errorlevel 1 exit /b %errorlevel%"
     )
     Invoke-DeveloperBatch $cudaBuildCommands "Configure and build CUDA whisper-server using MSVC $($msvcToolset.Name)"
