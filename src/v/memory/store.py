@@ -103,6 +103,26 @@ def _validate_fields(data: dict[str, Any]) -> None:
         if evidence is not None and not isinstance(evidence, str):
             raise TypeError("Evidence must be a string or None.")
 
+    if "source_created_at" in data:
+        source_created_at = data["source_created_at"]
+        if source_created_at is not None:
+            if not isinstance(source_created_at, str) or not source_created_at:
+                raise ValueError(
+                    "source_created_at must be a timezone-aware ISO-8601 timestamp or None."
+                )
+            try:
+                parsed_source_date = datetime.fromisoformat(
+                    source_created_at.replace("Z", "+00:00")
+                )
+            except ValueError as error:
+                raise ValueError(
+                    "source_created_at must be a valid ISO-8601 timestamp."
+                ) from error
+            if parsed_source_date.tzinfo is None:
+                raise ValueError(
+                    "source_created_at must include a timezone."
+                )
+
     if "last_confirmed_at" in data:
         confirmed = data["last_confirmed_at"]
 
@@ -117,7 +137,7 @@ class MemoryStore:
     This initial implementation does not retain a hidden deletion archive.
     """
 
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 2
 
     def __init__(self, database_path: Path | str) -> None:
         self.database_path = Path(database_path).expanduser().resolve()
@@ -183,6 +203,7 @@ class MemoryStore:
 
                     source_conversation_id TEXT,
                     source_message_id INTEGER,
+                    source_created_at TEXT,
                     evidence TEXT,
 
                     created_at TEXT NOT NULL,
@@ -257,6 +278,15 @@ class MemoryStore:
                 """
             )
 
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(memories)")
+            }
+            if "source_created_at" not in columns:
+                connection.execute(
+                    "ALTER TABLE memories ADD COLUMN source_created_at TEXT"
+                )
+
             connection.execute(
                 f"PRAGMA user_version = {self.SCHEMA_VERSION}"
             )
@@ -278,6 +308,7 @@ class MemoryStore:
             importance=row["importance"],
             source_conversation_id=row["source_conversation_id"],
             source_message_id=row["source_message_id"],
+            source_created_at=row["source_created_at"],
             evidence=row["evidence"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
@@ -289,8 +320,8 @@ class MemoryStore:
         return """
             id, memory_type, subject, content, memory_key,
             provenance, confidence, importance,
-            source_conversation_id, source_message_id, evidence,
-            created_at, updated_at, last_confirmed_at
+            source_conversation_id, source_message_id, source_created_at,
+            evidence, created_at, updated_at, last_confirmed_at
         """
 
     def create_memory(
@@ -305,6 +336,7 @@ class MemoryStore:
         importance: int = 3,
         source_conversation_id: str | None = None,
         source_message_id: int | None = None,
+        source_created_at: str | None = None,
         evidence: str | None = None,
     ) -> Memory:
         """Create a memory with source and provenance metadata."""
@@ -316,6 +348,7 @@ class MemoryStore:
             "provenance": provenance,
             "confidence": confidence,
             "importance": importance,
+            "source_created_at": source_created_at,
             "evidence": evidence,
         }
 
@@ -359,10 +392,10 @@ class MemoryStore:
                             id, memory_type, subject, content, memory_key,
                             provenance, confidence, importance,
                             source_conversation_id, source_message_id,
-                            evidence, created_at, updated_at,
+                            source_created_at, evidence, created_at, updated_at,
                             last_confirmed_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             memory_id,
@@ -375,6 +408,7 @@ class MemoryStore:
                             importance,
                             source_conversation_id,
                             source_message_id,
+                            source_created_at,
                             evidence,
                             now,
                             now,
