@@ -56,6 +56,7 @@ class MemoryManagerDialogTests(unittest.TestCase):
             source_conversation_id="conversation-1",
             source_message_id=9,
             evidence="one PowerShell step at a time",
+            source_created_at="2026-10-30T10:00:00+00:00",
             created_at="2026-10-31T10:00:00+00:00",
             updated_at="2026-10-31T10:01:00+00:00",
             last_confirmed_at="2026-10-31T10:00:00+00:00",
@@ -71,6 +72,10 @@ class MemoryManagerDialogTests(unittest.TestCase):
         self.assertEqual(self.dialog.content_input.toPlainText(), memory.content)
         self.assertIn("explicit", self.dialog.provenance_label.text())
         self.assertIn("message 9", self.dialog.source_label.text())
+        self.assertIn(
+            "Original message date: 2026-10-30T10:00:00+00:00",
+            self.dialog.source_label.text(),
+        )
         self.assertTrue(self.dialog.save_button.isEnabled())
         self.assertTrue(self.dialog.delete_button.isEnabled())
 
