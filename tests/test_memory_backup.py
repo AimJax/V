@@ -47,6 +47,30 @@ class MemoryBackupTests(unittest.TestCase):
             1,
         )
 
+    def test_v1_backup_imports_with_unknown_source_date(self):
+        original = self.source.create_memory(
+            content="A memory from an older backup.",
+            source_conversation_id="conversation-legacy",
+            source_message_id=18,
+        )
+        export_backup(self.source, self.backup_path)
+        payload = json.loads(self.backup_path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["version"], 2)
+        payload["version"] = 1
+        for record in payload["memories"]:
+            record.pop("source_created_at")
+        self.backup_path.write_text(
+            json.dumps(payload),
+            encoding="utf-8",
+        )
+
+        restored, skipped = import_backup(self.target, self.backup_path)
+        copy = self.target.get_memory(original.id)
+
+        self.assertEqual((restored, skipped), (1, 0))
+        self.assertIsNone(copy.source_created_at)
+        self.assertEqual(copy.source_message_id, 18)
+
     def test_import_is_idempotent_for_identical_ids(self):
         original = self.source.create_memory(content="A durable fact.")
         export_backup(self.source, self.backup_path)
