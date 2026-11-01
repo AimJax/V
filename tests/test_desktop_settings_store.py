@@ -135,11 +135,11 @@ class DesktopSettingsStoreTests(unittest.TestCase):
             self.assertEqual(parsed["llm"]["model"], "gemma-chat")
             self.assertEqual(parsed["llm"]["max_tokens"], 768)
             self.assertEqual(parsed["memory"]["embedding_model"], "nomic-embed")
-        self.assertEqual(parsed["voice"]["stt_device"], "cpu")
-        self.assertEqual(
-            parsed["voice"]["whisper_cuda_server_path"],
-            "apps/whisper.cpp/build-cuda/bin/whisper-server.exe",
-        )
+            self.assertEqual(parsed["voice"]["stt_device"], "cpu")
+            self.assertEqual(
+                parsed["voice"]["whisper_cuda_server_path"],
+                "apps/whisper.cpp/build-cuda/bin/whisper-server.exe",
+            )
             self.assertEqual(
                 saved_personality.read_text(encoding="utf-8"),
                 "You are V. Be direct and transparent.",
