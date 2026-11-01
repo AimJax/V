@@ -13,6 +13,7 @@ The first desktop interface is a native Qt Widgets application built with the of
 - Settings changes require an application restart. The current runtime is not hot-reconfigured after saving.
 - Disabling strict offline mode does not activate web access; search and retrieval are not connected to the desktop application yet.
 - The Memory Manager searches and filters records by content, memory type, and provenance.
+- The Memory Manager can reprocess all historical user messages through **Reprocess history…**. Scans use resumable, transactionally checkpointed batches on the configured local model. Results enter a separate review queue; accepted memories are added only after explicit user approval. The review window exposes progress, pause/resume, full re-scan, proposal filtering, source evidence, editable fields, approval, and rejection with retained audit history. A new chat or voice turn pauses backfill at the last committed batch so normal conversation takes priority.
 - Memory content, subject, type, key, confidence, importance, and supporting evidence can be corrected while original source references are retained.
 - Permanent memory deletion requires confirmation and explicitly notes that conversation-history and backup copies are separate.
 - Memory JSON export and merge-only import are available from the manager, with plaintext and overwrite warnings.
