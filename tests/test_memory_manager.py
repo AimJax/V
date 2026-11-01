@@ -3,6 +3,7 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from v.desktop.memory_manager import MemoryManagerDialog
@@ -16,6 +17,26 @@ class MemoryManagerDialogTests(unittest.TestCase):
 
     def setUp(self):
         self.dialog = MemoryManagerDialog()
+
+    def test_window_has_native_controls_and_fits_available_screen(self):
+        flags = self.dialog.windowFlags()
+        for flag in (
+            Qt.WindowType.WindowTitleHint,
+            Qt.WindowType.WindowSystemMenuHint,
+            Qt.WindowType.WindowCloseButtonHint,
+            Qt.WindowType.WindowMinimizeButtonHint,
+            Qt.WindowType.WindowMaximizeButtonHint,
+        ):
+            self.assertTrue(flags & flag)
+
+        self.assertTrue(self.dialog.sizeGripEnabled())
+        screen = self.dialog.screen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            self.assertLessEqual(self.dialog.width(), available.width())
+            self.assertLessEqual(self.dialog.height(), available.height())
+            self.assertLessEqual(self.dialog.minimumWidth(), available.width())
+            self.assertLessEqual(self.dialog.minimumHeight(), available.height())
 
     def tearDown(self):
         self.dialog._dirty = False
