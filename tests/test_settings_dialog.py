@@ -59,7 +59,7 @@ class SettingsDialogTests(unittest.TestCase):
                 "stt_threads": 4,
                 "whisper_server_path": "apps/whisper.cpp/build/bin/Release/whisper-server.exe",
                 "whisper_cuda_server_path": "apps/whisper.cpp/build-cuda/bin/whisper-server.exe",
-                "whisper_model_path": "models/whisper/ggml-base.bin",
+                "whisper_model_path": "models/whisper/ggml-small.bin",
                 "silero_vad_model_path": "models/whisper/ggml-silero-v6.2.0.bin",
                 "vad_threshold": 0.5,
                 "vad_min_speech_duration_ms": 250,
