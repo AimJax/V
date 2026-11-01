@@ -360,6 +360,72 @@ class ConversationStore:
             for row in rows
         ]
 
+    def get_surrounding_messages(
+        self,
+        message_id: int,
+        *,
+        before: int = 1,
+        after: int = 1,
+        max_chars_per_message: int = 1200,
+    ) -> list[StoredMessage]:
+        """Return a small same-conversation neighborhood, excluding the target."""
+        if message_id < 1:
+            raise ValueError("message_id must be positive.")
+        if not 0 <= before <= 5 or not 0 <= after <= 5:
+            raise ValueError("Conversation context bounds must be between 0 and 5.")
+        if max_chars_per_message < 1:
+            raise ValueError("Context message character limit must be positive.")
+
+        with closing(self._connect()) as connection:
+            target = connection.execute(
+                "SELECT conversation_id, id FROM messages WHERE id = ?",
+                (message_id,),
+            ).fetchone()
+            if target is None:
+                return []
+
+            rows = connection.execute(
+                """
+                SELECT id, conversation_id, role, content, created_at
+                FROM (
+                    SELECT id, conversation_id, role, content, created_at
+                    FROM messages
+                    WHERE conversation_id = ? AND id < ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                )
+                UNION ALL
+                SELECT id, conversation_id, role, content, created_at
+                FROM (
+                    SELECT id, conversation_id, role, content, created_at
+                    FROM messages
+                    WHERE conversation_id = ? AND id > ?
+                    ORDER BY id ASC
+                    LIMIT ?
+                )
+                ORDER BY id ASC
+                """,
+                (
+                    target["conversation_id"],
+                    message_id,
+                    before,
+                    target["conversation_id"],
+                    message_id,
+                    after,
+                ),
+            ).fetchall()
+
+        return [
+            StoredMessage(
+                id=row["id"],
+                conversation_id=row["conversation_id"],
+                role=row["role"],
+                content=row["content"][:max_chars_per_message],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+
     def get_recent_messages(
         self,
         conversation_id: str,
