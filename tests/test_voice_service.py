@@ -15,6 +15,8 @@ class LocalVoiceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.root = Path(self.temp.name)
         self.assets = {
             "whisper_server_path": "apps/whisper/whisper-server.exe",
+            "whisper_cuda_server_path": "apps/whisper/whisper-server-cuda.exe",
+            "stt_device": "cpu",
             "whisper_model_path": "models/whisper/ggml-base.bin",
             "silero_vad_model_path": "models/whisper/ggml-silero.bin",
             "kokoro_model_path": "models/kokoro/kokoro.onnx",
@@ -27,6 +29,7 @@ class LocalVoiceServiceTests(unittest.IsolatedAsyncioTestCase):
         }
         for relative in (
             "apps/whisper/whisper-server.exe",
+            "apps/whisper/whisper-server-cuda.exe",
             "models/whisper/ggml-base.bin",
             "models/whisper/ggml-silero.bin",
             "models/kokoro/kokoro.onnx",
@@ -73,6 +76,34 @@ class LocalVoiceServiceTests(unittest.IsolatedAsyncioTestCase):
         fake_server.transcribe.assert_awaited_once_with(
             b"RIFFfake-wav",
             language="en",
+        )
+
+    async def test_whisper_uses_cuda_executable_when_selected(self):
+        settings = {"voice": {**self.assets, "stt_device": "cuda"}}
+        service = LocalVoiceService(settings, root=self.root)
+        fake_server = Mock()
+
+        with patch("v.voice.service.WhisperServer", return_value=fake_server) as factory:
+            server = service._whisper()
+
+        self.assertIs(server, fake_server)
+        config = factory.call_args.args[0]
+        self.assertEqual(
+            config.executable,
+            self.root / "apps/whisper/whisper-server-cuda.exe",
+        )
+        self.assertIn("whisper-server-cuda.log", str(factory.call_args.kwargs["log_path"]))
+
+    async def test_whisper_uses_cpu_executable_by_default(self):
+        service = LocalVoiceService({"voice": self.assets}, root=self.root)
+        fake_server = Mock()
+
+        with patch("v.voice.service.WhisperServer", return_value=fake_server) as factory:
+            service._whisper()
+
+        self.assertEqual(
+            factory.call_args.args[0].executable,
+            self.root / "apps/whisper/whisper-server.exe",
         )
 
     async def test_synthesize_runs_kokoro_off_the_async_event_loop(self):
