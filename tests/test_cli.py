@@ -2,7 +2,7 @@ import sys
 import unittest
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from support import temporary_directory
 
@@ -40,11 +40,14 @@ class CliTests(unittest.TestCase):
             sys,
             "argv",
             ["v", "memory", "backfill", "--batch-size", "7", "--new-run"],
-        ), patch("v.cli._run_memory_backfill", return_value=0) as backfill:
+        ), patch(
+            "v.cli._run_memory_backfill",
+            new=AsyncMock(return_value=0),
+        ) as backfill:
             result = main()
 
         self.assertEqual(result, 0)
-        backfill.assert_not_called()
+        backfill.assert_awaited_once_with(batch_size=7, new_run=True)
 
     def test_memory_backfill_status_does_not_contact_the_model(self):
         with patch.object(
