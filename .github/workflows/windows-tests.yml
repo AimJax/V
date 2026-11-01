@@ -35,5 +35,21 @@ jobs:
       - name: Compile source and tests
         run: python -m compileall -q src tests
 
+      - name: Parse PowerShell installer
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          $path = (Resolve-Path "scripts/install_voice_assets.ps1").Path
+          [System.Management.Automation.Language.Parser]::ParseFile(
+              $path,
+              [ref]$tokens,
+              [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+              $errors | Format-List
+              exit 1
+          }
+
       - name: Check dependencies
         run: python -m pip check
