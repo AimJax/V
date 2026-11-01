@@ -8,8 +8,9 @@
 - Cancelled work remains pending for a later attempt.
 - Pending jobs survive application restarts.
 - Failed jobs remain retryable, with a maximum of three attempts before failure.
-- The worker processes a configurable number of jobs per idle cycle.
-- Each normal worker extraction call processes one user message.
+- The worker processes a configurable number of extraction batches per idle cycle.
+- Each normal worker extraction call processes up to five user messages.
+- Automatic extraction and historical backfill use the same candidate validation rules.
 - Only user-authored messages belonging to the queued conversation are accepted.
 - Memories require an exact source quotation.
 - Evidence matching is whitespace-normalized and case-insensitive.
@@ -37,9 +38,9 @@ Default minimum extraction confidence: 0.90.
 
 ## Limitations
 
-- Existing historical conversations are not automatically imported.
+- Existing historical conversations are not automatically accepted into memory. Use the separate historical backfill workflow to scan them into a review queue.
 - Inferred pattern extraction is intentionally disabled.
-- Memory correction is available through the storage API but not exposed as a conversational command.
+- Historical proposals must be explicitly approved or rejected. Approval can include user edits; rejection records remain available for audit.
 - Semantic retrieval is implemented separately and uses local Nomic embeddings with FTS5 fallback.
 - Data is stored locally in SQLite without database encryption.
 - There is no graphical memory manager or export/restore workflow.
