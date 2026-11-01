@@ -73,6 +73,57 @@ class ConversationStoreTests(unittest.TestCase):
 
         self.assertEqual(updated.title, "I want to talk about music.")
 
+    def test_historical_user_message_pages_are_ordered_and_bounded(self):
+        first = self.store.create_conversation("First")
+        second = self.store.create_conversation("Second")
+        user_one = self.store.add_message(first.id, "user", "User message one.")
+        self.store.add_message(first.id, "assistant", "Assistant reply.")
+        user_two = self.store.add_message(second.id, "user", "User message two.")
+        user_three = self.store.add_message(first.id, "user", "User message three.")
+
+        self.assertEqual(
+            self.store.max_user_message_id(),
+            user_three,
+        )
+        self.assertEqual(
+            self.store.count_user_messages(through_id=user_two),
+            2,
+        )
+        page_one = self.store.list_user_messages(
+            after_id=0,
+            through_id=user_two,
+            limit=1,
+        )
+        page_two = self.store.list_user_messages(
+            after_id=page_one[-1].id,
+            through_id=user_two,
+            limit=5,
+        )
+
+        self.assertEqual([item.id for item in page_one], [user_one])
+        self.assertEqual([item.id for item in page_two], [user_two])
+        self.assertEqual(
+            [item.content for item in page_one + page_two],
+            ["User message one.", "User message two."],
+        )
+        self.assertEqual(
+            self.store.list_user_messages(after_id=user_three, limit=5),
+            [],
+        )
+
+    def test_message_insert_returns_permanent_message_id(self):
+        conversation = self.store.create_conversation("IDs")
+        message_id = self.store.add_message(
+            conversation.id,
+            "user",
+            "Return the persistent ID.",
+        )
+        self.assertIsInstance(message_id, int)
+        self.assertEqual(
+            self.store.get_message_record(message_id).content,
+            "Return the persistent ID.",
+        )
+
     def test_recent_message_limit(self):
         conversation = self.store.create_conversation()
 
