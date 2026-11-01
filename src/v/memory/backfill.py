@@ -445,6 +445,30 @@ class MemoryBackfillRunner:
         *,
         changes: dict | None = None,
     ):
+        return MemoryReviewService(
+            self.memory_store,
+            self.review_store,
+        ).approve_candidate(candidate_id, changes=changes)
+
+    def reject_candidate(self, candidate_id: str, *, reason: str = "") -> None:
+        MemoryReviewService(
+            self.memory_store,
+            self.review_store,
+        ).reject_candidate(candidate_id, reason=reason)
+
+
+class MemoryReviewService:
+    """Apply explicit approve/reject decisions without invoking a model."""
+
+    def __init__(
+        self,
+        memory_store: MemoryStore,
+        review_store: MemoryBackfillStore,
+    ) -> None:
+        self.memory_store = memory_store
+        self.review_store = review_store
+
+    def approve_candidate(self, candidate_id: str, *, changes: dict | None = None):
         candidate = self.review_store.get_candidate(candidate_id)
         if candidate is None:
             raise KeyError(f"Memory candidate not found: {candidate_id}")
