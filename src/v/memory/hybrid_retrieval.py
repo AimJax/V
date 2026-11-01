@@ -30,8 +30,13 @@ def cosine_similarity(
 
 
 def memory_document(memory: Memory) -> str:
+    temporal = (
+        f" Source date: {memory.source_created_at}."
+        if memory.source_created_at
+        else ""
+    )
     return (
-        f"{memory.memory_type}. {memory.subject}. "
+        f"{memory.memory_type}. {memory.subject}.{temporal} "
         f"{memory.content}"
     )
 
