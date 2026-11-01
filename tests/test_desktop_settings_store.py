@@ -34,8 +34,10 @@ def valid_changes():
         "voice_output_device_id": "",
         "voice_sample_rate": 16000,
         "voice_stt_language": "auto",
+        "voice_stt_device": "cpu",
         "voice_stt_threads": 4,
         "voice_whisper_server_path": "apps/whisper.cpp/build/bin/Release/whisper-server.exe",
+        "voice_whisper_cuda_server_path": "apps/whisper.cpp/build-cuda/bin/whisper-server.exe",
         "voice_whisper_model_path": "models/whisper/ggml-base.bin",
         "voice_silero_vad_model_path": "models/whisper/ggml-silero-v6.2.0.bin",
         "voice_vad_threshold": 0.50,
@@ -133,9 +135,23 @@ class DesktopSettingsStoreTests(unittest.TestCase):
             self.assertEqual(parsed["llm"]["model"], "gemma-chat")
             self.assertEqual(parsed["llm"]["max_tokens"], 768)
             self.assertEqual(parsed["memory"]["embedding_model"], "nomic-embed")
+        self.assertEqual(parsed["voice"]["stt_device"], "cpu")
+        self.assertEqual(
+            parsed["voice"]["whisper_cuda_server_path"],
+            "apps/whisper.cpp/build-cuda/bin/whisper-server.exe",
+        )
             self.assertEqual(
                 saved_personality.read_text(encoding="utf-8"),
                 "You are V. Be direct and transparent.",
+            )
+
+    def test_rejects_unknown_speech_recognition_device(self):
+        changes = valid_changes()
+        changes["voice_stt_device"] = "directml"
+        with self.assertRaisesRegex(ValueError, "cpu or cuda"):
+            validate_desktop_settings(
+                changes,
+                available_models=["gemma-chat", "nomic-embed"],
             )
 
     def test_rejects_speech_replies_when_voice_is_disabled(self):
@@ -155,9 +171,10 @@ class DesktopSettingsStoreTests(unittest.TestCase):
             root = Path(temporary).resolve()
             changes = valid_changes()
             changes["voice_enabled"] = True
+            changes["voice_stt_device"] = "cuda"
 
             for relative in (
-                changes["voice_whisper_server_path"],
+                changes["voice_whisper_cuda_server_path"],
                 changes["voice_whisper_model_path"],
                 changes["voice_silero_vad_model_path"],
             ):
@@ -172,6 +189,7 @@ class DesktopSettingsStoreTests(unittest.TestCase):
                 )
 
         self.assertTrue(validated["voice_enabled"])
+        self.assertEqual(validated["voice_stt_device"], "cuda")
         self.assertFalse(validated["voice_speak_replies"])
 
     def test_spoken_replies_require_kokoro_assets(self):
