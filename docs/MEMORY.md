@@ -12,6 +12,7 @@ SQLite stores memory records, the extraction queue, and semantic embedding metad
 - Historical reprocessing of every stored user message, including messages whose original extraction job was already completed.
 - Durable review proposals that can be approved, edited, rejected, or marked as duplicate without changing existing memories.
 - Resumable backfill checkpoints and per-run processing statistics stored in the memory database.
+- Original source timestamps and limited adjacent-conversation context are retained for historically accurate review; evidence still comes only from the quoted source user message.
 - Explicit-only extraction; inferred patterns are not automatically stored.
 - Verbatim evidence excerpts are stored instead of model-generated paraphrases.
 - Background extraction after a configurable idle period.
