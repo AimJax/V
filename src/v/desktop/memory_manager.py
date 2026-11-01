@@ -50,6 +50,7 @@ class MemoryManagerDialog(QDialog):
     export_requested = Signal(str, bool)
     import_requested = Signal(str)
     backfill_requested = Signal()
+    confirm_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -266,6 +267,8 @@ class MemoryManagerDialog(QDialog):
         self.export_button = QPushButton("Export…")
         self.import_button = QPushButton("Import…")
         self.delete_button = QPushButton("Delete")
+        self.confirm_button = QPushButton("Confirm still true")
+        self.confirm_button.setToolTip("Record that you have reviewed and reaffirmed this memory.")
         self.backfill_button.clicked.connect(self.backfill_requested.emit)
         self.save_button = QPushButton("Save changes")
         self.save_button.setObjectName("primary")
@@ -273,12 +276,14 @@ class MemoryManagerDialog(QDialog):
         self.export_button.clicked.connect(self._export)
         self.import_button.clicked.connect(self._import)
         self.delete_button.clicked.connect(self._delete)
+        self.confirm_button.clicked.connect(self._confirm)
         self.save_button.clicked.connect(self._save)
 
         actions.addWidget(self.backfill_button)
         actions.addWidget(self.export_button)
         actions.addWidget(self.import_button)
         actions.addStretch(1)
+        actions.addWidget(self.confirm_button)
         actions.addWidget(self.delete_button)
         actions.addWidget(self.save_button)
         root.addLayout(actions)
@@ -516,6 +521,44 @@ class MemoryManagerDialog(QDialog):
         self._dirty = False
         self.status_label.setText("Memory correction saved.")
         self.refresh()
+
+    def _confirm(self) -> None:
+        if self._selected_memory_id is None or self._operation_pending or self._dirty:
+            return
+
+        answer = QMessageBox.question(
+            self,
+            "Confirm memory is still true?",
+            "This records that you have reviewed and reaffirmed this memory. "
+            "It does not change the original source date, evidence, or content.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        self._operation_pending = True
+        self._update_action_state()
+        self.status_label.setText("Confirming memory…")
+        self.confirm_requested.emit(self._selected_memory_id)
+
+    def on_memory_confirmed(self, memory: Memory) -> None:
+        self._operation_pending = False
+        self._dirty = False
+        self._selected_memory_id = memory.id
+
+        for index, existing in enumerate(self._memories):
+            if existing.id == memory.id:
+                self._memories[index] = memory
+                break
+
+        self.confirmed_label.setText(
+            f"Last confirmed: {memory.last_confirmed_at or 'not confirmed'}"
+        )
+        self.updated_label.setText(f"Updated: {memory.updated_at}")
+        self.dirty_label.setText("No unsaved changes")
+        self.status_label.setText("Memory confirmation recorded.")
+        self._update_action_state()
 
     def _delete(self) -> None:
         if self._selected_memory_id is None or self._operation_pending:

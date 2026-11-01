@@ -126,6 +126,7 @@ class MemoryRetrievalTests(unittest.TestCase):
         memory = self.store.create_memory(
             content="The user currently works in construction.",
             memory_type="episodic",
+            provenance="inferred",
             source_created_at="2024-03-12T09:15:00+00:00",
         )
 

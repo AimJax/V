@@ -154,6 +154,25 @@ class MemoryManagerDialogTests(unittest.TestCase):
         self.assertEqual(emitted, [memory.id])
         self.assertTrue(self.dialog._operation_pending)
 
+    def test_confirmation_result_updates_confirmation_metadata(self):
+        memory = self._memory()
+        self.dialog.set_memories([memory])
+        self.application.processEvents()
+
+        from dataclasses import replace
+        confirmed = replace(
+            memory,
+            updated_at="2026-11-01T14:00:00+00:00",
+            last_confirmed_at="2026-11-01T14:00:00+00:00",
+        )
+        self.dialog._operation_pending = True
+        self.dialog.on_memory_confirmed(confirmed)
+
+        self.assertFalse(self.dialog._operation_pending)
+        self.assertIn(confirmed.last_confirmed_at, self.dialog.confirmed_label.text())
+        self.assertIn(confirmed.updated_at, self.dialog.updated_label.text())
+        self.assertTrue(self.dialog.confirm_button.isEnabled())
+
     def test_confirm_button_is_disabled_when_editor_has_unsaved_changes(self):
         self.dialog.set_memories([self._memory()])
         self.application.processEvents()
