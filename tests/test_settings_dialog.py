@@ -55,8 +55,10 @@ class SettingsDialogTests(unittest.TestCase):
                 "output_device_id": "",
                 "sample_rate": 16000,
                 "stt_language": "auto",
+                "stt_device": "cpu",
                 "stt_threads": 4,
                 "whisper_server_path": "apps/whisper.cpp/build/bin/Release/whisper-server.exe",
+                "whisper_cuda_server_path": "apps/whisper.cpp/build-cuda/bin/whisper-server.exe",
                 "whisper_model_path": "models/whisper/ggml-base.bin",
                 "silero_vad_model_path": "models/whisper/ggml-silero-v6.2.0.bin",
                 "vad_threshold": 0.5,
@@ -85,6 +87,11 @@ class SettingsDialogTests(unittest.TestCase):
         )
         self.assertFalse(self.dialog._dirty)
         self.assertFalse(self.dialog.save_button.isEnabled())
+        self.assertEqual(self.dialog.stt_device.currentData(), "cpu")
+        self.assertEqual(
+            self.dialog.whisper_cuda_server_path.text(),
+            "apps/whisper.cpp/build-cuda/bin/whisper-server.exe",
+        )
         self.assertEqual(
             self.dialog.kokoro_model_path.text(),
             "models/kokoro/kokoro-v1.0.onnx",
@@ -99,12 +106,20 @@ class SettingsDialogTests(unittest.TestCase):
         self.assertFalse(self.dialog.speak_replies.isChecked())
         self.assertFalse(self.dialog.speak_replies.isEnabled())
 
+        self.dialog.stt_device.setCurrentIndex(
+            self.dialog.stt_device.findData("cuda")
+        )
         self.dialog.voice_enabled.setChecked(True)
         self.assertTrue(self.dialog.speak_replies.isEnabled())
         self.dialog.speak_replies.setChecked(True)
 
         values = self.dialog._settings_values()
         self.assertTrue(values["voice_enabled"])
+        self.assertEqual(values["voice_stt_device"], "cuda")
+        self.assertEqual(
+            values["voice_whisper_cuda_server_path"],
+            "apps/whisper.cpp/build-cuda/bin/whisper-server.exe",
+        )
         self.assertTrue(values["voice_speak_replies"])
 
         self.dialog.voice_enabled.setChecked(False)
