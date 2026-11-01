@@ -43,8 +43,14 @@ class PlaybackHarness:
 
 def test_end_of_media_detaches_source_before_releasing_buffer_and_defers_next():
     playback = PlaybackHarness(pending=[b"RIFFnext"])
+    scheduled = []
 
-    with patch("v.voice.playback.QTimer.singleShot") as single_shot:
+    class FakeTimer:
+        @staticmethod
+        def singleShot(milliseconds, callback):
+            scheduled.append((milliseconds, callback))
+
+    with patch("v.voice.playback.QTimer", FakeTimer):
         playback._on_media_status(QMediaPlayer.MediaStatus.EndOfMedia)
 
     assert playback.events == [
@@ -52,7 +58,7 @@ def test_end_of_media_detaches_source_before_releasing_buffer_and_defers_next():
         ("set_source", True),
         "delete_buffer",
     ]
-    single_shot.assert_called_once_with(0, playback._play_next)
+    assert scheduled == [(0, playback._play_next)]
     assert playback._buffer is None
 
 
