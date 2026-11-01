@@ -38,6 +38,64 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual(result.source_message_id, 7)
         self.assertIsNotNone(result.last_confirmed_at)
 
+    def test_original_source_date_survives_storage_and_retrieval(self):
+        source_date = "2025-05-18T12:30:00+00:00"
+        memory = self.store.create_memory(
+            content="The user was working in a construction role.",
+            memory_type="episodic",
+            source_conversation_id="conversation-old",
+            source_message_id=24,
+            source_created_at=source_date,
+            evidence="I was working in construction.",
+        )
+
+        loaded = self.store.get_memory(memory.id)
+
+        self.assertEqual(loaded.source_created_at, source_date)
+        self.assertEqual(
+            self.store.get_memory_by_key(memory.memory_key),
+            loaded,
+        )
+
+    def test_invalid_original_source_date_is_rejected(self):
+        for value in (
+            "not-a-date",
+            "2025-05-18T12:30:00",
+            123,
+        ):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    self.store.create_memory(
+                        content="Historical context.",
+                        source_created_at=value,
+                    )
+
+    def test_migrates_existing_schema_without_losing_memories(self):
+        original = self.store.create_memory(
+            content="An existing memory.",
+            memory_key="existing",
+        )
+        with self.store._connect() as connection:
+            connection.execute(
+                "ALTER TABLE memories DROP COLUMN source_created_at"
+            )
+            connection.execute("PRAGMA user_version = 1")
+            connection.commit()
+
+        migrated = MemoryStore(self.database_path)
+        restored = migrated.get_memory(original.id)
+
+        self.assertEqual(restored.content, "An existing memory.")
+        self.assertIsNone(restored.source_created_at)
+        with migrated._connect() as connection:
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(memories)")
+            }
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+        self.assertIn("source_created_at", columns)
+        self.assertEqual(version, 2)
+
     def test_inferred_memory_has_distinct_provenance(self):
         memory = self.store.create_memory(
             content="The user may prefer working late.",
