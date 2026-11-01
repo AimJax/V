@@ -17,7 +17,7 @@ from v.memory.store import MemoryStore, _validate_fields
 
 
 BACKUP_FORMAT = "v-memory-backup"
-BACKUP_VERSION = 1
+BACKUP_VERSION = 2
 MAX_BACKUP_BYTES = 10 * 1024 * 1024
 MAX_MEMORIES = 10_000
 
@@ -32,10 +32,15 @@ MEMORY_FIELDS = (
     "importance",
     "source_conversation_id",
     "source_message_id",
+    "source_created_at",
     "evidence",
     "created_at",
     "updated_at",
     "last_confirmed_at",
+)
+
+LEGACY_MEMORY_FIELDS = tuple(
+    field for field in MEMORY_FIELDS if field != "source_created_at"
 )
 
 
@@ -55,11 +60,20 @@ def _valid_timestamp(value: Any, field: str, *, optional: bool = False) -> None:
         raise ValueError(f"{field} must include a timezone.")
 
 
-def _validate_record(record: Any) -> dict[str, Any]:
-    if not isinstance(record, dict) or set(record) != set(MEMORY_FIELDS):
+def _validate_record(
+    record: Any,
+    *,
+    version: int,
+) -> dict[str, Any]:
+    expected_fields = (
+        LEGACY_MEMORY_FIELDS if version == 1 else MEMORY_FIELDS
+    )
+    if not isinstance(record, dict) or set(record) != set(expected_fields):
         raise ValueError("Backup contains a memory with an invalid field set.")
 
     normalized = dict(record)
+    if version == 1:
+        normalized["source_created_at"] = None
 
     memory_id = normalized["id"]
     if not isinstance(memory_id, str) or not re.fullmatch(r"[0-9a-f]{32}", memory_id):
@@ -87,6 +101,7 @@ def _validate_record(record: Any) -> dict[str, Any]:
             "importance",
             "evidence",
             "last_confirmed_at",
+            "source_created_at",
         )
     }
     _validate_fields(fields)
@@ -107,6 +122,11 @@ def _validate_record(record: Any) -> dict[str, Any]:
 
     _valid_timestamp(normalized["created_at"], "created_at")
     _valid_timestamp(normalized["updated_at"], "updated_at")
+    _valid_timestamp(
+        normalized["source_created_at"],
+        "source_created_at",
+        optional=True,
+    )
     _valid_timestamp(
         normalized["last_confirmed_at"],
         "last_confirmed_at",
@@ -220,9 +240,10 @@ def import_backup(
     if payload.get("format") != BACKUP_FORMAT:
         raise ValueError("File is not a V memory backup.")
 
-    if payload.get("version") != BACKUP_VERSION:
+    version = payload.get("version")
+    if version not in {1, BACKUP_VERSION}:
         raise ValueError(
-            f"Unsupported memory backup version: {payload.get('version')!r}"
+            f"Unsupported memory backup version: {version!r}"
         )
 
     _valid_timestamp(payload.get("exported_at"), "exported_at")
@@ -234,7 +255,10 @@ def import_backup(
     if len(records) > MAX_MEMORIES:
         raise ValueError(f"Cannot import more than {MAX_MEMORIES} memories.")
 
-    validated = [_validate_record(record) for record in records]
+    validated = [
+        _validate_record(record, version=version)
+        for record in records
+    ]
     ids = [record["id"] for record in validated]
     if len(ids) != len(set(ids)):
         raise ValueError("Backup contains duplicate memory IDs.")
