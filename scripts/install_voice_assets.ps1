@@ -3,6 +3,7 @@
 param(
     [int]$BuildThreads = 4,
     [switch]$SkipWhisperBuild,
+    [switch]$BuildWhisperCuda,
     [switch]$SkipModelDownloads
 )
 
@@ -13,6 +14,7 @@ $ProgressPreference = "SilentlyContinue"
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $WhisperSource = Join-Path $ProjectRoot "apps\whisper.cpp"
 $WhisperBuild = Join-Path $WhisperSource "build"
+$WhisperCudaBuild = Join-Path $WhisperSource "build-cuda"
 $ModelDirectory = Join-Path $ProjectRoot "models\whisper"
 $KokoroDirectory = Join-Path $ProjectRoot "models\kokoro"
 
@@ -94,7 +96,7 @@ Write-Host "V local voice asset setup" -ForegroundColor Green
 Write-Host "Project: $ProjectRoot"
 Write-Host "No microphone will be opened by this installer."
 
-if (-not $SkipWhisperBuild) {
+if ((-not $SkipWhisperBuild) -or $BuildWhisperCuda) {
     Assert-Command "git"
     Assert-Command "cmake"
 
@@ -139,6 +141,7 @@ if (-not $SkipWhisperBuild) {
         throw "Existing whisper.cpp checkout is not the pinned v1.9.5 commit. Expected d1be6fde11ac6e0407606b4e42fe72d34add8037, received '$whisperCommit'. Remove or rename '$WhisperSource' before installing this pinned build."
     }
 
+    if (-not $SkipWhisperBuild) {
     Invoke-Native "cmake" @(
         "-S", $WhisperSource,
         "-B", $WhisperBuild,
@@ -164,6 +167,65 @@ if (-not $SkipWhisperBuild) {
         throw "Build completed but whisper-server.exe was not found under $WhisperBuild."
     }
     Write-Host "Whisper server: $serverPath" -ForegroundColor Green
+    }
+}
+
+if ($BuildWhisperCuda) {
+    $msvcRoot = Join-Path $installation "VC\Tools\MSVC"
+    $msvcToolset = Get-ChildItem -LiteralPath $msvcRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like "14.38*" } |
+        Sort-Object Name -Descending |
+        Select-Object -First 1
+    if (-not $msvcToolset) {
+        throw "MSVC 14.38 was not found under $msvcRoot. Install the v14.38-17.8 x64/x86 build tools component, then retry."
+    }
+    $cudaRoot = [Environment]::GetEnvironmentVariable("CUDA_PATH")
+    if (-not $cudaRoot -or -not (Test-Path -LiteralPath $cudaRoot -PathType Container)) {
+        throw "CUDA_PATH is missing or invalid. Set CUDA_PATH to the CUDA 12.8 Toolkit directory, then reopen PowerShell."
+    }
+    $cudaCompiler = Join-Path $cudaRoot "bin\nvcc.exe"
+    $cudaCublas = Join-Path $cudaRoot "lib\x64\cublas.lib"
+    if (-not (Test-Path -LiteralPath $cudaCompiler -PathType Leaf)) {
+        throw "CUDA compiler was not found: $cudaCompiler"
+    }
+    if (-not (Test-Path -LiteralPath $cudaCublas -PathType Leaf)) {
+        throw "CUDA cuBLAS import library was not found: $cudaCublas"
+    }
+
+    Invoke-Native "cmake" @(
+        "-S", $WhisperSource,
+        "-B", $WhisperCudaBuild,
+        "-G", "Visual Studio 17 2022",
+        "-A", "x64",
+        "-T", "version=14.38",
+        "-DWHISPER_BUILD_SERVER=ON",
+        "-DWHISPER_BUILD_EXAMPLES=ON",
+        "-DWHISPER_BUILD_TESTS=OFF",
+        "-DGGML_CUDA=ON",
+        "-DCMAKE_CUDA_ARCHITECTURES=75",
+        "-DCUDAToolkit_ROOT=$cudaRoot",
+        "-DCMAKE_CUDA_COMPILER=$cudaCompiler"
+    ) "Configure CUDA whisper.cpp server for RTX 2060 Super (sm_75)"
+
+    Invoke-Native "cmake" @(
+        "--build", $WhisperCudaBuild,
+        "--config", "Release",
+        "--target", "whisper-server",
+        "--parallel", "$BuildThreads"
+    ) "Build CUDA whisper-server"
+
+    $cudaServerCandidates = @(
+        (Join-Path $WhisperCudaBuild "bin\Release\whisper-server.exe"),
+        (Join-Path $WhisperCudaBuild "bin\whisper-server.exe")
+    )
+    $cudaServerPath = $cudaServerCandidates |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+        Select-Object -First 1
+    if (-not $cudaServerPath) {
+        throw "CUDA build completed but whisper-server.exe was not found under $WhisperCudaBuild."
+    }
+    Write-Host "CUDA Whisper server: $cudaServerPath" -ForegroundColor Green
+    Write-Host "In V Settings > Voice, set Whisper server path to this CUDA executable." -ForegroundColor Yellow
 }
 
 if (-not $SkipModelDownloads) {
