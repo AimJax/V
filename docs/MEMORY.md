@@ -19,6 +19,9 @@ SQLite stores memory records, the extraction queue, and semantic embedding metad
 - Background extraction after a configurable idle period.
 - SQLite FTS5 lexical search.
 - Local semantic retrieval using Nomic embeddings through LM Studio.
+- A versioned relationship graph connects memories by exact canonical subject, shared original source message, or identical episodic timeline key. These are structural associations, not model-invented causal claims.
+- Retrieval can add one-hop associated memories when direct results leave room, preserving direct query matches first.
+- Existing memories are linked during schema migration; new records and subject/key corrections refresh their relationships automatically.
 - Bounded memory context injected into the conversation system message.
 - Memory listing, searching, status inspection, correction, and deletion through chat commands.
 - Versioned JSON export and validated, transactional merge restore through the CLI.

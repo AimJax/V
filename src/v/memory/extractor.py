@@ -60,6 +60,10 @@ For every proposed memory:
 - provenance must always be "explicit".
 - confidence must reflect extraction certainty.
 - memory_key must be a stable, concise, unique key when possible.
+- subject must be a concise, canonical name for the person, project, or topic the memory concerns.
+  Reuse the same subject label for later statements about the same named project or entity.
+  Prefer the actual project/entity name (for example, "Project V") over a vague
+  label such as "User" when the statement is specifically about that project.
 - memory_type must be one of:
   profile, preference, episodic, relationship, project, fact.
 - importance must be an integer from 1 to 5.

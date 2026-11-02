@@ -76,6 +76,41 @@ class MemoryRetrievalTests(unittest.TestCase):
 
         self.assertIn(self.project.id, [item.id for item in results])
 
+    def test_retrieval_expands_to_co_mentioned_context(self):
+        primary = self.store.create_memory(
+            content="I am building a local AI companion named V.",
+            memory_type="project", subject="Project V",
+            source_conversation_id="conversation-1", source_message_id=100,
+        )
+        related = self.store.create_memory(
+            content="Long-term continuity is a central design priority.",
+            memory_type="fact", subject="Design priorities",
+            source_conversation_id="conversation-1", source_message_id=100,
+        )
+        results = retrieve_relevant_memories(
+            self.store, "Tell me about building a local AI companion.", limit=5,
+        )
+        result_ids = [item.id for item in results]
+        self.assertIn(primary.id, result_ids)
+        self.assertIn(related.id, result_ids)
+
+    def test_retrieval_does_not_expand_into_a_different_source_message(self):
+        primary = self.store.create_memory(
+            content="I am building a local AI companion named V.",
+            memory_type="project", subject="Project V",
+            source_conversation_id="conversation-1", source_message_id=101,
+        )
+        unrelated = self.store.create_memory(
+            content="I enjoy atmospheric role-playing games.",
+            memory_type="preference", subject="Games",
+            source_conversation_id="conversation-1", source_message_id=102,
+        )
+        results = retrieve_relevant_memories(
+            self.store, "Tell me about building a local AI companion.", limit=5,
+        )
+        self.assertIn(primary.id, [item.id for item in results])
+        self.assertNotIn(unrelated.id, [item.id for item in results])
+
     def test_memory_context_is_labeled_as_contextual_data(self):
         context = build_memory_context([self.preference])
 

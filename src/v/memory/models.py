@@ -22,3 +22,14 @@ class Memory:
     updated_at: str
     last_confirmed_at: str | None
     source_created_at: str | None = None
+
+@dataclass(frozen=True, slots=True)
+class MemoryLink:
+    """A traceable structural association between two memory records."""
+
+    memory_a_id: str
+    memory_b_id: str
+    relation_type: str
+    basis: str
+    confidence: float
+    created_at: str

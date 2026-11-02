@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from v.memory.models import Memory
+from v.memory.models import Memory, MemoryLink
 
 
 MEMORY_TYPES = {
@@ -30,6 +30,13 @@ PROVENANCE_TYPES = {"explicit", "inferred"}
 
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+
+
+def _normalize_subject(value: str) -> str:
+    return " ".join(value.split()).casefold()
+
+
+GENERIC_SUBJECT_KEYS = {"", "user", "the user", "self", "myself", "me"}
 
 
 def _normalize_key(value: str | None) -> str | None:
@@ -137,7 +144,7 @@ class MemoryStore:
     This initial implementation does not retain a hidden deletion archive.
     """
 
-    SCHEMA_VERSION = 3
+    SCHEMA_VERSION = 4
 
     def __init__(
         self,
@@ -149,23 +156,30 @@ class MemoryStore:
         self.read_only = read_only
 
         self._has_source_created_at = True
+        self._has_memory_links = True
         if read_only:
             if not self.database_path.is_file():
                 raise FileNotFoundError(
                     f"Memory database does not exist: {self.database_path}"
                 )
-            # Older databases may predate the source_created_at migration.
-            # Detect that schema without applying any migration or write.
+            # Detect schema capabilities without applying migrations or writes.
             with closing(self._connect()) as connection:
                 columns = {
                     row["name"]
                     for row in connection.execute("PRAGMA table_info(memories)")
+                }
+                tables = {
+                    row["name"]
+                    for row in connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    )
                 }
             if not columns:
                 raise RuntimeError(
                     f"Memory database has no memories table: {self.database_path}"
                 )
             self._has_source_created_at = "source_created_at" in columns
+            self._has_memory_links = "memory_links" in tables
         else:
             self.database_path.parent.mkdir(parents=True, exist_ok=True)
             self._initialize()
@@ -259,6 +273,28 @@ class MemoryStore:
                 CREATE INDEX IF NOT EXISTS idx_memories_importance
                     ON memories(importance DESC);
 
+                CREATE TABLE IF NOT EXISTS memory_links (
+                    memory_a_id TEXT NOT NULL,
+                    memory_b_id TEXT NOT NULL,
+                    relation_type TEXT NOT NULL CHECK (
+                        relation_type IN ('same_topic', 'co_mentioned', 'same_timeline')
+                    ),
+                    basis TEXT NOT NULL CHECK (
+                        basis IN ('subject_key', 'source_message', 'episodic_key')
+                    ),
+                    confidence REAL NOT NULL CHECK (
+                        confidence >= 0 AND confidence <= 1
+                    ),
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (memory_a_id, memory_b_id, relation_type),
+                    CHECK (memory_a_id < memory_b_id),
+                    FOREIGN KEY (memory_a_id) REFERENCES memories(id) ON DELETE CASCADE,
+                    FOREIGN KEY (memory_b_id) REFERENCES memories(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_memory_links_b
+                    ON memory_links(memory_b_id, relation_type);
+
                 CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts
                 USING fts5(
                     content,
@@ -322,6 +358,34 @@ class MemoryStore:
                     "ALTER TABLE memories ADD COLUMN source_created_at TEXT"
                 )
 
+            if "subject_key" not in columns:
+                connection.execute(
+                    "ALTER TABLE memories ADD COLUMN subject_key TEXT NOT NULL DEFAULT ''"
+                )
+
+            # Normalize existing subjects once, preserving original display values.
+            subject_rows = connection.execute(
+                "SELECT id, subject FROM memories WHERE subject_key = ''"
+            ).fetchall()
+            for subject_row in subject_rows:
+                connection.execute(
+                    "UPDATE memories SET subject_key = ? WHERE id = ?",
+                    (_normalize_subject(subject_row["subject"]), subject_row["id"]),
+                )
+
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_memories_subject_key "
+                "ON memories(subject_key)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_memories_source_message "
+                "ON memories(source_conversation_id, source_message_id)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_memories_episodic_key "
+                "ON memories(memory_key) WHERE memory_type = 'episodic'"
+            )
+
             # Episodic records are dated snapshots, not a single mutable
             # current-value slot. Preserve uniqueness for stable/profile keys
             # while allowing a timeline of episodic memories under one key.
@@ -335,10 +399,188 @@ class MemoryStore:
                 """
             )
 
+            if version < self.SCHEMA_VERSION:
+                self._rebuild_all_relationships(connection)
+
             connection.execute(
                 f"PRAGMA user_version = {self.SCHEMA_VERSION}"
             )
             connection.commit()
+
+    @staticmethod
+    def _insert_memory_link(connection, memory_a_id, memory_b_id,
+                             relation_type, basis, created_at) -> None:
+        if memory_a_id == memory_b_id:
+            return
+        first, second = sorted((memory_a_id, memory_b_id))
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO memory_links (
+                memory_a_id, memory_b_id, relation_type, basis,
+                confidence, created_at
+            ) VALUES (?, ?, ?, ?, 1.0, ?)
+            """,
+            (first, second, relation_type, basis, created_at),
+        )
+
+    @classmethod
+    def _refresh_memory_links(cls, connection, memory_id: str) -> None:
+        row = connection.execute(
+            """
+            SELECT id, memory_type, subject_key, memory_key,
+                   source_conversation_id, source_message_id
+            FROM memories WHERE id = ?
+            """,
+            (memory_id,),
+        ).fetchone()
+        if row is None:
+            return
+        connection.execute(
+            "DELETE FROM memory_links WHERE memory_a_id = ? OR memory_b_id = ?",
+            (memory_id, memory_id),
+        )
+        now = _timestamp()
+        subject_key = row["subject_key"] or ""
+        if subject_key and subject_key not in GENERIC_SUBJECT_KEYS:
+            matches = connection.execute(
+                """
+                SELECT id FROM memories
+                WHERE subject_key = ? AND id != ?
+                ORDER BY importance DESC, updated_at DESC LIMIT 50
+                """,
+                (subject_key, memory_id),
+            ).fetchall()
+            for match in matches:
+                cls._insert_memory_link(
+                    connection, memory_id, match["id"],
+                    "same_topic", "subject_key", now,
+                )
+        if row["source_message_id"] is not None:
+            matches = connection.execute(
+                """
+                SELECT id FROM memories
+                WHERE source_conversation_id IS ?
+                  AND source_message_id = ? AND id != ?
+                ORDER BY importance DESC, created_at DESC LIMIT 50
+                """,
+                (row["source_conversation_id"], row["source_message_id"], memory_id),
+            ).fetchall()
+            for match in matches:
+                cls._insert_memory_link(
+                    connection, memory_id, match["id"],
+                    "co_mentioned", "source_message", now,
+                )
+        if row["memory_type"] == "episodic" and row["memory_key"]:
+            matches = connection.execute(
+                """
+                SELECT id FROM memories
+                WHERE memory_type = 'episodic'
+                  AND memory_key = ? AND id != ?
+                ORDER BY source_created_at DESC, created_at DESC LIMIT 100
+                """,
+                (row["memory_key"], memory_id),
+            ).fetchall()
+            for match in matches:
+                cls._insert_memory_link(
+                    connection, memory_id, match["id"],
+                    "same_timeline", "episodic_key", now,
+                )
+
+    @classmethod
+    def _rebuild_all_relationships(cls, connection) -> None:
+        connection.execute("DELETE FROM memory_links")
+        rows = connection.execute(
+            "SELECT id FROM memories ORDER BY created_at ASC, id ASC"
+        ).fetchall()
+        for row in rows:
+            cls._refresh_memory_links(connection, row["id"])
+
+    def list_memory_links(self, memory_id: str, *,
+                          relation_types: tuple[str, ...] | None = None,
+                          limit: int = 50) -> list[MemoryLink]:
+        if limit < 1:
+            raise ValueError("Memory-link limit must be positive.")
+        if not self._has_memory_links:
+            return []
+        allowed = {"same_topic", "co_mentioned", "same_timeline"}
+        if relation_types is not None:
+            relation_types = tuple(dict.fromkeys(relation_types))
+            if not set(relation_types) <= allowed:
+                raise ValueError("Unsupported memory relationship type.")
+            if not relation_types:
+                return []
+        conditions = ["(memory_a_id = ? OR memory_b_id = ?)"]
+        parameters: list[object] = [memory_id, memory_id]
+        if relation_types is not None:
+            conditions.append(
+                "relation_type IN (" + ",".join("?" for _ in relation_types) + ")"
+            )
+            parameters.extend(relation_types)
+        parameters.append(limit)
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT memory_a_id, memory_b_id, relation_type,
+                       basis, confidence, created_at
+                FROM memory_links
+                WHERE {" AND ".join(conditions)}
+                ORDER BY CASE relation_type
+                    WHEN 'same_topic' THEN 0
+                    WHEN 'co_mentioned' THEN 1 ELSE 2 END,
+                    created_at DESC
+                LIMIT ?
+                """,
+                parameters,
+            ).fetchall()
+        return [
+            MemoryLink(
+                memory_a_id=row["memory_a_id"], memory_b_id=row["memory_b_id"],
+                relation_type=row["relation_type"], basis=row["basis"],
+                confidence=row["confidence"], created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+
+    def list_related_memories(self, memory_id: str, *,
+                              relation_types: tuple[str, ...] | None = None,
+                              limit: int = 20) -> list[Memory]:
+        if limit < 1:
+            raise ValueError("Related-memory limit must be positive.")
+        if not self._has_memory_links:
+            return []
+        allowed = {"same_topic", "co_mentioned", "same_timeline"}
+        if relation_types is not None:
+            relation_types = tuple(dict.fromkeys(relation_types))
+            if not set(relation_types) <= allowed:
+                raise ValueError("Unsupported memory relationship type.")
+            if not relation_types:
+                return []
+        conditions = ["(l.memory_a_id = ? OR l.memory_b_id = ?)"]
+        parameters: list[object] = [memory_id, memory_id]
+        if relation_types is not None:
+            conditions.append(
+                "l.relation_type IN (" + ",".join("?" for _ in relation_types) + ")"
+            )
+            parameters.extend(relation_types)
+        parameters.append(limit)
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT {self._memory_columns("m")}
+                FROM memory_links AS l
+                JOIN memories AS m ON m.id = CASE
+                    WHEN l.memory_a_id = ? THEN l.memory_b_id
+                    ELSE l.memory_a_id END
+                WHERE {" AND ".join(conditions)}
+                ORDER BY CASE l.relation_type
+                    WHEN 'same_topic' THEN 0
+                    WHEN 'co_mentioned' THEN 1 ELSE 2 END,
+                    m.importance DESC, m.updated_at DESC
+                LIMIT ?
+                """,
+                [memory_id, *parameters],
+            ).fetchall()
+        return [self._from_row(row) for row in rows if row is not None]
 
     @staticmethod
     def _from_row(row: sqlite3.Row | None) -> Memory | None:
@@ -426,6 +668,7 @@ class MemoryStore:
         content = data["content"]
         memory_type = data["memory_type"]
         subject = data["subject"]
+        subject_key = _normalize_subject(subject)
         memory_key = data["memory_key"]
         provenance = data["provenance"]
         confidence = data["confidence"]
@@ -461,9 +704,9 @@ class MemoryStore:
                             provenance, confidence, importance,
                             source_conversation_id, source_message_id,
                             source_created_at, evidence, created_at, updated_at,
-                            last_confirmed_at
+                            last_confirmed_at, subject_key
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             memory_id,
@@ -481,8 +724,10 @@ class MemoryStore:
                             now,
                             now,
                             last_confirmed,
+                            subject_key,
                         ),
                     )
+                    self._refresh_memory_links(connection, memory_id)
         except sqlite3.IntegrityError as error:
             if memory_key is not None:
                 raise ValueError(
@@ -718,6 +963,8 @@ class MemoryStore:
 
         changes = dict(changes)
         _validate_fields(changes)
+        if "subject" in changes:
+            changes["subject_key"] = _normalize_subject(changes["subject"])
 
         changes["updated_at"] = _timestamp()
 
@@ -741,6 +988,8 @@ class MemoryStore:
 
                     if cursor.rowcount == 0:
                         raise KeyError(f"Memory not found: {memory_id}")
+                    if set(changes) & {"memory_type", "memory_key", "subject", "subject_key"}:
+                        self._refresh_memory_links(connection, memory_id)
 
         except sqlite3.IntegrityError as error:
             raise ValueError(

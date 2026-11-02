@@ -688,16 +688,14 @@ async def run_chat() -> int:
 
             if memory_store is not None and memory_retrieval:
                 try:
-                    memory_query = user_input
-                    if _is_contextual_follow_up(user_input):
-                        recent_dialogue = conversation_store.get_recent_messages(
-                            conversation.id,
-                            min(history_limit, 4),
-                        )
-                        memory_query = build_memory_retrieval_query(
-                            user_input,
-                            recent_dialogue,
-                        )
+                    recent_dialogue = conversation_store.get_recent_messages(
+                        conversation.id,
+                        min(history_limit, 4),
+                    )
+                    memory_query = build_memory_retrieval_query(
+                        user_input,
+                        recent_dialogue,
+                    )
 
                     if retriever is not None:
                         relevant_memories = await retriever.retrieve(

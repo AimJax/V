@@ -7,6 +7,7 @@ from v.memory.embedding_provider import LMStudioEmbeddingProvider
 from v.memory.embedding_store import EmbeddingStore
 from v.memory.models import Memory
 from v.memory.retrieval import (
+    expand_related_memories,
     meaningful_terms,
     resolve_temporal_memories,
     source_timestamp_key,
@@ -219,11 +220,14 @@ class HybridMemoryRetriever:
                 semantic_threshold=self.semantic_threshold,
             )
 
-            return resolve_temporal_memories(
+            resolved = resolve_temporal_memories(
                 ranked,
                 memories,
                 query,
                 limit=selected_limit,
+            )
+            return expand_related_memories(
+                self.memory_store, resolved, limit=selected_limit
             )
 
         except ProviderError as error:
@@ -231,7 +235,9 @@ class HybridMemoryRetriever:
 
             # Preserve exact keyword recall if the embedding service
             # becomes unavailable. Do not pretend this is semantic search.
-            return lexical_results
+            return expand_related_memories(
+                self.memory_store, lexical_results, limit=selected_limit
+            )
 
     async def rebuild_index(self) -> int:
         """Index all missing or stale memory documents."""

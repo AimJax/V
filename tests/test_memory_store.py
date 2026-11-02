@@ -229,7 +229,7 @@ class MemoryStoreTests(unittest.TestCase):
             }
             version = connection.execute("PRAGMA user_version").fetchone()[0]
         self.assertIn("source_created_at", columns)
-        self.assertEqual(version, 3)
+        self.assertEqual(version, 4)
         migrated.create_memory(
             content="A dated episodic snapshot sharing the old fact key.",
             memory_type="episodic",
@@ -237,6 +237,132 @@ class MemoryStoreTests(unittest.TestCase):
             source_created_at="2026-10-31T10:00:00+00:00",
         )
         self.assertEqual(migrated.count_memories(), 2)
+
+    def test_memories_with_same_canonical_subject_are_linked(self):
+        first = self.store.create_memory(
+            content="The user is building a local AI companion.",
+            memory_type="project", subject="Project V", memory_key="project.v.core",
+        )
+        second = self.store.create_memory(
+            content="The user wants V to have long-term conversational continuity.",
+            memory_type="project", subject=" project   v ",
+            memory_key="project.v.continuity",
+        )
+        links = self.store.list_memory_links(first.id)
+        self.assertTrue(any(
+            link.memory_a_id == min(first.id, second.id)
+            and link.memory_b_id == max(first.id, second.id)
+            and link.relation_type == "same_topic"
+            and link.basis == "subject_key"
+            for link in links
+        ))
+        self.assertEqual(
+            [item.id for item in self.store.list_related_memories(first.id)],
+            [second.id],
+        )
+
+    def test_memories_from_same_source_message_are_co_mentioned(self):
+        first = self.store.create_memory(
+            content="The user is developing Project V.", memory_type="project",
+            subject="Project V", source_conversation_id="conversation-1",
+            source_message_id=42,
+        )
+        second = self.store.create_memory(
+            content="The project must run local AI inference.", memory_type="fact",
+            subject="Privacy requirements", source_conversation_id="conversation-1",
+            source_message_id=42,
+        )
+        related = self.store.list_related_memories(
+            first.id, relation_types=("co_mentioned",)
+        )
+        self.assertEqual([item.id for item in related], [second.id])
+
+    def test_episodic_snapshots_share_a_timeline_relationship(self):
+        first = self.store.create_memory(
+            content="An earlier project state.", memory_type="episodic",
+            memory_key="project.v.status",
+            source_created_at="2025-01-01T00:00:00+00:00",
+        )
+        second = self.store.create_memory(
+            content="A later project state.", memory_type="episodic",
+            memory_key="project.v.status",
+            source_created_at="2026-01-01T00:00:00+00:00",
+        )
+        related = self.store.list_related_memories(
+            second.id, relation_types=("same_timeline",)
+        )
+        self.assertEqual([item.id for item in related], [first.id])
+
+    def test_generic_user_subjects_do_not_create_broad_topic_links(self):
+        first = self.store.create_memory(
+            content="The user likes atmospheric music.",
+            memory_type="preference", subject="User",
+        )
+        self.store.create_memory(
+            content="The user prefers concise programming help.",
+            memory_type="preference", subject=" user ",
+        )
+        self.assertEqual(self.store.list_memory_links(first.id), [])
+
+    def test_correcting_subject_refreshes_automatic_links(self):
+        first = self.store.create_memory(
+            content="A fact about Project V.", memory_type="project",
+            subject="Project V",
+        )
+        second = self.store.create_memory(
+            content="Another fact about Project V.", memory_type="project",
+            subject="Project V",
+        )
+        third = self.store.create_memory(
+            content="A fact about Project North.", memory_type="project",
+            subject="Project North",
+        )
+        self.store.update_memory(first.id, subject="Project North")
+        related = self.store.list_related_memories(
+            first.id, relation_types=("same_topic",)
+        )
+        self.assertEqual({item.id for item in related}, {third.id})
+        self.assertNotIn(second.id, {item.id for item in related})
+
+    def test_deleting_memory_cascades_its_relationships(self):
+        first = self.store.create_memory(
+            content="One Project V detail.", memory_type="project",
+            subject="Project V",
+        )
+        second = self.store.create_memory(
+            content="Another Project V detail.", memory_type="project",
+            subject="Project V",
+        )
+        self.assertEqual(self.store.list_related_memories(first.id), [second])
+        self.assertTrue(self.store.delete_memory(second.id))
+        self.assertEqual(self.store.list_memory_links(first.id), [])
+        self.assertEqual(self.store.list_related_memories(first.id), [])
+
+    def test_legacy_schema_migration_builds_relationships_without_losing_records(self):
+        first = self.store.create_memory(
+            content="Existing memory one.", memory_type="project",
+            subject="Project V",
+        )
+        second = self.store.create_memory(
+            content="Existing memory two.", memory_type="project",
+            subject="Project V",
+        )
+        with closing(self.store._connect()) as connection:
+            with connection:
+                connection.execute("DROP INDEX IF EXISTS idx_memories_subject_key")
+                connection.execute("DROP INDEX IF EXISTS idx_memories_source_message")
+                connection.execute("DROP INDEX IF EXISTS idx_memories_episodic_key")
+                connection.execute("ALTER TABLE memories DROP COLUMN subject_key")
+                connection.execute("PRAGMA user_version = 3")
+        migrated = MemoryStore(self.database_path)
+        self.assertEqual(migrated.count_memories(), 2)
+        self.assertEqual(
+            {item.id for item in migrated.list_related_memories(first.id)},
+            {second.id},
+        )
+        with closing(migrated._connect()) as connection:
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual(version, 4)
 
     def test_inferred_memory_has_distinct_provenance(self):
         memory = self.store.create_memory(

@@ -16,6 +16,7 @@
 - Adjacent messages can clarify intent but are never accepted as evidence; evidence must be an exact quote from the specific source user message.
 - Original message timestamps accompany extraction so historical statements are not mistaken for present-day facts.
 - Memories require an exact source quotation.
+- Subject labels are canonicalized by the local extraction prompt so memories about the same named project or entity can be grouped consistently.
 - Evidence matching is whitespace-normalized and case-insensitive.
 - The stored memory content is the verbatim evidence excerpt, not an LLM-generated paraphrase.
 - Only explicit statements are accepted in this initial version.

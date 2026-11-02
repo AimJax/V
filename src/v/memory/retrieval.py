@@ -143,6 +143,38 @@ def resolve_temporal_memories(
     return resolved
 
 
+def expand_related_memories(
+    memory_store: MemoryStore,
+    memories: list[Memory],
+    *,
+    limit: int,
+) -> list[Memory]:
+    """Fill spare retrieval capacity with directly associated memories.
+
+    Only one hop is followed. Edges describe exact structural associations,
+    not inferred causality. Direct query matches always keep priority.
+    """
+    if limit < 1:
+        raise ValueError("Memory retrieval limit must be positive.")
+    selected = list(memories[:limit])
+    seen = {memory.id for memory in selected}
+    for memory in memories:
+        if len(selected) >= limit:
+            break
+        related = memory_store.list_related_memories(
+            memory.id,
+            relation_types=("same_topic", "co_mentioned"),
+            limit=limit,
+        )
+        for candidate in related:
+            if candidate.id not in seen:
+                seen.add(candidate.id)
+                selected.append(candidate)
+                if len(selected) >= limit:
+                    break
+    return selected
+
+
 def retrieve_relevant_memories(
     memory_store: MemoryStore,
     query: str,
@@ -163,12 +195,13 @@ def retrieve_relevant_memories(
         limit=max(limit * 4, limit),
     )
     all_memories = memory_store.list_memories(limit=10000)
-    return resolve_temporal_memories(
+    resolved = resolve_temporal_memories(
         matches,
         all_memories,
         query,
         limit=limit,
     )
+    return expand_related_memories(memory_store, resolved, limit=limit)
 
 
 def build_memory_context(
