@@ -256,7 +256,7 @@ class MemoryEvaluationTests(unittest.IsolatedAsyncioTestCase):
                 subject="Project V",
                 importance=4,
             )
-            store.create_memory(
+            third = store.create_memory(
                 content="The user likes immersive role-playing games.",
                 memory_type="preference",
                 subject="Games",
@@ -271,12 +271,10 @@ class MemoryEvaluationTests(unittest.IsolatedAsyncioTestCase):
                 batch_size=2,
             )
 
-        self.assertEqual(len(cases), 2)
+        self.assertEqual(len(cases), 3)
         self.assertEqual(
             {case.relevant_record_ids[0] for case in cases},
-            {first.id, second.id, next(
-                memory.id for memory in store.list_memories() if memory.subject == "Games"
-            )},
+            {first.id, second.id, third.id},
         )
         self.assertEqual(summary["saved_memories"], 3)
         self.assertEqual(summary["sampled_memories"], 3)
