@@ -153,17 +153,16 @@ def export_backup(
         rows = connection.execute(
             f"SELECT {store._memory_columns()} FROM memories ORDER BY created_at, id"
         ).fetchall()
+        evidence_rows = connection.execute(
+            """
+            SELECT pattern_memory_id, source_memory_id
+            FROM memory_evidence
+            ORDER BY pattern_memory_id, source_memory_id
+            """
+        ).fetchall() if store._has_memory_evidence else []
 
     if len(rows) > MAX_MEMORIES:
         raise ValueError(f"Cannot export more than {MAX_MEMORIES} memories.")
-
-    evidence_rows = connection.execute(
-        """
-        SELECT pattern_memory_id, source_memory_id
-        FROM memory_evidence
-        ORDER BY pattern_memory_id, source_memory_id
-        """
-    ).fetchall() if store._has_memory_evidence else []
 
     payload = {
         "format": BACKUP_FORMAT,
