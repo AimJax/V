@@ -53,6 +53,24 @@ class CliTests(unittest.TestCase):
             limit=5,
         )
 
+    def test_memory_evaluate_dispatches_personal_auto_generation(self):
+        with patch.object(
+            sys,
+            "argv",
+            ["v", "memory", "evaluate", "--personal"],
+        ), patch(
+            "v.cli._run_memory_evaluation",
+            new=AsyncMock(return_value=0),
+        ) as evaluate:
+            result = main()
+
+        self.assertEqual(result, 0)
+        evaluate.assert_awaited_once_with(
+            personal=True,
+            cases_path=None,
+            limit=5,
+        )
+
     def test_memory_evaluate_dispatches_personal_labels(self):
         with patch.object(
             sys,

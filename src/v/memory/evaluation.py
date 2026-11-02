@@ -26,6 +26,7 @@ from v.memory.retrieval import (
     resolve_temporal_memories,
 )
 from v.memory.store import MemoryStore
+from v.providers.base import ChatMessage, ChatProvider
 
 
 DEFAULT_THRESHOLDS = (0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75)
@@ -279,7 +280,7 @@ def _aggregate(
     *,
     positive_count: int,
     negative_count: int,
-) -> dict[str, float | int]:
+) -> dict[str, float | int | None]:
     positives = per_query[:positive_count]
     negatives = per_query[positive_count:]
 
@@ -291,7 +292,7 @@ def _aggregate(
     false_positive_rate = (
         sum(bool(item["false_positive"]) for item in negatives) / negative_count
         if negative_count
-        else 0.0
+        else None
     )
     f1 = (
         2 * precision * recall / (precision + recall)
@@ -299,7 +300,12 @@ def _aggregate(
         else 0.0
     )
     # A transparent ranking heuristic, not an automatic configuration change.
-    selection_score = f1 * (1.0 - false_positive_rate)
+    # Positive-only sets cannot measure no-answer rejection, so use F1 alone.
+    selection_score = (
+        f1
+        if false_positive_rate is None
+        else f1 * (1.0 - false_positive_rate)
+    )
 
     return {
         "precision": precision,
@@ -499,7 +505,7 @@ PERSONAL_CASES_TEMPLATE = {
         "For questions that should retrieve nothing, use an empty relevant_memory_ids array.",
         "For historical questions, label the historical snapshot IDs that answer the question.",
         "For present-state questions, label the latest relevant snapshot, not superseded history.",
-        "Add an answerable case and a no-answer case to measure false positives.",
+        "No-answer cases are optional; add them only when you want to measure false positives.",
     ],
     "cases": [],
     "examples": [
@@ -517,6 +523,169 @@ PERSONAL_CASES_TEMPLATE = {
         },
     ],
 }
+
+
+AUTO_PERSONAL_EVALUATION_MAX_MEMORIES = 40
+AUTO_PERSONAL_EVALUATION_BATCH_SIZE = 6
+
+
+def _select_evaluation_memories(
+    memories: list[Memory],
+    *,
+    limit: int,
+) -> list[Memory]:
+    """Select a diverse, high-value sample without changing saved memories."""
+    ranked = sorted(
+        memories,
+        key=lambda memory: (
+            -memory.importance,
+            -memory.confidence,
+            memory.subject.casefold(),
+            memory.id,
+        ),
+    )
+    selected: list[Memory] = []
+    seen_subjects: set[str] = set()
+    remaining = list(ranked)
+
+    while remaining and len(selected) < limit:
+        index = next(
+            (
+                position
+                for position, memory in enumerate(remaining)
+                if memory.subject.casefold().strip() not in seen_subjects
+            ),
+            0,
+        )
+        memory = remaining.pop(index)
+        selected.append(memory)
+        seen_subjects.add(memory.subject.casefold().strip())
+
+    return selected
+
+
+def _parse_generated_cases(content: str) -> list[dict]:
+    """Parse a JSON response, tolerating a surrounding Markdown code fence."""
+    text = content.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text[:-3].strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start < 0 or end <= start:
+            raise ValueError("The local chat model did not return valid JSON.")
+        try:
+            payload = json.loads(text[start:end + 1])
+        except json.JSONDecodeError as error:
+            raise ValueError("The local chat model returned malformed evaluation JSON.") from error
+
+    if not isinstance(payload, dict) or not isinstance(payload.get("cases"), list):
+        raise ValueError("The local chat model response must contain a 'cases' array.")
+    return payload["cases"]
+
+
+async def generate_personal_evaluation_cases(
+    memories: list[Memory],
+    chat_provider: ChatProvider,
+    *,
+    model: str,
+    max_memories: int = AUTO_PERSONAL_EVALUATION_MAX_MEMORIES,
+    batch_size: int = AUTO_PERSONAL_EVALUATION_BATCH_SIZE,
+) -> tuple[list[BenchmarkQuery], dict]:
+    """Generate source-anchored retrieval questions using V's configured local LLM.
+
+    Each generated question is labeled against the exact source memory supplied
+    for its input index. The model generates wording only; it does not choose
+    or invent the ground-truth memory IDs. Generated cases exist in RAM only.
+    """
+    if not model.strip():
+        raise ValueError("A local chat model must be configured for personal evaluation.")
+    if max_memories < 1 or batch_size < 1:
+        raise ValueError("Evaluation memory and batch limits must be positive.")
+    if not memories:
+        raise ValueError("There are no saved memories to evaluate.")
+
+    selected = _select_evaluation_memories(memories, limit=max_memories)
+    cases_by_index: dict[int, BenchmarkQuery] = {}
+    system_prompt = (
+        "You create retrieval evaluation questions for a private local AI assistant. "
+        "For EACH supplied memory, create exactly one concise, natural question that "
+        "requires the information in that specific memory to answer. Paraphrase the "
+        "memory; do not copy its sentence. Do not ask a question answerable from "
+        "general knowledge alone. Do not combine different memories. Never invent "
+        "facts or request details absent from the memory. For an episodic memory with "
+        "a source date, phrase the question as historical and anchor it to that date; "
+        "do not imply that an old snapshot is current. If a record is too vague to "
+        "support a useful question, omit it. Return ONLY JSON in this shape: "
+        '{"cases":[{"index":0,"query":"..."}]}. The index must match the supplied '
+        "record index exactly."
+    )
+
+    for start in range(0, len(selected), batch_size):
+        batch = selected[start:start + batch_size]
+        rows = [
+            {
+                "index": index,
+                "memory_type": memory.memory_type,
+                "subject": memory.subject,
+                "source_date": memory.source_created_at,
+                "content": memory.content[:1600],
+            }
+            for index, memory in enumerate(batch)
+        ]
+        response = await chat_provider.chat(
+            [
+                ChatMessage(role="system", content=system_prompt),
+                ChatMessage(
+                    role="user",
+                    content=json.dumps({"memories": rows}, ensure_ascii=False),
+                ),
+            ],
+            model=model,
+            temperature=0.1,
+            max_tokens=max(256, len(batch) * 96),
+        )
+        generated = _parse_generated_cases(response.content)
+        for item in generated:
+            if not isinstance(item, dict):
+                continue
+            index = item.get("index")
+            query = item.get("query")
+            if (
+                type(index) is not int
+                or not 0 <= index < len(batch)
+                or index in cases_by_index
+                or not isinstance(query, str)
+                or not 8 <= len(query.strip()) <= 500
+            ):
+                continue
+            memory = batch[index]
+            stable_index = start + index
+            cases_by_index[stable_index] = BenchmarkQuery(
+                query.strip(),
+                (memory.id,),
+            )
+
+    cases = [cases_by_index[index] for index in sorted(cases_by_index)]
+    if not cases:
+        raise ValueError(
+            "The local chat model could not create usable questions from the saved memories."
+        )
+
+    summary = {
+        "method": "local source-anchored generation",
+        "model": model,
+        "saved_memories": len(memories),
+        "sampled_memories": len(selected),
+        "generated_queries": len(cases),
+        "skipped_memories": len(selected) - len(cases),
+        "cases_saved_to_disk": False,
+    }
+    return cases, summary
 
 
 def _validate_thresholds(
@@ -636,11 +805,6 @@ def load_personal_cases(
 
     if not any(case.relevant_record_ids for case in result):
         raise ValueError("At least one case must label one or more relevant memories.")
-    if all(case.relevant_record_ids for case in result):
-        raise ValueError(
-            "Add at least one no-answer case with an empty relevant_memory_ids array."
-        )
-
     return result
 
 
@@ -722,8 +886,6 @@ async def evaluate_personal_memory_retrieval(
         raise ValueError("At least one personal evaluation case is required.")
     if not any(case.relevant_record_ids for case in cases):
         raise ValueError("At least one personal case must label relevant memories.")
-    if all(case.relevant_record_ids for case in cases):
-        raise ValueError("At least one personal case must be a no-answer query.")
     if batch_size < 1:
         raise ValueError("Embedding batch size must be positive.")
     if max_context_characters < 1:
@@ -909,7 +1071,7 @@ async def evaluate_personal_memory_retrieval(
         threshold_results,
         key=lambda item: (
             item["selection_score"],
-            -item["false_positive_rate"],
+            -(item["false_positive_rate"] or 0.0),
             item["mrr"],
             item["threshold"],
         ),
@@ -933,6 +1095,11 @@ async def evaluate_personal_memory_retrieval(
             "Heuristic ranking only: F1 multiplied by the negative-query "
             "rejection rate. Inspect per-query misses and false positives "
             "before changing the production threshold."
+            if negatives
+            else
+            "Positive-only evaluation: the score is F1. No-answer rejection "
+            "was not measured in this run. Generated questions are "
+            "source-anchored calibration cases, not a human-verified test set."
         ),
         "database_modified": False,
     }

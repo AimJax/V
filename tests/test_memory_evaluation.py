@@ -13,6 +13,7 @@ from v.memory.evaluation import (
     create_personal_cases_template,
     evaluate_memory_retrieval,
     evaluate_personal_memory_retrieval,
+    generate_personal_evaluation_cases,
     load_personal_cases,
     query_metrics,
     resolve_personal_cases_path,
@@ -210,6 +211,99 @@ class MemoryEvaluationTests(unittest.IsolatedAsyncioTestCase):
                 report["thresholds"][0]["false_positive_rate"],
                 0.0,
             )
+
+
+    async def test_auto_generation_anchors_labels_to_source_memory_ids(self):
+        class QuestionChatProvider:
+            def __init__(self):
+                self.batch_sizes = []
+
+            async def chat(self, messages, *, model=None, temperature=0.7, max_tokens=None):
+                payload = json.loads(messages[-1].content)
+                rows = payload["memories"]
+                self.batch_sizes.append(len(rows))
+                result = {
+                    "cases": [
+                        {
+                            "index": row["index"],
+                            "query": f"What should V remember about {row['subject']}?",
+                        }
+                        for row in rows
+                    ]
+                }
+                return type("Result", (), {"content": json.dumps(result)})()
+
+            async def list_models(self):
+                return []
+
+            def stream_chat(self, *args, **kwargs):
+                raise NotImplementedError
+
+            async def aclose(self):
+                return None
+
+        with temporary_directory() as temporary:
+            store = MemoryStore(Path(temporary) / "memory.sqlite3")
+            first = store.create_memory(
+                content="The user prefers direct technical explanations.",
+                memory_type="preference",
+                subject="Communication",
+                importance=5,
+            )
+            second = store.create_memory(
+                content="The user's ongoing project is a local AI companion.",
+                memory_type="project",
+                subject="Project V",
+                importance=4,
+            )
+            store.create_memory(
+                content="The user likes immersive role-playing games.",
+                memory_type="preference",
+                subject="Games",
+                importance=3,
+            )
+            provider = QuestionChatProvider()
+            cases, summary = await generate_personal_evaluation_cases(
+                store.list_memories(),
+                provider,
+                model="local-test-chat",
+                max_memories=2,
+                batch_size=2,
+            )
+
+        self.assertEqual(len(cases), 2)
+        self.assertEqual(
+            {case.relevant_record_ids[0] for case in cases},
+            {first.id, second.id},
+        )
+        self.assertEqual(summary["saved_memories"], 3)
+        self.assertEqual(summary["sampled_memories"], 2)
+        self.assertEqual(summary["generated_queries"], 2)
+        self.assertFalse(summary["cases_saved_to_disk"])
+        self.assertEqual(provider.batch_sizes, [2])
+
+    async def test_personal_evaluation_supports_positive_only_auto_cases(self):
+        with temporary_directory() as temporary:
+            database = Path(temporary) / "memory.sqlite3"
+            memories = MemoryStore(database)
+            preference = memories.create_memory(
+                content="I prefer concise technical explanations.",
+                memory_type="preference",
+                subject="Communication",
+            )
+            read_only_memories = MemoryStore(database, read_only=True)
+            report = await evaluate_personal_memory_retrieval(
+                read_only_memories,
+                EqualVectorProvider(),
+                [BenchmarkQuery("What response style is preferred?", (preference.id,))],
+                model="test-local",
+                thresholds=(0.60,),
+            )
+
+        self.assertEqual(report["positive_queries"], 1)
+        self.assertEqual(report["negative_queries"], 0)
+        self.assertIsNone(report["thresholds"][0]["false_positive_rate"])
+        self.assertIn("not measured", report["selection_note"])
 
     async def test_personal_evaluation_rejects_unknown_labels(self):
         with temporary_directory() as temporary:

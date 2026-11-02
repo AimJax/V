@@ -16,11 +16,11 @@ from v.diagnostics import main as run_diagnostics
 from v.memory.backup import export_backup, import_backup
 from v.memory.embedding_provider import LMStudioEmbeddingProvider
 from v.memory.evaluation import (
-    DEFAULT_PERSONAL_CASES_PATH,
     DEFAULT_THRESHOLDS,
     create_personal_cases_template,
     evaluate_memory_retrieval,
     evaluate_personal_memory_retrieval,
+    generate_personal_evaluation_cases,
     load_personal_cases,
     resolve_personal_cases_path,
 )
@@ -97,27 +97,47 @@ async def _run_memory_evaluation(
     memory_store = None
     personal_cases = None
     selected_cases_path = None
+    case_generation = None
     if personal:
-        if cases_path is None:
-            selected_cases_path = resolve_personal_cases_path()
-        else:
-            selected_cases_path = resolve_personal_cases_path(cases_path)
         memory_store = _memory_store(read_only=True)
-        personal_cases = load_personal_cases(
-            selected_cases_path,
-            {memory.id for memory in memory_store.list_memories(limit=10000)},
-        )
+        if cases_path is not None:
+            selected_cases_path = resolve_personal_cases_path(cases_path)
+            personal_cases = load_personal_cases(
+                selected_cases_path,
+                {memory.id for memory in memory_store.list_memories(limit=10000)},
+            )
 
     policy = NetworkPolicy.from_settings(settings)
     endpoint = policy.authorize_local_endpoint(
         str(llm_settings.get("base_url", ""))
     )
-    provider = LMStudioEmbeddingProvider(
-        base_url=endpoint,
-        model=model,
-        timeout_seconds=float(llm_settings.get("request_timeout_seconds", 120)),
-    )
+    timeout = float(llm_settings.get("request_timeout_seconds", 120))
+    provider = None
+    chat_provider = None
     try:
+        if personal and cases_path is None:
+            chat_model = str(llm_settings.get("model", "")).strip()
+            if not chat_model:
+                raise ValueError(
+                    "Configure llm.model before running automatic personal evaluation."
+                )
+            chat_provider = LMStudioProvider(
+                base_url=endpoint,
+                model=chat_model,
+                timeout_seconds=timeout,
+            )
+            memories = memory_store.list_memories(limit=10000)
+            personal_cases, case_generation = await generate_personal_evaluation_cases(
+                memories,
+                chat_provider,
+                model=chat_model,
+            )
+
+        provider = LMStudioEmbeddingProvider(
+            base_url=endpoint,
+            model=model,
+            timeout_seconds=timeout,
+        )
         if personal:
             report = await evaluate_personal_memory_retrieval(
                 memory_store,
@@ -127,6 +147,8 @@ async def _run_memory_evaluation(
                 thresholds=thresholds,
                 limit=limit,
             )
+            if case_generation is not None:
+                report["case_generation"] = case_generation
         else:
             report = await evaluate_memory_retrieval(
                 provider,
@@ -138,7 +160,10 @@ async def _run_memory_evaluation(
         print(f"Memory evaluation failed: {error}", file=sys.stderr)
         return 1
     finally:
-        await provider.aclose()
+        if provider is not None:
+            await provider.aclose()
+        if chat_provider is not None:
+            await chat_provider.aclose()
 
     fts = report["fts_baseline"]
     mode = "personal memory" if personal else "synthetic"
@@ -154,6 +179,14 @@ async def _run_memory_evaluation(
             f"({report['positive_queries']} answerable, "
             f"{report['negative_queries']} no-answer)"
         )
+        if "case_generation" in report:
+            generated = report["case_generation"]
+            print(
+                f"Questions generated locally: {generated['generated_queries']} "
+                f"from {generated['sampled_memories']} sampled memories "
+                f"(chat model: {generated['model']})"
+            )
+            print("Generated test cases kept in RAM; no label file was created.")
         print(
             f"Embedding cache reused: {report['cached_embeddings_reused']}  "
             f"New vectors generated in RAM: "
@@ -166,11 +199,16 @@ async def _run_memory_evaluation(
             f"({report['positive_queries']} answerable, "
             f"{report['negative_queries']} no-answer)"
         )
+    fts_false_positive = (
+        "n/a"
+        if fts["false_positive_rate"] is None
+        else f"{fts['false_positive_rate']:.3f}"
+    )
     print(
         "FTS5-only baseline: "
         f"P={fts['precision']:.3f}  R={fts['recall']:.3f}  "
         f"MRR={fts['mrr']:.3f}  "
-        f"no-answer FP={fts['false_positive_rate']:.3f}"
+        f"no-answer FP={fts_false_positive}"
     )
     print()
     print("Threshold  Precision  Recall  MRR     No-answer FP  Score")
@@ -180,7 +218,7 @@ async def _run_memory_evaluation(
             f"{item['precision']:>9.3f}  "
             f"{item['recall']:>6.3f}  "
             f"{item['mrr']:>5.3f}  "
-            f"{item['false_positive_rate']:>13.3f}  "
+            f"{('n/a' if item['false_positive_rate'] is None else format(item['false_positive_rate'], '.3f')):>13}  "
             f"{item['selection_score']:>5.3f}"
         )
     if personal:
@@ -229,7 +267,7 @@ def _run_memory_evaluation_init(destination: str | None = None) -> int:
     """Create a local-only JSON file for human-labeled retrieval cases."""
     path = create_personal_cases_template(destination)
     print(f"Created personal memory evaluation template: {path}")
-    print("Edit its 'cases' array and add full memory IDs to each relevant_memory_ids list.")
+    print("Optional advanced workflow: edit 'cases' and label memory IDs manually. The normal --personal command generates cases automatically.")
     print("Find IDs with /memory search in chat or in the Memory Manager.")
     print("The file is under V's ignored data directory and is not committed to Git.")
     return 0
@@ -468,13 +506,13 @@ def main() -> int:
     evaluate_parser.add_argument(
         "--personal",
         action="store_true",
-        help="Evaluate manually labeled questions against your real memory corpus.",
+        help="Generate local questions from saved memories and evaluate real retrieval.",
     )
     evaluate_parser.add_argument(
         "--cases",
         help=(
-            "Personal evaluation JSON file (default: "
-            f"{DEFAULT_PERSONAL_CASES_PATH.as_posix()}; must be inside V_HOME)."
+            "Optional manually labeled evaluation file (must be inside V_HOME). "
+            "Omit this to let V generate questions locally."
         ),
     )
     evaluate_parser.add_argument(
@@ -486,7 +524,7 @@ def main() -> int:
 
     eval_init_parser = memory_actions.add_parser(
         "eval-init",
-        help="Create a private JSON template for personalized retrieval evaluation.",
+        help="Create an optional private template for manually labeled retrieval evaluation.",
     )
     eval_init_parser.add_argument(
         "--destination",

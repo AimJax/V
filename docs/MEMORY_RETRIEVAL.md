@@ -24,23 +24,19 @@ The benchmark creates a temporary SQLite database under `tmp/memory-evaluation` 
 
 ## Personalized retrieval evaluation
 
-Create a private starter file:
-
-```powershell
-& ".\.venv\Scripts\python.exe" -m v memory eval-init
-```
-
-Edit `data/memory/evaluation_cases.json`. Add realistic questions to its `cases` array and label the full memory IDs that should answer each question. Find IDs with `/memory search TEXT` in chat or in the desktop Memory Manager. Use an empty `relevant_memory_ids` array for a question that should retrieve nothing. Include at least one answerable case and one no-answer case. For historical questions, label the dated snapshots that answer them; for current questions, label the latest relevant snapshot.
-
-Run the personalized evaluation:
+Run the personalized benchmark directly:
 
 ```powershell
 & ".\.venv\Scripts\python.exe" -m v memory evaluate --personal
 ```
 
-Use `--cases data/memory/another_set.json` to select another local label file. The benchmark validates every labeled ID against the current database and reports stale IDs instead of silently ignoring them. It reports per-question hits and misses, context size, and threshold-level precision, recall, MRR, and no-answer false-positive rate.
+No JSON file or manual labeling is required. V opens its configured memory database read-only, selects up to 40 high-value memories while preferring subject diversity, and asks the configured local chat model to generate one natural retrieval question per selected memory. Each question is linked in code to its source memory ID; the model generates question wording but does not decide the expected memory IDs. Questions are generated in bounded batches and kept in RAM only.
 
-Personal mode opens the memory database and compatible embedding cache read-only. Missing or stale vectors are embedded in bounded batches through the configured loopback LM Studio endpoint and held only in RAM. No memory rows or cached vectors are written. The label file may contain sensitive questions and IDs, so keep it in V's ignored `data/` directory. Do not commit or share it.
+The generated questions and memory contents are sent only to the local endpoint authorized by V's network policy. The evaluator then uses the configured local embedding model to compare thresholds. Existing cached vectors are read without writes; missing or stale vectors are created in RAM. Neither the memory database nor embedding cache is modified, and no evaluation file is written.
+
+This automatic set is a source-anchored calibration sample, not a human-verified ground-truth benchmark. Since it contains answerable questions only, no-answer rejection is shown as `n/a`; use the separate synthetic benchmark for a measured no-answer false-positive rate.
+
+For an optional manually curated evaluation, use `--cases data/memory/your_cases.json` with `--personal`. The `memory eval-init` command creates a private starter file for this advanced workflow. Manual no-answer cases are optional. Keep such files under V's ignored `data/` directory and do not commit or share them.
 
 ## Integration
 - Retrieval occurs before the chat completion request.
