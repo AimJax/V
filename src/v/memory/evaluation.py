@@ -666,6 +666,7 @@ async def generate_personal_evaluation_cases(
     selected = _select_evaluation_memories(memories, limit=max_memories)
     cases_by_index: dict[int, BenchmarkQuery] = {}
     fallback_indexes: set[int] = set()
+    deterministic_fallback_count = 0
     json_mode_prompt = (
         "You create retrieval evaluation questions for a private local AI assistant. "
         "For EACH supplied memory, create exactly one concise, natural question that "
@@ -771,6 +772,7 @@ async def generate_personal_evaluation_cases(
             query = _clean_generated_question(plain_response.content)
             if query is None:
                 query = _fallback_evaluation_question(memory)
+                deterministic_fallback_count += 1
             cases_by_index[stable_index] = BenchmarkQuery(
                 query,
                 (memory.id,),
@@ -789,7 +791,7 @@ async def generate_personal_evaluation_cases(
         "sampled_memories": len(selected),
         "generated_queries": len(cases),
         "plain_text_retries": len(fallback_indexes),
-        "deterministic_fallbacks": 0,
+        "deterministic_fallbacks": deterministic_fallback_count,
         "skipped_memories": len(selected) - len(cases),
         "cases_saved_to_disk": False,
     }
