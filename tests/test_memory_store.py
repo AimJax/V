@@ -331,7 +331,7 @@ class MemoryStoreTests(unittest.TestCase):
             }
             version = connection.execute("PRAGMA user_version").fetchone()[0]
         self.assertIn("source_created_at", columns)
-        self.assertEqual(version, 4)
+        self.assertEqual(version, 5)
         migrated.create_memory(
             content="A dated episodic snapshot sharing the old fact key.",
             memory_type="episodic",
@@ -464,7 +464,7 @@ class MemoryStoreTests(unittest.TestCase):
         )
         with closing(migrated._connect()) as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 4)
+        self.assertEqual(version, 5)
 
     def test_inferred_memory_has_distinct_provenance(self):
         memory = self.store.create_memory(

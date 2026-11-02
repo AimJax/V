@@ -55,8 +55,9 @@ class MemoryBackupTests(unittest.TestCase):
         )
         export_backup(self.source, self.backup_path)
         payload = json.loads(self.backup_path.read_text(encoding="utf-8"))
-        self.assertEqual(payload["version"], 2)
+        self.assertEqual(payload["version"], 3)
         payload["version"] = 1
+        payload.pop("evidence_links")
         for record in payload["memories"]:
             record.pop("source_created_at")
         self.backup_path.write_text(
