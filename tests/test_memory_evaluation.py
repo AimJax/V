@@ -267,20 +267,22 @@ class MemoryEvaluationTests(unittest.IsolatedAsyncioTestCase):
                 store.list_memories(),
                 provider,
                 model="local-test-chat",
-                max_memories=2,
+                max_memories=3,
                 batch_size=2,
             )
 
         self.assertEqual(len(cases), 2)
         self.assertEqual(
             {case.relevant_record_ids[0] for case in cases},
-            {first.id, second.id},
+            {first.id, second.id, next(
+                memory.id for memory in store.list_memories() if memory.subject == "Games"
+            )},
         )
         self.assertEqual(summary["saved_memories"], 3)
-        self.assertEqual(summary["sampled_memories"], 2)
-        self.assertEqual(summary["generated_queries"], 2)
+        self.assertEqual(summary["sampled_memories"], 3)
+        self.assertEqual(summary["generated_queries"], 3)
         self.assertFalse(summary["cases_saved_to_disk"])
-        self.assertEqual(provider.batch_sizes, [2])
+        self.assertEqual(provider.batch_sizes, [2, 1])
 
     async def test_personal_evaluation_supports_positive_only_auto_cases(self):
         with temporary_directory() as temporary:

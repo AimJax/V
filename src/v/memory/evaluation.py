@@ -658,7 +658,7 @@ async def generate_personal_evaluation_cases(
             if (
                 type(index) is not int
                 or not 0 <= index < len(batch)
-                or index in cases_by_index
+                or (start + index) in cases_by_index
                 or not isinstance(query, str)
                 or not 8 <= len(query.strip()) <= 500
             ):
