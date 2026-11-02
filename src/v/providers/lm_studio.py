@@ -155,6 +155,7 @@ class LMStudioProvider:
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        response_format: dict | None = None,
     ) -> ChatResult:
         """Send a non-streaming conversation request."""
         payload = {
@@ -166,6 +167,9 @@ class LMStudioProvider:
 
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+
+        if response_format is not None:
+            payload["response_format"] = response_format
 
         try:
             response = await self._client.post(

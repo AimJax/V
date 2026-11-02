@@ -218,7 +218,15 @@ class MemoryEvaluationTests(unittest.IsolatedAsyncioTestCase):
             def __init__(self):
                 self.batch_sizes = []
 
-            async def chat(self, messages, *, model=None, temperature=0.7, max_tokens=None):
+            async def chat(
+                self,
+                messages,
+                *,
+                model=None,
+                temperature=0.7,
+                max_tokens=None,
+                response_format=None,
+            ):
                 payload = json.loads(messages[-1].content)
                 rows = payload["memories"]
                 self.batch_sizes.append(len(rows))
@@ -281,6 +289,56 @@ class MemoryEvaluationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary["generated_queries"], 3)
         self.assertFalse(summary["cases_saved_to_disk"])
         self.assertEqual(provider.batch_sizes, [2, 1])
+
+
+    async def test_auto_generation_recovers_when_json_output_is_invalid(self):
+        class PlainTextRecoveryProvider:
+            def __init__(self):
+                self.calls = []
+
+            async def chat(
+                self,
+                messages,
+                *,
+                model=None,
+                temperature=0.7,
+                max_tokens=None,
+                response_format=None,
+            ):
+                self.calls.append(response_format)
+                if response_format is not None:
+                    return type("Result", (), {
+                        "content": "Here are some questions based on the memories."
+                    })()
+                return type("Result", (), {
+                    "content": "Question: What kind of technical explanations do I prefer?"
+                })()
+
+        with temporary_directory() as temporary:
+            store = MemoryStore(Path(temporary) / "memory.sqlite3")
+            memory = store.create_memory(
+                content="The user prefers concise technical explanations.",
+                memory_type="preference",
+                subject="Communication",
+            )
+            provider = PlainTextRecoveryProvider()
+            cases, summary = await generate_personal_evaluation_cases(
+                store.list_memories(),
+                provider,
+                model="local-test-chat",
+                max_memories=1,
+                batch_size=1,
+            )
+
+        self.assertEqual(len(cases), 1)
+        self.assertEqual(cases[0].relevant_record_ids, (memory.id,))
+        self.assertEqual(
+            cases[0].query,
+            "What kind of technical explanations do I prefer?",
+        )
+        self.assertEqual(provider.calls, [{"type": "json_object"}, None])
+        self.assertEqual(summary["plain_text_retries"], 1)
+        self.assertFalse(summary["cases_saved_to_disk"])
 
     async def test_personal_evaluation_supports_positive_only_auto_cases(self):
         with temporary_directory() as temporary:

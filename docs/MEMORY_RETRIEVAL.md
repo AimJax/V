@@ -30,7 +30,7 @@ Run the personalized benchmark directly:
 & ".\.venv\Scripts\python.exe" -m v memory evaluate --personal
 ```
 
-No JSON file or manual labeling is required. V opens its configured memory database read-only, selects up to 40 high-value memories while preferring subject diversity, and asks the configured local chat model to generate one natural retrieval question per selected memory. Each question is linked in code to its source memory ID; the model generates question wording but does not decide the expected memory IDs. Questions are generated in bounded batches and kept in RAM only.
+No JSON file or manual labeling is required. V opens its configured memory database read-only, selects up to 40 high-value memories while preferring subject diversity, and asks the configured local chat model to generate one natural retrieval question per selected memory. Each question is linked in code to its source memory ID; the model generates question wording but does not decide the expected memory IDs. V requests JSON mode from LM Studio and falls back to one plain-text question per memory if the model's JSON is invalid. If a plain-text response is unusable, V creates a deterministic subject-based question. Questions are generated in bounded batches and kept in RAM only.
 
 The generated questions and memory contents are sent only to the local endpoint authorized by V's network policy. The evaluator then uses the configured local embedding model to compare thresholds. Existing cached vectors are read without writes; missing or stale vectors are created in RAM. Neither the memory database nor embedding cache is modified, and no evaluation file is written.
 

@@ -103,6 +103,15 @@ class LMStudioProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(body["stream"])
         self.assertEqual(body["messages"][0]["content"], "Hello V")
 
+    async def test_chat_supports_json_object_response_format(self):
+        await self.provider.chat(
+            [ChatMessage(role="user", content="Return JSON")],
+            response_format={"type": "json_object"},
+        )
+
+        body = json.loads(self.last_request.content)
+        self.assertEqual(body["response_format"], {"type": "json_object"})
+
     async def test_streaming_chat(self):
         chunks = []
 
