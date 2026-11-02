@@ -186,6 +186,10 @@ async def _run_memory_evaluation(
                 f"from {generated['sampled_memories']} sampled memories "
                 f"(chat model: {generated['model']})"
             )
+            print(
+                f"Plain-text retries: {generated['plain_text_retries']}; "
+                f"deterministic fallbacks: {generated['deterministic_fallbacks']}"
+            )
             print("Generated test cases kept in RAM; no label file was created.")
         print(
             f"Embedding cache reused: {report['cached_embeddings_reused']}  "
