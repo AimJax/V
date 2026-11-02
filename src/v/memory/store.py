@@ -661,7 +661,7 @@ class MemoryStore:
         with closing(self._connect()) as connection:
             rows = connection.execute(
                 f"""
-                SELECT m.{self._memory_columns().replace(", ", ", m.")}
+                SELECT {self._memory_columns("m")}
                 FROM memories_fts
                 JOIN memories AS m
                     ON m.rowid = memories_fts.rowid

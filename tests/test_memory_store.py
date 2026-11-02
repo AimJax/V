@@ -51,12 +51,14 @@ class MemoryStoreTests(unittest.TestCase):
 
         loaded = read_only.get_memory(memory.id)
         listed = read_only.list_memories(limit=10)
-        lexical = read_only.search_memories_any("local AI", limit=10)
+        lexical_any = read_only.search_memories_any("local AI", limit=10)
+        lexical_all = read_only.search_memories("local AI", limit=10)
 
         self.assertEqual(loaded.id, memory.id)
         self.assertIsNone(loaded.source_created_at)
         self.assertEqual([item.id for item in listed], [memory.id])
-        self.assertEqual([item.id for item in lexical], [memory.id])
+        self.assertEqual([item.id for item in lexical_any], [memory.id])
+        self.assertEqual([item.id for item in lexical_all], [memory.id])
         self.assertEqual(self.database_path.stat().st_mtime_ns, modified_before)
 
         with closing(sqlite3.connect(self.database_path)) as connection:
