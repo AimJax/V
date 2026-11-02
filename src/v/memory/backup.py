@@ -17,7 +17,7 @@ from v.memory.store import MemoryStore, _validate_fields
 
 
 BACKUP_FORMAT = "v-memory-backup"
-BACKUP_VERSION = 2
+BACKUP_VERSION = 3
 MAX_BACKUP_BYTES = 10 * 1024 * 1024
 MAX_MEMORIES = 10_000
 
@@ -157,11 +157,20 @@ def export_backup(
     if len(rows) > MAX_MEMORIES:
         raise ValueError(f"Cannot export more than {MAX_MEMORIES} memories.")
 
+    evidence_rows = connection.execute(
+        """
+        SELECT pattern_memory_id, source_memory_id
+        FROM memory_evidence
+        ORDER BY pattern_memory_id, source_memory_id
+        """
+    ).fetchall() if store._has_memory_evidence else []
+
     payload = {
         "format": BACKUP_FORMAT,
         "version": BACKUP_VERSION,
         "exported_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "memories": [dict(row) for row in rows],
+        "evidence_links": [dict(row) for row in evidence_rows],
     }
     encoded = (
         json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
@@ -241,7 +250,7 @@ def import_backup(
         raise ValueError("File is not a V memory backup.")
 
     version = payload.get("version")
-    if version not in {1, BACKUP_VERSION}:
+    if version not in {1, 2, BACKUP_VERSION}:
         raise ValueError(
             f"Unsupported memory backup version: {version!r}"
         )
@@ -273,6 +282,66 @@ def import_backup(
     ]
     if len(keys) != len(set(keys)):
         raise ValueError("Backup contains duplicate memory keys.")
+
+    evidence_links = []
+    if version >= 3:
+        raw_links = payload.get("evidence_links")
+        if not isinstance(raw_links, list):
+            raise ValueError("Backup evidence_links must be a JSON array.")
+        record_by_id = {record["id"]: record for record in validated}
+        seen_links = set()
+        links_by_pattern: dict[str, list[dict[str, Any]]] = {}
+        for link in raw_links:
+            if (
+                not isinstance(link, dict)
+                or set(link) != {"pattern_memory_id", "source_memory_id"}
+            ):
+                raise ValueError("Backup contains an invalid evidence link.")
+            pattern_id = link["pattern_memory_id"]
+            source_id = link["source_memory_id"]
+            if (
+                not isinstance(pattern_id, str)
+                or not re.fullmatch(r"[0-9a-f]{32}", pattern_id)
+                or not isinstance(source_id, str)
+                or not re.fullmatch(r"[0-9a-f]{32}", source_id)
+                or pattern_id == source_id
+            ):
+                raise ValueError("Backup contains an invalid evidence memory ID.")
+            pair = (pattern_id, source_id)
+            if pair in seen_links:
+                raise ValueError("Backup contains duplicate evidence links.")
+            seen_links.add(pair)
+            pattern = record_by_id.get(pattern_id)
+            source = record_by_id.get(source_id)
+            if (
+                pattern is None
+                or source is None
+                or pattern["memory_type"] != "inferred_pattern"
+                or pattern["provenance"] != "inferred"
+                or source["provenance"] != "explicit"
+                or source["memory_type"] == "inferred_pattern"
+                or source["source_message_id"] is None
+                or not source["source_conversation_id"]
+            ):
+                raise ValueError("Backup evidence must connect inferred patterns to explicit source memories.")
+            links_by_pattern.setdefault(pattern_id, []).append(source)
+            evidence_links.append(pair)
+
+        for pattern_id, sources in links_by_pattern.items():
+            message_ids = {source["source_message_id"] for source in sources}
+            conversation_ids = {source["source_conversation_id"] for source in sources}
+            if len(message_ids) < 3 or len(conversation_ids) < 2:
+                raise ValueError(
+                    f"Inferred pattern {pattern_id} lacks three independent source messages across two conversations."
+                )
+
+        inferred_ids = {
+            record["id"] for record in validated
+            if record["memory_type"] == "inferred_pattern"
+            and record["provenance"] == "inferred"
+        }
+        if inferred_ids - set(links_by_pattern):
+            raise ValueError("Backup contains an inferred pattern without supporting evidence.")
 
     restored = 0
     skipped = 0
@@ -306,6 +375,16 @@ def import_backup(
                         [record[field] for field in MEMORY_FIELDS],
                     )
                     restored += 1
+
+                for pattern_id, source_id in evidence_links:
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO memory_evidence (
+                            pattern_memory_id, source_memory_id, created_at
+                        ) VALUES (?, ?, ?)
+                        """,
+                        (pattern_id, source_id, datetime.now().astimezone().isoformat(timespec="milliseconds")),
+                    )
     except sqlite3.IntegrityError as error:
         if "UNIQUE constraint failed: memories.memory_key" in str(error):
             raise ValueError(

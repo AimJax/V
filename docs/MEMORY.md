@@ -20,6 +20,9 @@ SQLite stores memory records, the extraction queue, and semantic embedding metad
 - SQLite FTS5 lexical search.
 - Local semantic retrieval using Nomic embeddings through LM Studio.
 - A versioned relationship graph connects memories by exact canonical subject, shared original source message, or identical episodic timeline key. These are structural associations, not model-invented causal claims.
+- Inferred patterns have a separate many-to-many evidence ledger: they must be supported by at least three explicit memories from three distinct source messages across at least two conversations.
+- Correcting a source statement invalidates derived patterns that depend on it. Deleting evidence removes a pattern if the remaining evidence no longer meets the minimum threshold.
+- Version 3 JSON backups preserve inferred-pattern evidence links; version 1 and 2 backups remain importable.
 - Retrieval can add one-hop associated memories when direct results leave room, preserving direct query matches first.
 - Existing memories are linked during schema migration; new records and subject/key corrections refresh their relationships automatically.
 - Bounded memory context injected into the conversation system message.

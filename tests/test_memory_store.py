@@ -68,6 +68,108 @@ class MemoryStoreTests(unittest.TestCase):
             }
         self.assertNotIn("source_created_at", columns)
 
+    def _create_pattern_sources(self):
+        return [
+            self.store.create_memory(
+                content=f"Explicit preference evidence {index}.",
+                memory_type="preference",
+                subject="User",
+                source_conversation_id="conversation-a" if index < 3 else "conversation-b",
+                source_message_id=100 + index,
+                evidence=f"Preference statement {index}.",
+            )
+            for index in range(3)
+        ]
+
+    def test_inferred_pattern_requires_three_messages_across_two_conversations(self):
+        sources = self._create_pattern_sources()
+        pattern = self.store.create_inferred_pattern(
+            content="The user consistently prioritizes practical, testable solutions.",
+            subject="User",
+            memory_key="pattern.practical_solutions",
+            confidence=0.94,
+            importance=4,
+            evidence_memory_ids=[item.id for item in sources],
+        )
+
+        self.assertEqual(pattern.memory_type, "inferred_pattern")
+        self.assertEqual(pattern.provenance, "inferred")
+        self.assertIsNone(pattern.source_message_id)
+        self.assertEqual(
+            {item.id for item in self.store.list_memory_evidence(pattern.id)},
+            {item.id for item in sources},
+        )
+        self.assertEqual(self.store.count_inferred_patterns(), 1)
+
+    def test_inferred_pattern_rejects_insufficient_or_non_explicit_sources(self):
+        first = self.store.create_memory(
+            content="First statement.",
+            source_conversation_id="conversation-a",
+            source_message_id=1,
+        )
+        second = self.store.create_memory(
+            content="Second statement.",
+            source_conversation_id="conversation-a",
+            source_message_id=2,
+        )
+        third = self.store.create_memory(
+            content="Third statement.",
+            source_conversation_id="conversation-a",
+            source_message_id=3,
+        )
+        with self.assertRaisesRegex(ValueError, "at least two conversations"):
+            self.store.create_inferred_pattern(
+                content="A proposed pattern.",
+                subject="User",
+                memory_key="pattern.one_conversation",
+                confidence=0.95,
+                importance=3,
+                evidence_memory_ids=[first.id, second.id, third.id],
+            )
+
+        self.assertEqual(self.store.count_inferred_patterns(), 0)
+
+    def test_deleting_support_that_breaks_minimum_removes_inferred_pattern(self):
+        sources = self._create_pattern_sources()
+        pattern = self.store.create_inferred_pattern(
+            content="A recurring pattern.",
+            subject="User",
+            memory_key="pattern.deletion",
+            confidence=0.95,
+            importance=3,
+            evidence_memory_ids=[item.id for item in sources],
+        )
+
+        self.assertTrue(self.store.delete_memory(sources[0].id))
+        self.assertIsNone(self.store.get_memory(pattern.id))
+        self.assertEqual(self.store.count_inferred_patterns(), 0)
+
+    def test_correcting_support_invalidates_derived_pattern(self):
+        sources = self._create_pattern_sources()
+        pattern = self.store.create_inferred_pattern(
+            content="A recurring pattern.",
+            subject="User",
+            memory_key="pattern.correction",
+            confidence=0.95,
+            importance=3,
+            evidence_memory_ids=[item.id for item in sources],
+        )
+
+        self.store.update_memory(sources[0].id, content="Corrected source statement.")
+        self.assertIsNone(self.store.get_memory(pattern.id))
+
+    def test_inferred_pattern_requires_high_confidence_and_importance(self):
+        sources = self._create_pattern_sources()
+        with self.assertRaisesRegex(ValueError, "confidence must be at least"):
+            self.store.create_inferred_pattern(
+                content="A recurring pattern.",
+                subject="User",
+                memory_key="pattern.low_confidence",
+                confidence=0.80,
+                importance=3,
+                evidence_memory_ids=[item.id for item in sources],
+            )
+
     def test_create_and_retrieve_explicit_memory(self):
         memory = self.store.create_memory(
             content="The user prefers concise answers.",

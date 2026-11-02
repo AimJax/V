@@ -144,7 +144,7 @@ class MemoryStore:
     This initial implementation does not retain a hidden deletion archive.
     """
 
-    SCHEMA_VERSION = 4
+    SCHEMA_VERSION = 5
 
     def __init__(
         self,
@@ -157,6 +157,7 @@ class MemoryStore:
 
         self._has_source_created_at = True
         self._has_memory_links = True
+        self._has_memory_evidence = True
         if read_only:
             if not self.database_path.is_file():
                 raise FileNotFoundError(
@@ -180,6 +181,7 @@ class MemoryStore:
                 )
             self._has_source_created_at = "source_created_at" in columns
             self._has_memory_links = "memory_links" in tables
+            self._has_memory_evidence = "memory_evidence" in tables
         else:
             self.database_path.parent.mkdir(parents=True, exist_ok=True)
             self._initialize()
@@ -294,6 +296,54 @@ class MemoryStore:
 
                 CREATE INDEX IF NOT EXISTS idx_memory_links_b
                     ON memory_links(memory_b_id, relation_type);
+
+                -- Inferred patterns must retain explicit, independently sourced evidence.
+                CREATE TABLE IF NOT EXISTS memory_evidence (
+                    pattern_memory_id TEXT NOT NULL,
+                    source_memory_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (pattern_memory_id, source_memory_id),
+                    CHECK (pattern_memory_id != source_memory_id),
+                    FOREIGN KEY (pattern_memory_id) REFERENCES memories(id) ON DELETE CASCADE,
+                    FOREIGN KEY (source_memory_id) REFERENCES memories(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_memory_evidence_source
+                    ON memory_evidence(source_memory_id, pattern_memory_id);
+
+                -- A derived pattern is removed when its supporting evidence no longer
+                -- meets the minimum independent-source requirement.
+                CREATE TRIGGER IF NOT EXISTS memory_evidence_cleanup
+                AFTER DELETE ON memory_evidence
+                BEGIN
+                    DELETE FROM memories
+                    WHERE id = OLD.pattern_memory_id
+                      AND memory_type = 'inferred_pattern'
+                      AND provenance = 'inferred'
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM memory_evidence AS e
+                          JOIN memories AS source ON source.id = e.source_memory_id
+                          WHERE e.pattern_memory_id = OLD.pattern_memory_id
+                          GROUP BY e.pattern_memory_id
+                          HAVING COUNT(DISTINCT source.source_message_id) >= 3
+                             AND COUNT(DISTINCT source.source_conversation_id) >= 2
+                      );
+                END;
+
+                -- Corrections to original statements invalidate derived conclusions.
+                CREATE TRIGGER IF NOT EXISTS memory_evidence_source_update
+                AFTER UPDATE OF memory_type, provenance, content, evidence, subject
+                ON memories
+                WHEN OLD.memory_type != 'inferred_pattern'
+                BEGIN
+                    DELETE FROM memories
+                    WHERE id IN (
+                        SELECT pattern_memory_id
+                        FROM memory_evidence
+                        WHERE source_memory_id = OLD.id
+                    );
+                END;
 
                 CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts
                 USING fts5(
@@ -581,6 +631,201 @@ class MemoryStore:
                 [memory_id, *parameters],
             ).fetchall()
         return [self._from_row(row) for row in rows if row is not None]
+
+    @staticmethod
+    def _validated_pattern_sources(connection, evidence_memory_ids: list[str]):
+        ids = list(dict.fromkeys(evidence_memory_ids))
+        if len(ids) < 3:
+            raise ValueError("An inferred pattern requires at least three supporting memories.")
+        if any(not isinstance(item, str) or not item for item in ids):
+            raise ValueError("Evidence memory IDs must be non-empty strings.")
+
+        placeholders = ",".join("?" for _ in ids)
+        rows = connection.execute(
+            f"""
+            SELECT id, memory_type, provenance, source_message_id,
+                   source_conversation_id
+            FROM memories
+            WHERE id IN ({placeholders})
+            """,
+            ids,
+        ).fetchall()
+        if len(rows) != len(ids):
+            raise ValueError("Every supporting memory must exist.")
+        if any(
+            row["provenance"] != "explicit"
+            or row["memory_type"] == "inferred_pattern"
+            or row["source_message_id"] is None
+            or not row["source_conversation_id"]
+            for row in rows
+        ):
+            raise ValueError(
+                "Pattern evidence must come from explicit memories with original message sources."
+            )
+
+        distinct_messages = {row["source_message_id"] for row in rows}
+        distinct_conversations = {row["source_conversation_id"] for row in rows}
+        if len(distinct_messages) < 3 or len(distinct_conversations) < 2:
+            raise ValueError(
+                "An inferred pattern requires three distinct source messages across at least two conversations."
+            )
+        return rows
+
+    def create_inferred_pattern(
+        self,
+        *,
+        content: str,
+        subject: str,
+        memory_key: str,
+        confidence: float,
+        importance: int,
+        evidence_memory_ids: list[str],
+    ) -> Memory:
+        """Create a derived pattern with auditable links to explicit memories."""
+        data: dict[str, Any] = {
+            "content": content,
+            "memory_type": "inferred_pattern",
+            "subject": subject,
+            "memory_key": memory_key,
+            "provenance": "inferred",
+            "confidence": confidence,
+            "importance": importance,
+            "evidence": None,
+        }
+        _validate_fields(data)
+        if not data["memory_key"]:
+            raise ValueError("An inferred pattern requires a stable memory key.")
+        if data["confidence"] < 0.90:
+            raise ValueError("Inferred-pattern confidence must be at least 0.90.")
+        if data["importance"] < 3:
+            raise ValueError("Inferred patterns must have importance of at least 3.")
+
+        memory_id = uuid.uuid4().hex
+        now = _timestamp()
+        try:
+            with closing(self._connect()) as connection:
+                with connection:
+                    self._validated_pattern_sources(connection, evidence_memory_ids)
+                    connection.execute(
+                        """
+                        INSERT INTO memories (
+                            id, memory_type, subject, content, memory_key,
+                            provenance, confidence, importance,
+                            source_conversation_id, source_message_id,
+                            source_created_at, evidence, created_at, updated_at,
+                            last_confirmed_at, subject_key
+                        )
+                        VALUES (?, 'inferred_pattern', ?, ?, ?, 'inferred',
+                                ?, ?, NULL, NULL, NULL, NULL, ?, ?, NULL, ?)
+                        """,
+                        (
+                            memory_id,
+                            data["subject"],
+                            data["content"],
+                            data["memory_key"],
+                            data["confidence"],
+                            data["importance"],
+                            now,
+                            now,
+                            _normalize_subject(data["subject"]),
+                        ),
+                    )
+                    for source_id in dict.fromkeys(evidence_memory_ids):
+                        connection.execute(
+                            """
+                            INSERT INTO memory_evidence (
+                                pattern_memory_id, source_memory_id, created_at
+                            ) VALUES (?, ?, ?)
+                            """,
+                            (memory_id, source_id, now),
+                        )
+                    self._refresh_memory_links(connection, memory_id)
+        except sqlite3.IntegrityError as error:
+            raise ValueError(
+                "The inferred pattern conflicts with an existing memory."
+            ) from error
+
+        result = self.get_memory(memory_id)
+        if result is None:
+            raise RuntimeError("Created inferred pattern could not be retrieved.")
+        return result
+
+    def attach_memory_evidence(
+        self,
+        pattern_memory_id: str,
+        evidence_memory_ids: list[str],
+    ) -> int:
+        """Attach additional explicit sources to an existing inferred pattern."""
+        if not self._has_memory_evidence:
+            raise RuntimeError("This memory database does not support evidence links.")
+        now = _timestamp()
+        with closing(self._connect()) as connection:
+            with connection:
+                pattern = connection.execute(
+                    """
+                    SELECT memory_type, provenance
+                    FROM memories WHERE id = ?
+                    """,
+                    (pattern_memory_id,),
+                ).fetchone()
+                if (
+                    pattern is None
+                    or pattern["memory_type"] != "inferred_pattern"
+                    or pattern["provenance"] != "inferred"
+                ):
+                    raise ValueError("Target must be an existing inferred pattern.")
+
+                existing = connection.execute(
+                    """
+                    SELECT source_memory_id FROM memory_evidence
+                    WHERE pattern_memory_id = ?
+                    """,
+                    (pattern_memory_id,),
+                ).fetchall()
+                all_ids = [
+                    row["source_memory_id"] for row in existing
+                ] + list(evidence_memory_ids)
+                self._validated_pattern_sources(connection, all_ids)
+                inserted = 0
+                for source_id in dict.fromkeys(evidence_memory_ids):
+                    cursor = connection.execute(
+                        """
+                        INSERT OR IGNORE INTO memory_evidence (
+                            pattern_memory_id, source_memory_id, created_at
+                        ) VALUES (?, ?, ?)
+                        """,
+                        (pattern_memory_id, source_id, now),
+                    )
+                    inserted += cursor.rowcount
+        return inserted
+
+    def list_memory_evidence(self, pattern_memory_id: str) -> list[Memory]:
+        """Return the explicit memories supporting one inferred pattern."""
+        if not self._has_memory_evidence:
+            return []
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT {self._memory_columns("m")}
+                FROM memory_evidence AS e
+                JOIN memories AS m ON m.id = e.source_memory_id
+                WHERE e.pattern_memory_id = ?
+                ORDER BY m.source_created_at, m.created_at, m.id
+                """,
+                (pattern_memory_id,),
+            ).fetchall()
+        return [self._from_row(row) for row in rows if row is not None]
+
+    def count_inferred_patterns(self) -> int:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*) FROM memories
+                WHERE memory_type = 'inferred_pattern'
+                  AND provenance = 'inferred'
+                """
+            ).fetchone()
+        return int(row[0])
 
     @staticmethod
     def _from_row(row: sqlite3.Row | None) -> Memory | None:

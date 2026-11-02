@@ -107,6 +107,57 @@ class MemoryBackupTests(unittest.TestCase):
         self.assertEqual(self.target.get_memory(older.id), older)
         self.assertEqual(self.target.get_memory(newer.id), newer)
 
+    def test_backup_round_trip_preserves_inferred_pattern_evidence(self):
+        sources = []
+        for index, conversation_id in enumerate(
+            ("conversation-a", "conversation-a", "conversation-b"),
+            start=1,
+        ):
+            sources.append(
+                self.source.create_memory(
+                    content=f"Explicit source {index}.",
+                    memory_type="preference",
+                    subject="User",
+                    source_conversation_id=conversation_id,
+                    source_message_id=200 + index,
+                    evidence=f"Original statement {index}.",
+                )
+            )
+        pattern = self.source.create_inferred_pattern(
+            content="The user repeatedly favors practical implementations.",
+            subject="User",
+            memory_key="pattern.practical",
+            confidence=0.96,
+            importance=4,
+            evidence_memory_ids=[item.id for item in sources],
+        )
+
+        path, exported = export_backup(self.source, self.backup_path)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["version"], 3)
+        self.assertEqual(len(payload["evidence_links"]), 3)
+
+        restored, skipped = import_backup(self.target, path)
+        self.assertEqual(exported, 4)
+        self.assertEqual((restored, skipped), (4, 0))
+        restored_pattern = self.target.get_memory(pattern.id)
+        self.assertEqual(restored_pattern, pattern)
+        self.assertEqual(
+            {item.id for item in self.target.list_memory_evidence(pattern.id)},
+            {item.id for item in sources},
+        )
+
+    def test_v2_backup_remains_importable(self):
+        original = self.source.create_memory(content="A v2-compatible record.")
+        export_backup(self.source, self.backup_path)
+        payload = json.loads(self.backup_path.read_text(encoding="utf-8"))
+        payload["version"] = 2
+        payload.pop("evidence_links")
+        self.backup_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        self.assertEqual(import_backup(self.target, self.backup_path), (1, 0))
+        self.assertEqual(self.target.get_memory(original.id), original)
+
     def test_export_refuses_to_overwrite_without_explicit_flag(self):
         self.source.create_memory(content="Backup test.")
         export_backup(self.source, self.backup_path)
