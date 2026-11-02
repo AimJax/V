@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import shlex
 
 from pathlib import Path
@@ -54,6 +55,113 @@ def _configured_data_path(settings: dict, key: str) -> Path:
         )
 
     return path
+
+
+_MEMORY_FOLLOW_UP_PREFIXES = (
+    "and ",
+    "but ",
+    "also ",
+    "what about",
+    "how about",
+    "what if",
+    "why is that",
+    "why does it",
+    "why do they",
+    "how does it",
+    "how do they",
+    "does it",
+    "did it",
+    "is it",
+    "is that",
+    "was it",
+    "are they",
+    "do they",
+    "can it",
+    "could it",
+    "would it",
+    "will it",
+    "which one",
+    "what do you mean",
+    "can you explain that",
+    "could you explain that",
+    "explain that",
+    "tell me more",
+    "more detail",
+    "more details",
+    "elaborate",
+    "expand on",
+    "what next",
+    "what now",
+    "what do we do next",
+    "what should we do next",
+    "next step",
+)
+
+_MEMORY_REFERENCE_WORDS = {
+    "it", "its", "this", "that", "they", "them", "their",
+    "these", "those", "one", "ones", "there",
+}
+
+
+def _is_contextual_follow_up(user_input: str) -> bool:
+    """Identify turns whose meaning likely depends on recent dialogue."""
+    normalized = " ".join(user_input.casefold().split())
+    if not normalized:
+        return False
+
+    if any(normalized.startswith(prefix) for prefix in _MEMORY_FOLLOW_UP_PREFIXES):
+        return True
+
+    if normalized in {"why?", "why", "how?", "how"}:
+        return True
+
+    if not normalized.endswith("?"):
+        return False
+
+    words = set(re.findall(r"[\w]+", normalized, flags=re.UNICODE))
+    return (
+        len(meaningful_terms(normalized)) <= 3
+        and bool(words & _MEMORY_REFERENCE_WORDS)
+    )
+
+
+def build_memory_retrieval_query(
+    user_input: str,
+    recent_messages: list[ChatMessage],
+    *,
+    max_messages: int = 4,
+    max_context_characters: int = 1600,
+) -> str:
+    """Resolve follow-up references using recent dialogue without another LLM call.
+
+    Standalone user turns remain unchanged so unrelated older topics do not
+    contaminate memory retrieval. Only likely follow-ups receive bounded context.
+    """
+    if max_messages < 1 or max_context_characters < 1:
+        raise ValueError("Memory retrieval context limits must be positive.")
+
+    if not _is_contextual_follow_up(user_input):
+        return user_input
+
+    context_lines: list[str] = []
+    for message in recent_messages[-max_messages:]:
+        content = " ".join(message.content.split())
+        if not content:
+            continue
+        if len(content) > 600:
+            content = content[-600:]
+        context_lines.append(f"{message.role}: {content}")
+
+    if not context_lines:
+        return user_input
+
+    context = "\n".join(context_lines)[-max_context_characters:]
+    return (
+        "Recent conversation context (use only to resolve the current reference):\n"
+        f"{context}\n"
+        "Current user message:\n"
+        f"{user_input}"
+    )
 
 
 def _build_messages(
@@ -580,13 +688,22 @@ async def run_chat() -> int:
 
             if memory_store is not None and memory_retrieval:
                 try:
+                    recent_dialogue = conversation_store.get_recent_messages(
+                        conversation.id,
+                        min(history_limit, 4),
+                    )
+                    memory_query = build_memory_retrieval_query(
+                        user_input,
+                        recent_dialogue,
+                    )
+
                     if retriever is not None:
                         relevant_memories = await retriever.retrieve(
-                            user_input,
+                            memory_query,
                             limit=retrieval_limit,
                         )
                     else:
-                        terms = meaningful_terms(user_input)
+                        terms = meaningful_terms(memory_query)
 
                         relevant_memories = (
                             memory_store.search_memories_any(

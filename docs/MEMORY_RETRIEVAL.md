@@ -40,6 +40,9 @@ For an optional manually curated evaluation, use `--cases data/memory/your_cases
 
 ## Integration
 - Retrieval occurs before the chat completion request.
+- Standalone turns are searched as written. Likely follow-ups (for example, "what about that?", "does it support this?", or "why?") are searched with a bounded window of recent dialogue so references can resolve across turns.
+- Contextual query expansion is deterministic and local; it adds no extra model request.
+- Unrelated standalone questions do not inherit previous topics.
 - Personality and retrieved memories are combined into one system message.
 - Conversation history remains separate.
 - A failure in memory retrieval must not prevent a normal conversation.

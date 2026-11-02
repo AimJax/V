@@ -6,6 +6,7 @@ from support import temporary_directory
 
 from v.chat import (
     _build_messages,
+    build_memory_retrieval_query,
     _correct_memory,
     load_personality,
     trim_history,
@@ -47,6 +48,80 @@ class ChatTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             trim_history(messages, 1)
+
+    def test_contextual_follow_up_uses_recent_dialogue_for_memory_query(self):
+        recent_messages = [
+            ChatMessage(
+                role="user",
+                content="I'm developing Project V as a local AI companion.",
+            ),
+            ChatMessage(
+                role="assistant",
+                content="V currently stores conversations and retrieves long-term memories.",
+            ),
+        ]
+
+        query = build_memory_retrieval_query(
+            "How does it remember things?",
+            recent_messages,
+        )
+
+        self.assertIn("Project V", query)
+        self.assertIn("long-term memories", query)
+        self.assertIn("Current user message:", query)
+        self.assertTrue(query.endswith("How does it remember things?"))
+
+    def test_standalone_query_does_not_inherit_unrelated_dialogue(self):
+        recent_messages = [
+            ChatMessage(
+                role="user",
+                content="I'm developing Project V as a local AI companion.",
+            ),
+            ChatMessage(
+                role="assistant",
+                content="We discussed long-term memory.",
+            ),
+        ]
+
+        query = build_memory_retrieval_query(
+            "How do I cook rice?",
+            recent_messages,
+        )
+
+        self.assertEqual(query, "How do I cook rice?")
+
+    def test_short_referential_question_uses_context(self):
+        recent_messages = [
+            ChatMessage(role="assistant", content="The model is Gemma 4 E4B."),
+        ]
+
+        query = build_memory_retrieval_query("Is that fast?", recent_messages)
+
+        self.assertIn("Gemma 4 E4B", query)
+
+    def test_acknowledgement_does_not_import_context(self):
+        recent_messages = [
+            ChatMessage(role="assistant", content="We discussed Project V."),
+        ]
+
+        query = build_memory_retrieval_query("Exactly.", recent_messages)
+
+        self.assertEqual(query, "Exactly.")
+
+    def test_contextual_memory_query_respects_context_bounds(self):
+        recent_messages = [
+            ChatMessage(role="assistant", content="A" * 2500),
+        ]
+
+        query = build_memory_retrieval_query(
+            "What about that?",
+            recent_messages,
+            max_context_characters=120,
+        )
+
+        self.assertIn("Current user message:", query)
+        self.assertTrue(query.endswith("What about that?"))
+        self.assertNotIn("A" * 121, query)
 
     def test_memory_context_is_injected_into_system_message(self):
         with temporary_directory() as temp:
