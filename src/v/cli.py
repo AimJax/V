@@ -172,7 +172,10 @@ async def _run_memory_evaluation(
     print(f"Embedding model: {report['model']}")
     print(f"Current configured threshold: {configured_threshold:.2f}")
     if personal:
-        print(f"Evaluation labels: {selected_cases_path}")
+        if selected_cases_path is None:
+            print("Evaluation cases: generated locally (no file)")
+        else:
+            print(f"Evaluation cases: {selected_cases_path}")
         print(
             f"Saved memories: {report['memory_count']}  "
             f"Queries: {report['query_count']} "
@@ -191,6 +194,12 @@ async def _run_memory_evaluation(
                 f"deterministic fallbacks: {generated['deterministic_fallbacks']}"
             )
             print("Generated test cases kept in RAM; no label file was created.")
+            print("Question generation methods:")
+            print(
+                f"  JSON: {sum(item['generation_method'] == 'json' for item in generated['question_previews'])}; "
+                f"plain text: {sum(item['generation_method'] == 'plain_text' for item in generated['question_previews'])}; "
+                f"deterministic: {sum(item['generation_method'] == 'deterministic' for item in generated['question_previews'])}"
+            )
         print(
             f"Embedding cache reused: {report['cached_embeddings_reused']}  "
             f"New vectors generated in RAM: "
@@ -248,6 +257,14 @@ async def _run_memory_evaluation(
                 f"returned={item['returned_count']}; "
                 f"context={item['context_characters']} chars"
             )
+            generated_questions = report.get("case_generation", {}).get("question_previews", [])
+            if item["case"] <= len(generated_questions):
+                preview = generated_questions[item["case"] - 1]
+                print(
+                    f"      source={preview['subject']} "
+                    f"({preview['generation_method']})"
+                )
+                print(f"      query={preview['query']}")
         best_result = next(
             item for item in report["thresholds"]
             if item["threshold"] == report["best_scoring_threshold"]

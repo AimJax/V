@@ -14,6 +14,8 @@ from v.memory.evaluation import (
     evaluate_memory_retrieval,
     evaluate_personal_memory_retrieval,
     generate_personal_evaluation_cases,
+    _clean_generated_question,
+    _parse_generated_cases,
     load_personal_cases,
     query_metrics,
     resolve_personal_cases_path,
@@ -290,6 +292,27 @@ class MemoryEvaluationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(summary["cases_saved_to_disk"])
         self.assertEqual(provider.batch_sizes, [2, 1])
 
+
+
+    def test_plain_text_question_cleaner_skips_explanatory_preamble(self):
+        response = (
+            "Here is a useful question based on the saved memory.\\n"
+            "Question: What kind of technical explanations do I prefer?\\n"
+            "I would use this to test retrieval."
+        )
+        self.assertEqual(
+            _clean_generated_question(response),
+            "What kind of technical explanations do I prefer?",
+        )
+
+    def test_json_case_parser_accepts_question_aliases(self):
+        generated = _parse_generated_cases(json.dumps({
+            "questions": [
+                {"memory_index": 0, "question": "What preference was saved?"}
+            ]
+        }))
+        self.assertEqual(generated[0]["memory_index"], 0)
+        self.assertEqual(generated[0]["question"], "What preference was saved?")
 
     async def test_auto_generation_recovers_when_json_output_is_invalid(self):
         class PlainTextRecoveryProvider:

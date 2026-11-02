@@ -591,33 +591,51 @@ def _parse_generated_cases(content: str) -> list[dict]:
         return payload
     if not isinstance(payload, dict):
         raise ValueError("The local chat model response must be a JSON object.")
-    for key in ("cases", "questions", "queries"):
+    for key in ("cases", "questions", "queries", "items"):
         if isinstance(payload.get(key), list):
             return payload[key]
     raise ValueError("The local chat model response must contain a cases array.")
 
 
 def _clean_generated_question(content: str) -> str | None:
-    """Reduce a plain-text local-model response to one usable question."""
+    """Extract the first usable question from a plain-text model response."""
     text = content.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[-1]
         if text.endswith("```"):
             text = text[:-3].strip()
+
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    if not lines:
-        return None
-    question = lines[0]
-    question = re.sub(r"^(?:question|query)\s*:\s*", "", question, flags=re.I)
-    question = re.sub(r"^(?:[-*•]\s*|\d+[.)]\s*)", "", question)
-    question = question.strip().strip("`").strip('"').strip("'").strip()
-    if "?" in question:
-        question = question[:question.find("?") + 1]
-    elif question:
-        question = question.rstrip(".!") + "?"
-    if not 8 <= len(question) <= 500:
-        return None
-    return question
+    question_pattern = re.compile(
+        r"\b(?:what|which|who|whom|whose|when|where|why|how|"
+        r"do|does|did|is|are|was|were|have|has|had|can|could|would|"
+        r"should|will|tell me|describe)\b[^?]{4,}\?",
+        re.IGNORECASE,
+    )
+    for line in lines:
+        cleaned = re.sub(r"^(?:[-*•]\s*|\d+[.)]\s*)", "", line)
+        cleaned = re.sub(r"^(?:question|query)\s*:\s*", "", cleaned, flags=re.I)
+        cleaned = cleaned.strip().strip("`").strip('"').strip("'").strip()
+        match = question_pattern.search(cleaned)
+        if match:
+            question = match.group(0).strip()
+            if 8 <= len(question) <= 500:
+                return question
+        if cleaned.endswith("?") and 8 <= len(cleaned) <= 500:
+            return cleaned
+
+    # Some local models omit punctuation but still produce a single question.
+    for line in lines:
+        cleaned = re.sub(r"^(?:[-*•]\s*|\d+[.)]\s*)", "", line)
+        cleaned = re.sub(r"^(?:question|query)\s*:\s*", "", cleaned, flags=re.I)
+        cleaned = cleaned.strip().strip("`").strip('"').strip("'").strip()
+        if re.match(r"^(?:what|which|who|when|where|why|how)\b", cleaned, re.I):
+            cleaned = cleaned.rstrip(".!") + "?"
+            if 8 <= len(cleaned) <= 500:
+                return cleaned
+    return None
+
+
 
 
 def _fallback_evaluation_question(memory: Memory) -> str:
@@ -665,6 +683,7 @@ async def generate_personal_evaluation_cases(
 
     selected = _select_evaluation_memories(memories, limit=max_memories)
     cases_by_index: dict[int, BenchmarkQuery] = {}
+    generation_methods: dict[int, str] = {}
     fallback_indexes: set[int] = set()
     deterministic_fallback_count = 0
     json_mode_prompt = (
@@ -727,8 +746,14 @@ async def generate_personal_evaluation_cases(
         for item in generated:
             if not isinstance(item, dict):
                 continue
-            index = item.get("index")
-            query = item.get("query")
+            index = item.get(
+                "index",
+                item.get("memory_index", item.get("record_index")),
+            )
+            query = item.get(
+                "query",
+                item.get("question", item.get("text")),
+            )
             if (
                 type(index) is not int
                 or not 0 <= index < len(batch)
@@ -743,6 +768,7 @@ async def generate_personal_evaluation_cases(
                 query.strip(),
                 (memory.id,),
             )
+            generation_methods[stable_index] = "json"
 
         for local_index, memory in enumerate(batch):
             stable_index = start + local_index
@@ -773,6 +799,9 @@ async def generate_personal_evaluation_cases(
             if query is None:
                 query = _fallback_evaluation_question(memory)
                 deterministic_fallback_count += 1
+                generation_methods[stable_index] = "deterministic"
+            else:
+                generation_methods[stable_index] = "plain_text"
             cases_by_index[stable_index] = BenchmarkQuery(
                 query,
                 (memory.id,),
@@ -793,6 +822,15 @@ async def generate_personal_evaluation_cases(
         "plain_text_retries": len(fallback_indexes),
         "deterministic_fallbacks": deterministic_fallback_count,
         "skipped_memories": len(selected) - len(cases),
+        "question_previews": [
+            {
+                "memory_id": selected[index].id,
+                "subject": selected[index].subject,
+                "query": cases_by_index[index].query,
+                "generation_method": generation_methods.get(index, "unknown"),
+            }
+            for index in sorted(cases_by_index)
+        ],
         "cases_saved_to_disk": False,
     }
     return cases, summary
