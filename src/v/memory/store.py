@@ -148,11 +148,24 @@ class MemoryStore:
         self.database_path = Path(database_path).expanduser().resolve()
         self.read_only = read_only
 
+        self._has_source_created_at = True
         if read_only:
             if not self.database_path.is_file():
                 raise FileNotFoundError(
                     f"Memory database does not exist: {self.database_path}"
                 )
+            # Older databases may predate the source_created_at migration.
+            # Detect that schema without applying any migration or write.
+            with closing(self._connect()) as connection:
+                columns = {
+                    row["name"]
+                    for row in connection.execute("PRAGMA table_info(memories)")
+                }
+            if not columns:
+                raise RuntimeError(
+                    f"Memory database has no memories table: {self.database_path}"
+                )
+            self._has_source_created_at = "source_created_at" in columns
         else:
             self.database_path.parent.mkdir(parents=True, exist_ok=True)
             self._initialize()
@@ -350,14 +363,34 @@ class MemoryStore:
             last_confirmed_at=row["last_confirmed_at"],
         )
 
-    @staticmethod
-    def _memory_columns() -> str:
-        return """
-            id, memory_type, subject, content, memory_key,
-            provenance, confidence, importance,
-            source_conversation_id, source_message_id, source_created_at,
-            evidence, created_at, updated_at, last_confirmed_at
-        """
+    def _memory_columns(self, table_alias: str | None = None) -> str:
+        """Return selected memory fields, tolerating pre-timeline read-only DBs."""
+        prefix = f"{table_alias}." if table_alias else ""
+        source_date = (
+            f"{prefix}source_created_at"
+            if self._has_source_created_at
+            else "NULL AS source_created_at"
+        )
+        return ", ".join((
+            f"{prefix}id",
+            f"{prefix}memory_type",
+            f"{prefix}subject",
+            f"{prefix}content",
+            f"{prefix}memory_key",
+            f"{prefix}provenance",
+            f"{prefix}confidence",
+            f"{prefix}importance",
+            f"{prefix}source_conversation_id",
+            f"{prefix}source_message_id",
+            source_date,
+            f"{prefix}evidence",
+            f"{prefix}created_at",
+            f"{prefix}updated_at",
+            f"{prefix}last_confirmed_at",
+        ))
+
+    def _source_created_at_order_expression(self) -> str:
+        return "source_created_at" if self._has_source_created_at else "NULL"
 
     def create_memory(
         self,
@@ -477,7 +510,7 @@ class MemoryStore:
                 WHERE memory_key = ?
                 ORDER BY
                     CASE WHEN memory_type = 'episodic' THEN 1 ELSE 0 END,
-                    julianday(source_created_at) DESC,
+                    julianday({self._source_created_at_order_expression()}) DESC,
                     importance DESC,
                     updated_at DESC
                 LIMIT 1
@@ -547,7 +580,7 @@ class MemoryStore:
                 ORDER BY
                     CASE WHEN memory_type = 'episodic' THEN 1 ELSE 0 END,
                     CASE WHEN memory_type = 'episodic'
-                         THEN julianday(source_created_at) END DESC,
+                         THEN julianday({self._source_created_at_order_expression()}) END DESC,
                     importance DESC,
                     updated_at DESC
                 LIMIT ?
@@ -587,7 +620,7 @@ class MemoryStore:
         with closing(self._connect()) as connection:
             rows = connection.execute(
                 f"""
-                SELECT m.{self._memory_columns().replace(", ", ", m.")}
+                SELECT {self._memory_columns("m")}
                 FROM memories_fts
                 JOIN memories AS m
                     ON m.rowid = memories_fts.rowid

@@ -34,6 +34,38 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual(self.store.count_memories(), 1)
         self.assertEqual(self.database_path.stat().st_mtime_ns, modified_before)
 
+    def test_read_only_store_reads_legacy_schema_without_migrating(self):
+        memory = self.store.create_memory(
+            content="A legacy-schema memory about local AI development.",
+            memory_type="project",
+            subject="Project",
+        )
+        with closing(sqlite3.connect(self.database_path)) as connection:
+            connection.execute(
+                "ALTER TABLE memories DROP COLUMN source_created_at"
+            )
+            connection.commit()
+
+        modified_before = self.database_path.stat().st_mtime_ns
+        read_only = MemoryStore(self.database_path, read_only=True)
+
+        loaded = read_only.get_memory(memory.id)
+        listed = read_only.list_memories(limit=10)
+        lexical = read_only.search_memories_any("local AI", limit=10)
+
+        self.assertEqual(loaded.id, memory.id)
+        self.assertIsNone(loaded.source_created_at)
+        self.assertEqual([item.id for item in listed], [memory.id])
+        self.assertEqual([item.id for item in lexical], [memory.id])
+        self.assertEqual(self.database_path.stat().st_mtime_ns, modified_before)
+
+        with closing(sqlite3.connect(self.database_path)) as connection:
+            columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(memories)")
+            }
+        self.assertNotIn("source_created_at", columns)
+
     def test_create_and_retrieve_explicit_memory(self):
         memory = self.store.create_memory(
             content="The user prefers concise answers.",
