@@ -74,7 +74,7 @@ class MemoryStoreTests(unittest.TestCase):
                 content=f"Explicit preference evidence {index}.",
                 memory_type="preference",
                 subject="User",
-                source_conversation_id="conversation-a" if index < 3 else "conversation-b",
+                source_conversation_id="conversation-a" if index < 2 else "conversation-b",
                 source_message_id=100 + index,
                 evidence=f"Preference statement {index}.",
             )
