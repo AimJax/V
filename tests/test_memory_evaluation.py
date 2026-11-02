@@ -296,8 +296,8 @@ class MemoryEvaluationTests(unittest.IsolatedAsyncioTestCase):
 
     def test_plain_text_question_cleaner_skips_explanatory_preamble(self):
         response = (
-            "Here is a useful question based on the saved memory.\\n"
-            "Question: What kind of technical explanations do I prefer?\\n"
+            "Here is a useful question based on the saved memory.\n"
+            "Question: What kind of technical explanations do I prefer?\n"
             "I would use this to test retrieval."
         )
         self.assertEqual(

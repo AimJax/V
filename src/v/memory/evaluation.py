@@ -598,7 +598,7 @@ def _parse_generated_cases(content: str) -> list[dict]:
 
 
 def _clean_generated_question(content: str) -> str | None:
-    """Extract the first usable question from a plain-text model response."""
+    """Extract a question line from plain text without mistaking prose for one."""
     text = content.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[-1]
@@ -606,33 +606,21 @@ def _clean_generated_question(content: str) -> str | None:
             text = text[:-3].strip()
 
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    question_pattern = re.compile(
-        r"\b(?:what|which|who|whom|whose|when|where|why|how|"
+    question_start = re.compile(
+        r"^(?:what|which|who|whom|whose|when|where|why|how|"
         r"do|does|did|is|are|was|were|have|has|had|can|could|would|"
-        r"should|will|tell me|describe)\b[^?]{4,}\?",
+        r"should|will|tell me|describe)\b",
         re.IGNORECASE,
     )
     for line in lines:
         cleaned = re.sub(r"^(?:[-*•]\s*|\d+[.)]\s*)", "", line)
         cleaned = re.sub(r"^(?:question|query)\s*:\s*", "", cleaned, flags=re.I)
         cleaned = cleaned.strip().strip("`").strip('"').strip("'").strip()
-        match = question_pattern.search(cleaned)
-        if match:
-            question = match.group(0).strip()
-            if 8 <= len(question) <= 500:
-                return question
-        if cleaned.endswith("?") and 8 <= len(cleaned) <= 500:
-            return cleaned
-
-    # Some local models omit punctuation but still produce a single question.
-    for line in lines:
-        cleaned = re.sub(r"^(?:[-*•]\s*|\d+[.)]\s*)", "", line)
-        cleaned = re.sub(r"^(?:question|query)\s*:\s*", "", cleaned, flags=re.I)
-        cleaned = cleaned.strip().strip("`").strip('"').strip("'").strip()
-        if re.match(r"^(?:what|which|who|when|where|why|how)\b", cleaned, re.I):
-            cleaned = cleaned.rstrip(".!") + "?"
-            if 8 <= len(cleaned) <= 500:
-                return cleaned
+        if not question_start.match(cleaned):
+            continue
+        question = cleaned.split("?", 1)[0].strip() + "?"
+        if 8 <= len(question) <= 500:
+            return question
     return None
 
 
