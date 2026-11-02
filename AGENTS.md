@@ -3,6 +3,11 @@
 ## Product identity
 V is a persistent, voice-enabled, visually aware, internet-capable AI companion for Windows.
 
+## Product philosophy — read before designing
+**Required reading:** `docs/PRODUCT_PHILOSOPHY.md`.
+
+V is intended to feel like an organic, continuous, distinct presence — not a generic chatbot with a persona layered on top. The philosophy document is a normative product constraint. Read it before substantial work on personality, conversation, memory, voice, vision, or background behavior. Optimize for coherent real-world interaction and continuity, not merely feature count or benchmark scores. Preserve honesty, privacy, and user control; never fake human experiences or awareness.
+
 ## Hardware target
 - Windows 10 22H2
 - Intel Core i7-4770K

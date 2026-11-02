@@ -2,6 +2,10 @@
 
 V is a local-first AI companion for Windows.
 
+## Product philosophy
+
+V is intended to feel organic, personal, and continuous — a distinct presence rather than a generic chatbot with a persona layered on top. The project's interaction north star, design principles, and guidance for AI contributors are documented in [Product Philosophy](docs/PRODUCT_PHILOSOPHY.md). Read this before making substantial changes to personality, conversation, memory, voice, or vision.
+
 ## Target hardware
 - Windows 10 22H2
 - Intel Core i7-4770K
@@ -29,7 +33,7 @@ Internet search is an explicitly configurable exception.
 - `models/` — local AI models
 - `cache/` — application caches
 - `tests/` — automated tests
-- `docs/` — technical documentation
+- `docs/` — technical documentation and product philosophy
 
 ## Development
 
