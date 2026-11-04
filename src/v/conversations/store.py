@@ -200,7 +200,7 @@ class ConversationStore:
         conversation_id: str,
         role: str,
         content: str,
-    ) -> None:
+    ) -> int:
         if role not in {"user", "assistant"}:
             raise ValueError(f"Unsupported stored message role: {role}")
 
