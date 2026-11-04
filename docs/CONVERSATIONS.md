@@ -3,14 +3,11 @@
 V stores completed conversation exchanges in a local SQLite database.
 
 ## Location
-
 `G:\V\data\conversations\conversations.sqlite3`
 
-SQLite may also create temporary WAL and shared-memory files beside the database.
-Those files are part of the same local storage system.
+SQLite may also create temporary WAL and shared-memory files beside the database. Those files are part of the same local storage system.
 
 ## Behavior
-
 - V automatically opens the most recently updated conversation on startup.
 - `/new` starts another conversation without deleting previous sessions.
 - `/sessions` lists recent conversations.
@@ -21,10 +18,6 @@ Those files are part of the same local storage system.
 - An interrupted or failed generation is not saved as a completed exchange.
 
 ## Privacy
+Conversation contents are stored locally as ordinary SQLite data. They are not encrypted by this initial implementation. Do not put the database in GitHub or share it unintentionally.
 
-Conversation contents are stored locally as ordinary SQLite data.
-They are not encrypted by this initial implementation.
-Do not put the database in GitHub or share it unintentionally.
-
-This database is conversation history, not the future long-term memory system.
-The memory system will separately extract, index, and manage useful information.
+This database is the durable source conversation history. The separate memory subsystem extracts and indexes selected information while retaining source conversation and message references. Deleting a memory does not currently delete its source conversation.
