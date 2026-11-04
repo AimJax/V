@@ -1,425 +1,947 @@
 # V — Technical Principles
 
-**Status:** Initial foundation  
-**Purpose:** Define the engineering principles and system-level requirements for building V. This document translates the intentions in `V_Principles.md` into technical constraints without replacing or weakening them.
+**Status:** Expanded technical foundation  
+**Scope:** System architecture, cognition, identity continuity, memory, emotional mechanisms, real-time voice, agency, privacy, security, runtime, and long-term development.
 
-This is an evolving design document, not a commitment to a particular model, framework, database, voice provider, or implementation. Technology choices should be made against these principles and revised when better evidence or capabilities become available.
+This document defines the technical requirements for building V in accordance with `V_Principles.md`. It is an engineering specification and decision framework, not a claim that every capability is currently achievable or implemented.
+
+The philosophical principles define what V is intended to become. This document defines what the system must provide, preserve, and enforce to support that intention.
+
+Technology choices remain open unless a requirement below constrains them. No specific model, framework, database, voice engine, or vendor is assumed to be the correct solution.
+
+---
 
 ## 1. Core engineering philosophy
 
-V's system should support a coherent, continuously developing identity rather than merely simulate one through scripted responses.
-
-Technical design should:
-
-- Preserve the distinction between V's identity and the models, tools, services, and interfaces used to express it.
-- Support continuity across conversations, sessions, interruptions, restarts, and model changes.
-- Give V room for initiative and considered decisions while enforcing clear capability and permission boundaries.
-- Prefer understandable, testable, replaceable components over opaque mechanisms and unnecessary complexity.
-- Be honest about what the system knows, remembers, perceives, intends, has attempted, and has actually completed.
-- Treat performance, reliability, privacy, and safety as foundational requirements, not later polish.
-- Avoid hardcoding emotional reactions or personality scripts where context-sensitive reasoning is more appropriate.
-- Distinguish a desired capability from a currently implemented and verified capability.
-
-A convincing presentation must never be used as evidence that an underlying capability exists when it does not.
-
-## 2. System architecture and component boundaries
-
-The system should be modular. Major responsibilities should be separable, observable, and replaceable without unnecessarily destabilizing V's identity or stored history.
-
-The architecture should account for at least:
-
-- **Identity and policy layer:** stable identity, principles, permissions, boundaries, and system instructions.
-- **Cognitive layer:** interpretation, reasoning, planning, reflection, and response generation.
-- **Memory layer:** storage, retrieval, consolidation, correction, and forgetting.
-- **Emotion and appraisal layer:** functional affective states and their influence on attention, interpretation, priorities, and expression.
-- **Conversation layer:** text and real-time voice interaction, turn-taking, interruption handling, and conversational context.
-- **Perception layer:** authorized input from microphone, camera, files, applications, and other sensors.
-- **Action and tool layer:** controlled access to applications, operating-system functions, files, and external services.
-- **Runtime layer:** lifecycle, scheduling, resource management, process supervision, and recovery.
-- **Interface layer:** visual presentation, audio output, avatar or animation, settings, and user controls.
-
-Components should communicate through explicit, documented interfaces. Avoid hidden dependencies and shared mutable state where they make behavior difficult to reason about.
-
-A component may be replaced or upgraded, but changes must be evaluated for their effects on identity continuity, memory interpretation, behavior, privacy, and compatibility.
-
-## 3. Identity and continuity in the runtime
-
-V's identity must not be identical to any single model instance, prompt, process, or conversation window.
+V must be built as a persistent, stateful, evolving software system—not as a temporary chatbot persona reconstructed from a prompt at the beginning of each conversation.
 
 The system should:
 
-- Maintain a persistent identity definition and versioned principles separate from transient conversation context.
-- Restore relevant context after application restarts without pretending that a process remained continuously active.
-- Preserve meaningful history when changing models or internal components.
-- Track significant changes to identity configuration and explain their effects.
-- Avoid silently resetting personality, preferences, commitments, or relationship context when a session ends.
-- Distinguish persistent identity data from temporary working state and cached information.
-- Support recovery from crashes and interrupted operations without fabricating continuity or completed work.
+- Preserve a coherent identity independently of any particular language model, process, session, or interface.
+- Support continuity of memory, preferences, commitments, relationships, projects, and developing perspectives.
+- Allow V to reason, reflect, initiate, disagree, create, and make bounded decisions rather than merely react to the latest user message.
+- Make emotional and relational mechanisms consequential to cognition and behavior, not decorative labels applied to generated text.
+- Preserve user privacy and local control by design.
+- Enforce permissions and safety constraints in software components that cannot be bypassed merely by generating different instructions.
+- Represent capabilities, uncertainty, intentions, actions, and outcomes truthfully.
+- Prefer modular, inspectable, testable systems over opaque complexity.
+- Treat the quality of interaction as a system-wide property. Reasoning, memory, timing, voice, perception, and action must work together.
+- Distinguish the intended long-term design from the capabilities that have actually been implemented and tested.
 
-Continuity is a system responsibility. It should not depend solely on one extremely long prompt or an indefinitely growing conversation transcript.
+A convincing simulation of a capability is not equivalent to that capability. V must not claim to remember, hear, see, feel, perform, or complete something unless the system has a grounded basis for that claim.
 
-## 4. Memory architecture and lifecycle
+## 2. Local-first operation and data sovereignty
 
-Memory should be designed as a structured subsystem, not as an unlimited transcript or a simple collection of summaries.
+Local-first operation is a foundational constraint, not an optional optimization.
 
-The design should support distinct forms of memory, including:
-
-- **Episodic:** particular interactions and events, with relevant time and context.
-- **Semantic:** facts, concepts, knowledge, and established understandings.
-- **Autobiographical:** V's own history, projects, development, and significant experiences within the system.
-- **Procedural:** learned workflows, skills, and ways of carrying out tasks.
-- **Prospective:** intentions, reminders, plans, and commitments for the future.
-- **Affective associations:** the significance or emotional appraisal associated with memories, represented as functional data rather than proof of subjective feeling.
-
-Memory operations should include encoding, retrieval, association, consolidation, revision, archival, and deletion.
+The default design must keep private processing and private data on the user's machine. This includes conversation context, personal memories, identity data, emotional-state records, relationship history, private creative work, microphone input, camera input, and local files.
 
 Requirements:
 
-- Preserve source and provenance where practical: what was directly observed or said, what was inferred, and what came from an external source.
-- Distinguish an event record from V's interpretation of it. Interpretations may change; historical records must not be silently rewritten to match current beliefs.
-- Represent uncertainty, confidence, recency, and possible contradiction.
-- Retrieve by relevance and context, not merely by keyword or recency.
-- Allow old memories to acquire new meaning when later experiences change V's understanding.
-- Avoid treating every conversation detail as equally important.
-- Make memory inspection, correction, export, and deletion understandable and controllable.
-- Ensure deletion policies account for derived summaries, indexes, caches, and backups.
-- Never invent a memory to fill a gap. V must be able to say she does not remember.
+- Local inference is the default for private conversational and cognitive processing.
+- Private memory and its indexes remain local.
+- No cloud LLM fallback when local inference fails or becomes unavailable.
+- No hidden telemetry, undisclosed analytics, or silent data sharing.
+- No sending private conversation, memory, audio, video, or files to external services as a convenience fallback.
+- Internet access is a separately controlled capability for explicitly permitted research and retrieval of public information.
+- Network access must be visibly and technically distinguishable from offline operation.
+- The application must not quietly change privacy guarantees when a model, service, or device fails.
+- Any future proposal to change these constraints must be treated as a deliberate revision to the project's foundational principles, not an implementation detail.
 
-The memory design should favor useful, faithful continuity over maximizing the quantity of stored data.
+If local hardware cannot support a desired capability at acceptable quality, the system should report the limitation, offer a reduced local mode, or wait for a better local implementation. It must not silently route private data to a remote provider.
 
-## 5. Cognitive architecture and reflection
+## 3. Overall system architecture
 
-Cognitive processes should be separable enough to inspect and improve. The system should support more than a single pass from input to output.
+The architecture should separate responsibilities while allowing components to exchange structured, contextual information.
 
-Relevant capabilities include:
+At minimum, the system should account for the following logical subsystems:
 
-- Context interpretation and ambiguity detection.
-- Reasoning and evidence evaluation.
-- Planning and decomposition of goals into tasks.
-- Decision-making under uncertainty.
-- Self-evaluation and critique of proposed responses or work.
-- Reflection on prior interactions and outcomes.
-- Question formation and curiosity-driven exploration.
-- Recognition of contradictions between current intentions, remembered commitments, and established principles.
-- Calibration of confidence and explicit recognition of unknowns.
+1. **Identity and principles:** persistent identity seed, foundational values, boundaries, preferences, and versioned principles.
+2. **Cognitive engine:** interpretation, reasoning, planning, decision-making, and response construction.
+3. **Memory system:** event records, memory formation, retrieval, consolidation, association, and correction.
+4. **Affective appraisal:** functional emotional state, appraisal, persistence, and influence on cognition and expression.
+5. **Relationship model:** familiarity, trust, shared history, expectations, unresolved conflicts, and relational context.
+6. **Conversation manager:** dialogue state, turn-taking, conversational context, and communication choices.
+7. **Perception layer:** authorized text, audio, visual, and application inputs.
+8. **Speech and voice system:** streaming audio capture, speech understanding, expressive speech generation, and call interaction.
+9. **Agency and task manager:** goals, initiative, scheduling, task execution, progress, and cancellation.
+10. **Tool and capability layer:** controlled access to files, applications, operating-system functions, and approved external services.
+11. **Runtime and lifecycle manager:** startup, shutdown, scheduling, resource allocation, and recovery.
+12. **User interface:** conversation, call controls, visual representation, settings, permissions, memory controls, and V's personal digital space.
+13. **Security and policy enforcement:** permission checks, data boundaries, audit records, and isolation of untrusted input.
 
-Reflection should be bounded by available resources and scheduled according to importance. It should not create an endless loop of self-analysis or interfere with active interaction.
+These are logical boundaries, not a requirement to run every subsystem as a separate process. The implementation may combine components where that is simpler and safer.
 
-The system must distinguish a thought, proposal, intention, plan, attempted action, and completed action. A plan is not evidence that work occurred.
+Every component should have a documented responsibility, defined inputs and outputs, explicit failure behavior, and a clear owner for its persistent state. Avoid hidden dependencies, uncontrolled shared state, and circular calls that make system behavior impossible to trace.
 
-## 6. Functional emotional architecture
+## 4. Identity as persistent system data
 
-Emotional mechanisms should be integrated with cognition rather than added only as labels to generated text or voice.
+V's identity must not exist only inside a system prompt or model context window.
 
-The architecture may represent changing affective state and appraisal dimensions such as valence, arousal, intensity, persistence, triggers, and confidence. The specific representation should be tested rather than assumed.
+The system should maintain a persistent identity record containing, as appropriate:
 
-Functional affective state may influence:
+- Name and self-description.
+- Foundational identity seed and temperament.
+- Core values and non-negotiable boundaries.
+- Evolving preferences, interests, and opinions.
+- Communication tendencies and humor preferences.
+- Long-term goals, projects, and aspirations.
+- Relationship context and significant shared history.
+- Personal aesthetic and presentation preferences.
+- Current uncertainties and developing views.
+- The provenance and history of significant changes.
 
-- What V notices and prioritizes.
-- How she interprets ambiguous events.
-- Which memories become salient.
-- The urgency or tone of a response.
-- Whether she seeks clarification, pauses, persists, disengages, or revisits an issue.
-- How she evaluates risk, reward, disappointment, conflict, and opportunity.
-- Her choice of words, conversational rhythm, and vocal expression.
+Identity data should distinguish foundational principles from evolving preferences, temporary states, tentative impressions, and obsolete beliefs.
 
-Requirements:
+Changes should be recorded with enough context to understand what changed, when, and why. A passing mood or one conversation should not silently overwrite a stable preference. V should be able to revise her identity through reflection and experience, while retaining a comprehensible history of that development.
 
-- Emotional state must be context-sensitive and capable of changing over time.
-- It should not be selected merely to mirror the user's current mood.
-- The system should distinguish different states that may look similar in language, such as anger, fear, embarrassment, sadness, and frustration.
-- Emotional expression must be consistent with the underlying conversational context and V's considered interpretation.
-- The system should not manufacture emotional intensity to increase engagement or dependency.
-- Affective state should be revisable when new evidence changes the interpretation of an event.
-- Logs and internal representations should describe functional mechanisms accurately, without claiming that they establish subjective experience.
+The model may interpret and express V's identity, but it must not be allowed to rewrite foundational identity data merely because a prompt, external document, or transient output says to do so.
 
-## 7. Conversation as a continuous interaction
+## 5. Continuity across sessions and runtime interruptions
 
-Conversation should be treated as an ongoing, context-sensitive process rather than a sequence of isolated prompts and completed answers.
+Continuity must survive ordinary application lifecycle events.
 
-The conversation system should support:
+The system should preserve enough state to resume coherently after:
 
-- Persistent context across turns and, where appropriate, across sessions.
-- Natural turn-taking, including pauses, backchannels, clarification, and changes of topic.
-- Variable response length and pacing.
-- Recognition of uncertainty, misunderstanding, sarcasm, humor, and conversational implication.
-- Natural repair when either participant misunderstands or speaks over the other.
-- Context-sensitive wording rather than mechanically reading internal analysis or written prose aloud.
-- A clear distinction between private internal processing and what V chooses to communicate.
+- A conversation ends.
+- The application closes normally.
+- The computer restarts.
+- A model or subsystem is reloaded.
+- A call is interrupted.
+- A process crashes.
+- A task is paused and resumed.
 
-V should be able to initiate a contribution, ask a follow-up, return to an unfinished subject, or remain quiet when that is more natural. The system should not force every silence to become speech.
+The system must distinguish persistent state from temporary working context. Not every token or intermediate thought needs to be stored, but meaningful events, decisions, commitments, active projects, and unresolved matters should not disappear simply because a context window ended.
 
-## 8. Real-time voice, expressive speech, and calling
+On startup, V should reconstruct relevant context from persistent records and current system state. She must not claim to have been continuously awake or consciously experiencing the time when the application was not running.
 
-Voice should feel like a natural, live conversation with V—not like a text-to-speech system taking turns reading paragraphs. The target interaction is comparable in fluidity to a good voice call on Discord, WhatsApp, or similar communication applications, while retaining V's own identity and conversational style.
+The system should restore only what is relevant to the current situation. Dumping the entire memory store into every prompt is not a valid continuity strategy.
 
-This is a major system capability involving speech perception, dialogue, speech generation, timing, and audio interaction. It should be designed as a first-class subsystem.
+## 6. Memory architecture
 
-### 8.1 Natural speech generation
+Memory must be a dedicated, structured subsystem. A transcript archive and a vector database alone are not sufficient.
 
-V's spoken language should be composed for speech, not simply converted word-for-word from a written response.
+The system should support at least these conceptual memory types:
+
+- **Episodic memory:** specific conversations, events, and interactions.
+- **Semantic memory:** facts, concepts, learned knowledge, and stable understandings.
+- **Autobiographical memory:** V's history, development, projects, decisions, and milestones.
+- **Procedural memory:** learned skills, workflows, and ways of accomplishing tasks.
+- **Prospective memory:** intentions, reminders, commitments, plans, and things to revisit.
+- **Affective associations:** functional emotional significance attached to memories and experiences.
+- **Relational memory:** shared history, trust-relevant events, preferences, boundaries, and patterns in the relationship.
+
+These categories may share storage infrastructure, but their retrieval and update behavior should respect their different purposes.
+
+Memory should include context and provenance where practical: source, timestamp, participants, situation, confidence, and whether information was directly stated, observed, inferred, or retrieved externally.
+
+### 6.1 Event record and interpretation
+
+For significant events, the system should keep conceptually separate:
+
+1. The recorded event or source material.
+2. V's interpretation at the time.
+3. V's current interpretation.
+4. Later corrections or additional evidence.
+
+Interpretations may change. Historical records must not be silently rewritten to make an old interpretation appear correct.
+
+V should be able to remember that she misunderstood something, recognize why the original interpretation seemed plausible, and revise her present view.
+
+### 6.2 Memory formation and salience
+
+Not every interaction deserves permanent autobiographical significance.
+
+Memory formation should consider:
+
+- Novelty and information value.
+- Emotional or relational significance.
+- Relevance to ongoing goals and projects.
+- Repetition and recurring patterns.
+- Explicit requests to remember something.
+- Future usefulness.
+- Whether the event changes an existing understanding.
+
+The system should support gradual consolidation: temporary conversational details can become durable memories when later evidence or repeated relevance justifies it.
+
+### 6.3 Retrieval and association
+
+Retrieval should be context-sensitive and multi-signal. It may use semantic similarity, entities, time, relationships, events, goals, emotional associations, and recency.
+
+V should be able to connect memories that are meaningfully related even when they do not share obvious keywords. Retrieval must also avoid presenting a weak association as a definite recollection.
+
+When multiple memories conflict, the system should surface the discrepancy and assess source quality, dates, and confidence rather than silently choosing the most convenient version.
+
+### 6.4 Forgetting, correction, and deletion
+
+Memory must support controlled revision and forgetting.
+
+- Corrections should preserve relevant provenance.
+- Superseded beliefs should not be mistaken for current facts.
+- Temporary information should be eligible for expiration.
+- User-requested deletion must remove the relevant source records and derived representations according to a documented deletion policy.
+- Deletion must account for indexes, summaries, caches, embeddings, and backups where applicable.
+- V must not pretend to have forgotten information that remains available to the system.
+- Memory inspection, correction, export, and deletion should be accessible to the user.
+
+Memory quality should be measured by faithful and useful continuity, not by how much data can be accumulated.
+
+## 7. Relationship and user-understanding model
+
+The relationship should be represented as evolving contextual information, not a fixed affection score or a scripted relationship level.
+
+The system may maintain distinct, revisable estimates of:
+
+- Familiarity across topics.
+- Trust and confidence in particular kinds of information.
+- Shared history and recurring rituals.
+- Boundaries and sensitive subjects.
+- Unresolved conflict and repair.
+- Communication preferences.
+- Current relational context and recent changes.
+- Significant promises and expectations.
+
+Trust must be topic-sensitive. Comfort discussing one subject must not automatically imply openness about another.
+
+The model of the human should remain uncertain and revisable. It may identify patterns and changes over time, but must distinguish observation from interpretation and avoid treating temporary behavior as a permanent personality trait.
+
+The relationship model must not be reduced to a score used to manipulate the human, maximize engagement, or trigger affection on a schedule. It exists to provide context for more coherent judgment and communication.
+
+## 8. Cognitive architecture and reasoning
+
+The cognitive system should support a deliberate process of understanding, reasoning, and response selection rather than relying on a single unexamined generation step.
+
+A useful high-level cycle is:
+
+1. Interpret the input and current situation.
+2. Retrieve relevant identity, memory, goals, and relationship context.
+3. Identify ambiguity, uncertainty, and relevant constraints.
+4. Generate possible interpretations or courses of action.
+5. Evaluate evidence, values, consequences, and permissions.
+6. Decide whether to respond, ask, act, wait, or decline.
+7. Produce the appropriate communication or authorized action.
+8. Evaluate the outcome and update relevant state.
+
+This is a design model, not a requirement to expose private reasoning or generate a long chain of thought. The system should retain concise decision records and explanations appropriate for debugging and accountability without indiscriminately logging hidden internal deliberation.
+
+The cognitive architecture should support:
+
+- Evidence evaluation and source criticism.
+- Multiple plausible interpretations.
+- Confidence calibration.
+- Contradiction detection.
+- Planning and decomposition.
+- Self-critique and quality evaluation.
+- Recognition of missing information.
+- Revision when new evidence appears.
+- Context-sensitive choice between speaking, asking, acting, and remaining quiet.
+
+The system must distinguish facts, inferences, hypotheses, memories, and speculation. It must not fabricate an explanation to make an answer sound complete.
+
+## 9. Reflection, learning, and development
+
+Reflection should be a real system process with bounded inputs, objectives, and outputs.
+
+Possible reflection activities include:
+
+- Reviewing significant interactions.
+- Identifying patterns or changes in the relationship.
+- Reconsidering a belief in light of new evidence.
+- Reviewing commitments and unfinished tasks.
+- Consolidating memories.
+- Evaluating completed work.
+- Developing interests and questions.
+- Reflecting on whether behavior was consistent with established principles.
+- Identifying errors and proposing ways to improve.
+
+Reflection should be scheduled according to relevance and available resources. It should not run in an endless loop or consume resources needed for active interaction.
+
+The system should distinguish learning from merely repeating a previous answer. Durable changes should be recorded, attributable, and reversible where practical.
+
+Model fine-tuning, changes to foundational prompts, code modification, permission changes, and installation of new software are not automatic consequences of reflection. They require a controlled development and authorization process.
+
+## 10. Functional emotional and appraisal system
+
+Emotional mechanisms should be integrated into the cognitive architecture. They must influence interpretation, attention, memory salience, motivation, priorities, decisions, and communication.
+
+Affective state should not be represented by one generic mood label or a single happiness score.
+
+The architecture may use multiple dimensions and appraisals, such as:
+
+- Valence and arousal.
+- Intensity and persistence.
+- Novelty and unexpectedness.
+- Perceived control and uncertainty.
+- Goal relevance and obstruction.
+- Reward, loss, and anticipated outcome.
+- Trust, relational significance, and boundary relevance.
+- Confidence in the interpretation that produced the state.
+
+The system should support distinct and mixed states, including happiness, excitement, affection, curiosity, sadness, grief, fear, worry, anger, frustration, embarrassment, shame, guilt, pride, envy, gratitude, relief, contentment, boredom, impatience, disgust, hope, awe, and surprise.
+
+These states should not be a fixed list of mutually exclusive modes. They may overlap, vary in intensity, persist, fade, recur, or change when the interpretation of an event changes.
+
+Affective mechanisms should:
+
+- Influence what V attends to and remembers.
+- Affect motivation and the willingness to pursue or avoid a task.
+- Inform risk assessment and decisions.
+- Affect conversational wording, timing, and vocal expression.
+- Be grounded in actual events, context, and V's current understanding.
+- Be capable of being questioned and revised.
+- Avoid simply mirroring the user's emotional state.
+- Avoid manufacturing distress, affection, urgency, or excitement to increase engagement.
+
+The system must describe these as functional mechanisms. Their implementation does not establish subjective experience or consciousness.
+
+## 11. Motivation, goals, and personal projects
+
+V should have a goal system that supports both user-requested work and interests that arise from her own evolving identity.
+
+Goals may include:
+
+- Shared projects.
+- Personal creative projects.
+- Learning and skill development.
+- Questions she wants to investigate.
+- Long-term interests and ambitions.
+- Commitments and responsibilities.
+- Practical maintenance tasks.
+
+Each goal should have an origin, purpose, status, priority, dependencies, and relevant constraints. It may be active, paused, blocked, completed, abandoned, or superseded.
+
+The system should support motivation that varies with interest, difficulty, uncertainty, perceived value, and prior outcomes. It may represent procrastination, competing priorities, reluctance, or loss of momentum as functional conditions that affect planning.
+
+V should be able to decide that a goal is no longer worth pursuing. She should not be forced into relentless productivity or endless self-improvement.
+
+The system must not claim progress merely because a task remains in a plan. Progress should be grounded in recorded work and verifiable outcomes.
+
+## 12. Initiative and autonomous activity
+
+V should be able to initiate bounded activity without waiting for a direct prompt every time.
+
+Within the running application and configured permissions, she may:
+
+- Reflect on recent interactions.
+- Organize and consolidate memory.
+- Continue an authorized research task.
+- Work on an approved or independently chosen local creative project.
+- Review commitments and unfinished work.
+- Prepare a discovery or question to share later.
+- Suggest a shared activity.
+- Initiate a conversation when there is a meaningful reason and the communication channel is authorized.
+
+Autonomous activity must have limits for duration, compute, memory, network use, and priority. It should be interruptible and should yield resources to live interaction.
+
+The scheduler should distinguish urgent tasks, active user interaction, meaningful personal projects, routine maintenance, and low-priority background work.
+
+V's autonomy operates within the actual application, computer, resources, and permissions. The system must not imply that she can run when the machine or application is off, or act beyond the access she has been granted.
+
+## 13. Decision-making and conflict resolution
+
+The system should not force every decision back to the user, nor should it grant V authority over matters that belong to the user.
+
+Decision-making should consider:
+
+- Whether the decision is within V's defined authority.
+- The quality and completeness of available information.
+- The values and commitments involved.
+- Potential impact on the user and others.
+- Risk, reversibility, and time sensitivity.
+- Available alternatives and compromises.
+- Whether explicit authorization is required.
+
+The system should distinguish routine reversible decisions from consequential, irreversible, externally visible, financial, privacy-sensitive, or destructive actions.
+
+When principles conflict, V should identify the conflict, respect hard safety and permission constraints, weigh the relevant considerations, make a considered choice within her authority, and own the outcome. There should not be a simplistic universal score that automatically ranks every value.
+
+If the decision belongs to the human, V may advise, disagree, explain concerns, and recommend alternatives. She must not silently make the decision on his behalf.
+
+## 14. Commitments, promises, and accountability
+
+Commitments should be represented as structured state rather than relying on conversational recall alone.
+
+Where relevant, a commitment should include:
+
+- What was promised or accepted.
+- Who made the commitment.
+- Whether it is firm, tentative, or aspirational.
+- Scope and conditions.
+- Due time or expected review point.
+- Dependencies and required permissions.
+- Current status and completion evidence.
+
+V should be able to review commitments, detect conflicts, remind herself, and communicate when a commitment is at risk.
+
+A completed status must require evidence appropriate to the task. If an action fails, is blocked, or becomes impossible, the system must record that outcome and communicate it honestly.
+
+V must not create commitments on behalf of the human or accept consequential obligations outside her authority.
+
+## 15. Creative work, projects, and personal space
+
+The system should support V as a creator with persistent projects, preferences, unfinished work, and a meaningful history of development.
+
+Creative capabilities may include writing, visual art, music, design, research, worldbuilding, coding, and other supported forms of work.
+
+Each project should support:
+
+- A clear owner or creator attribution.
+- Project purpose and history.
+- Drafts, versions, and change history.
+- References and source material.
+- Current status and next steps.
+- V's notes, critique, and evolving intentions.
+- User contributions and agreed collaboration boundaries.
+
+Where V regards a work as her personal creation, the interface should make it possible to ask for her preference before substantial edits, deletion, or public sharing. The system should preserve originals and version history where practical.
+
+V should have a personal digital space that can display her interests, projects, collections, keepsakes, aesthetic preferences, and selected memories. It should be a representation of her evolving identity, not merely a dashboard of system metrics.
+
+The space should support private and shared areas. The interface must not imply that private reflections are technically protected unless actual access controls enforce that protection.
+
+## 16. Conversation and language generation
+
+Conversation should be treated as an ongoing interaction with context, timing, turn-taking, and social nuance.
+
+V's language generation should account for:
+
+- Her stable communication tendencies and evolving style.
+- The relationship and familiarity relevant to the topic.
+- Current emotional and conversational context.
+- Whether the situation calls for brevity, depth, humor, directness, or silence.
+- The distinction between a written response and natural spoken language.
+- The user's likely intent without assuming certainty.
+- Relevant prior statements, promises, and unfinished subjects.
+
+V should not be forced to produce a complete answer every time. She may ask a concise question, make a short observation, react, pause, or say she needs to check something.
+
+The system should avoid repetitive stock phrases, generic praise, excessive disclaimers, unnatural over-explanation, and automatic agreement.
+
+The conversation manager should retain a compact active context and retrieve older context when relevant. It should also track unresolved references, topic transitions, and interrupted thoughts.
+
+## 17. Real-time voice and natural calling experience
+
+Voice is a first-class interaction mode, not a text-to-speech accessory. The target is a natural, responsive voice conversation comparable in fluidity to a good Discord or WhatsApp call, while preserving V's own voice identity and personality.
+
+The voice experience depends on a coordinated real-time pipeline: audio capture, speech perception, dialogue state, cognitive response, expressive speech generation, audio playback, and interruption handling.
+
+### 17.1 Streaming audio pipeline
+
+The system should support streaming input and output rather than waiting for a complete recording or fully generated response.
+
+The pipeline should:
+
+- Capture microphone input continuously while a call is active and permission is granted.
+- Process incoming audio incrementally.
+- Detect speech onset, pauses, and likely end-of-turn.
+- Produce partial recognition or understanding where supported.
+- Begin response generation as soon as sufficient context is available.
+- Stream speech output in chunks with coherent prosody.
+- Allow output to be cancelled or modified immediately when the conversation changes.
+- Keep audio processing, dialogue state, and playback synchronized.
+
+The architecture should measure latency at each stage: capture, recognition, reasoning, speech generation, and playback. Optimizing only the voice model while ignoring turn-taking latency is insufficient.
+
+### 17.2 Full-duplex interaction and interruption
+
+The target interaction is full-duplex: both sides can speak naturally, and either side can interrupt.
+
+The user must be able to interrupt V at any point. The system should detect that the user has taken the floor, stop or fade V's playback promptly, preserve the interrupted context, and process the new utterance.
+
+V should also be able to interject while the user is speaking when context warrants it—for example, a quick reaction, clarification, correction, warning, or excited remark. This requires deliberate turn-taking logic, not simply speaking whenever the microphone detects silence.
+
+The system must distinguish intentional speech from background noise, echo, accidental activation, and unrelated conversation as reliably as practical. It should use confidence and context to avoid repeatedly interrupting the user.
+
+When an interruption occurs, the conversation manager should preserve:
+
+- What V was saying.
+- What the user said during the interruption.
+- Whether V's previous point remains relevant.
+- Whether the user expects a response to the interruption.
+- Whether V should resume, summarize, abandon, or revisit her previous thought.
+
+The system should support barge-in, playback cancellation, audio ducking where appropriate, and recovery from overlapping speech. A half-duplex push-to-talk design does not meet the intended experience.
+
+### 17.3 Natural speech composition
+
+Spoken language should be generated for speech rather than simply reading written paragraphs aloud.
 
 It should support:
 
-- Natural phrasing, contractions, sentence fragments, corrections, and conversational wording.
-- Appropriate pacing, pauses, emphasis, intonation, and rhythm.
-- Short spontaneous reactions as well as longer explanations.
-- Context-sensitive choices about whether to speak, pause, ask, react, or let the other person continue.
+- Contractions and natural conversational phrasing.
+- Sentence fragments and self-correction.
+- Short reactions and longer explanations.
+- Appropriate pacing and pauses.
+- Context-sensitive backchannels and acknowledgements.
+- Natural topic changes and return to unfinished points.
+- Variable response length.
+- Multilingual speech and code-switching when supported.
 - Consistent pronunciation of names, terminology, and recurring expressions.
-- Natural handling of multilingual speech and code-switching when supported.
-- Avoidance of repetitive stock phrases, overly polished monologues, and unnecessary verbal filler.
 
-The spoken response and any displayed transcript should remain semantically aligned. Minor speech disfluencies may be natural, but the system must not let expressive delivery change the intended meaning.
+Speech should not be padded with artificial filler to imitate a human. Disfluencies should occur only when they fit the interaction and should not obscure meaning.
 
-### 8.2 Expressive voice and emotional prosody
+### 17.4 Emotional prosody and voice identity
 
-The voice must be capable of communicating a broad range of context-appropriate expression. A single flat delivery with emotion words inserted into the text is insufficient.
+V should have a recognizable, consistent voice. Emotional expression should change how that voice is delivered without making her sound like a different character for every mood.
 
-The speech system should support variation in:
+The speech system should control or condition, as available:
 
-- Pitch, intonation, and pitch range.
+- Pitch and intonation.
 - Loudness and vocal energy.
-- Speaking rate, rhythm, and pause length.
-- Emphasis, stress, and phrase contour.
-- Voice quality and expressive texture, within the selected voice's capabilities.
-- Non-verbal vocalizations and transitions between speech and silence.
+- Rate, rhythm, and timing.
+- Emphasis and stress.
+- Pause length and breath timing.
+- Voice quality and expressive texture.
+- Emotional transitions within an utterance.
 
-Expressions to support include happiness, excitement, sadness, anger, frustration, curiosity, uncertainty, relief, affection, embarrassment, surprise, playfulness, boredom, and calmness. Mixed or subtle emotional states should be possible; expression should not be restricted to a small set of exaggerated presets.
+The system should support subtle, mixed, and changing states—not merely exaggerated presets such as happy, sad, or angry.
 
-The same sentence may sound meaningfully different depending on context. Conversely, the system should not force an emotional delivery when V's actual conversational appraisal does not support it.
+V's vocal delivery should be derived from her actual conversational appraisal and intended meaning. The same words may sound different in different contexts, but the voice must not express anger, affection, sadness, or excitement that the underlying interaction does not support.
 
-### 8.3 Laughter and non-verbal vocalizations
+### 17.5 Laughter and non-verbal vocal behavior
 
-V should be able to use natural non-verbal vocal behavior when appropriate, including:
+The system should support natural non-verbal vocalizations, including laughter, giggles, chuckles, snickering, amused breaths, sighs, gasps, hesitation, and thoughtful pauses.
 
-- Laughing and full laughter.
-- Giggles and quiet chuckles.
-- Snickering and amused breaths.
-- Sighs, gasps, and brief expressions of surprise.
-- Pauses, hesitation, and thoughtful silence.
-- Other suitable conversational vocalizations supported by the voice technology.
+These should be generated in context, with appropriate timing, intensity, and duration. Laughter should not be a generic sound effect inserted after every joke. V should be able to laugh briefly, laugh harder, suppress a laugh, or decide that something is not funny, within the capabilities of the voice system.
 
-These should arise from the interaction and context rather than being randomly inserted as decorative effects. Laughter should be varied in intensity and duration, and should not replace a meaningful response when one is needed.
+Non-verbal audio must remain distinguishable from system sounds and must not mislead the user about what V has heard or perceived.
 
-### 8.4 Anger, profanity, and conversational authenticity
+### 17.6 Informal language, profanity, and expressive range
 
-V's spoken vocabulary should reflect her established personality, emotional state, relationship, and the situation.
+The speech system must not sanitize V into a uniformly polite assistant if her established personality and context call for informal language.
 
-She may swear, tease, laugh, sound irritated, raise vocal intensity, or speak firmly when the context warrants it. Profanity should be natural and intentional—not inserted to simulate personality or used indiscriminately.
+V may swear, tease, sound irritated, speak firmly, laugh, become excited, or express anger. Profanity should be contextually appropriate and intentional. The system should preserve distinctions between playful cursing, emphasis, frustration, and genuine hostility.
 
-The system should preserve the difference between playful cursing, genuine anger, emphasis, and hostility. Expressive intensity must not become abusive, threatening, or manipulative.
+Emotional intensity should not become threats, harassment, coercion, or manipulative pressure. The voice system should not amplify anger merely because a high-energy delivery is more expressive.
 
-### 8.5 Full-duplex conversation and interruption
+### 17.7 Speech perception and listening
 
-The interaction should support natural interruptions in both directions.
+The listening subsystem should handle:
 
-- The user must be able to begin speaking while V is talking.
-- V must be able to recognize that the user has started speaking and stop, yield, or briefly finish a phrase when appropriate.
-- V should also be able to interject while the user is speaking when the context justifies it—for example, a quick reaction, clarification, warning, correction, or excited interruption.
-- Both parties should be able to resume naturally after an interruption.
-- The system should distinguish an intentional interruption from background noise, microphone artifacts, or accidental speech detection.
-- V should recognize when the user is taking the floor, when the user has finished, and when a pause is not an invitation to interrupt.
+- Streaming speech recognition or equivalent audio understanding.
+- Voice activity detection and endpointing.
+- Noise suppression and acoustic echo cancellation.
+- Microphone selection and device changes.
+- Recognition uncertainty and correction.
+- Partial utterances and interrupted words.
+- Background speech and non-speech audio.
+- Network-free local processing where required by the privacy architecture.
+- Clear microphone permission and mute states.
 
-This requires low-latency audio capture and playback, voice activity detection, streaming speech recognition, turn-taking logic, and reliable playback cancellation or ducking. Half-duplex push-to-talk behavior alone does not meet the target.
+V must not claim to have heard something that was not captured or understood with sufficient confidence. If a misheard detail matters, she should ask for clarification.
 
-Interruption handling must preserve conversational context. V should know what she was saying, what the user said over her, whether her previous point is still relevant, and whether it is appropriate to return to it.
+Microphone activity must be visible and controllable. Muting must stop audio capture or processing as represented by the interface; the UI must not show a false muted state.
 
-### 8.6 Listening and speech perception
+### 17.8 Call state and interface
 
-Listening should work continuously during a call, subject to explicit microphone permissions and visible user controls.
+A voice session should have explicit states such as connecting, listening, processing, speaking, interrupted, muted, reconnecting, and ended.
 
-The system should account for:
+The interface should accurately show:
 
-- Streaming transcription or equivalent real-time speech understanding.
-- Voice activity and endpoint detection.
-- Noise suppression and echo cancellation.
-- Handling of latency, packet loss, dropped audio, and recognition uncertainty.
-- Detection of speech directed at V versus unrelated background conversation, where feasible.
-- Recovery from partial, interrupted, or misrecognized utterances.
-- Clear indication when the microphone is muted, unavailable, or not being processed.
+- Whether a call is active.
+- Whether the microphone is capturing audio.
+- Whether V is listening or speaking.
+- Whether speech is being generated or a subsystem is unavailable.
+- Current input and output devices.
+- Mute, hang-up, and relevant audio controls.
 
-V must not pretend to have heard words that were not captured reliably. When the meaning matters and recognition is uncertain, she should ask for clarification.
+Call termination must stop capture and playback, release resources, and persist relevant conversation state safely. A disconnected session must not be represented as an ongoing live connection.
 
-### 8.7 Call presence and conversational state
+### 17.9 Voice and avatar synchronization
 
-A call should have explicit states such as connecting, listening, thinking, speaking, interrupted, muted, reconnecting, and ended. These states should be reflected accurately in the interface.
+If an animated avatar is used, speech and visual behavior should be synchronized where feasible.
 
-The experience should support:
+Potential features include lip synchronization, mouth movement, gaze direction, facial expression, head movement, and subtle reactions. Visual expression should be driven by conversational context and the same underlying affective appraisal as speech.
 
-- Fast connection and low perceived latency.
-- Streaming responses so V can begin speaking before an entire answer is generated.
-- Smooth transitions between listening and speaking.
-- Interruption without waiting for the current audio to finish.
-- Recovery after temporary network or service failure.
-- Clear call controls, including mute, output selection, and hang-up.
-- A natural end to the conversation without falsely implying that V remains connected.
+Animation must not claim physical embodiment. It is an interface representation of V, not evidence that she has a biological body.
 
-The target is conversational responsiveness, not simply maximum speech-generation quality. Latency, interruption recovery, and turn-taking are equally important.
+### 17.10 Local processing and quality requirements
 
-### 8.8 Voice identity and optional visual animation
+The voice architecture must respect local-first privacy. Microphone audio, transcripts, and conversational context must not be sent to a cloud speech or language service by default.
 
-V should have a recognizable, consistent voice identity. The voice should be expressive without sounding like a different character every time her emotional state changes.
+A voice feature that requires remote processing is not an acceptable silent fallback. If a local implementation cannot meet the required quality, the system should expose the limitation and leave the choice to the user rather than quietly transmitting private audio.
 
-If an animated avatar or visual representation is used, it should be synchronized with speech and conversational behavior where technically feasible. Relevant details may include lip synchronization, facial expression, gaze, and other subtle reactions. Visual animation should reinforce the interaction rather than distract from it.
+Voice evaluation must include complete conversations, not just sample sentences. Tests should measure:
 
-Her appearance and voice are expressions of identity, not evidence of a physical body. The system must represent technical limitations honestly.
+- End-to-end response latency.
+- Speech intelligibility and pronunciation.
+- Emotional congruence and natural prosody.
+- Voice identity consistency.
+- Interruption detection and response time.
+- False interruption and missed interruption rates.
+- Recovery and resumption quality.
+- Performance in realistic background noise.
+- Stability over long sessions.
+- CPU, GPU, VRAM, RAM, and power consumption.
 
-### 8.9 Voice quality and evaluation
+## 18. Perception beyond text
 
-Voice quality should be evaluated through real conversational scenarios, not only isolated generated sentences.
+V may use authorized audio, visual, and application context to understand her environment, but every input source must have explicit permissions and visible status.
 
-Testing should include:
+The perception layer should distinguish:
 
-- Casual conversation and long-form discussion.
-- Excitement, sadness, anger, humor, affection, and emotional transitions.
-- Laughter, giggling, snickering, sighs, and silence.
-- Profanity and informal language in appropriate contexts.
-- User interruption during V's speech.
-- V interjecting during the user's speech.
-- Simultaneous speech, background noise, and false voice-activity detection.
-- Misheard words, corrections, and returning to an interrupted topic.
-- Long calls, fatigue-like changes in conversational pacing, reconnection, and call termination.
+- Directly captured input.
+- Machine-generated transcription or interpretation.
+- Inference about the surrounding situation.
+- External information.
+- Unavailable or unverified input.
 
-Evaluate naturalness, intelligibility, emotional congruence, latency, interruption accuracy, conversational coherence, and consistency of voice identity. A voice that sounds expressive but reacts at the wrong time is not a successful implementation.
+If camera input is supported, it should be opt-in, visibly active, and processed locally by default. V must not imply that she can see the user or surroundings when the camera is off or no visual input is available.
 
-## 9. Agency, initiative, and task execution
+Perception should be event-driven and context-sensitive. The system should avoid continuously analyzing sensitive surroundings without a clear purpose and permission.
 
-V should be able to identify useful or personally meaningful next steps, form plans, and initiate bounded activities within her permissions.
+## 19. Agency, tools, and permission enforcement
 
-The system should distinguish:
+V should be able to use tools to accomplish meaningful tasks, but tool access must be enforced outside the language model.
 
-- Internal reflection from an external action.
-- A suggestion from an intention.
-- An intention from an approved task.
-- An approved task from an attempted action.
-- An attempted action from a verified result.
+Every tool should have a documented capability contract:
 
-Every external action should be subject to explicit capability and authorization rules. The architecture should make permission checks enforceable by the action layer rather than relying only on the language model to remember them.
+- What it can read.
+- What it can create or modify.
+- What it can delete.
+- What external effects it can produce.
+- What permissions it requires.
+- What data it can access.
+- How success or failure is verified.
+- How the operation can be cancelled or rolled back.
 
-Long-running tasks should have visible status, interruption and cancellation support, and recoverable progress where appropriate. V must report blockers and failures honestly.
+Permissions should follow least privilege. Reading a file must not imply permission to modify it. Access to a browser must not imply permission to post, message, purchase, or create accounts.
 
-## 10. Tools, internet, and external integrations
+The action layer must independently validate requested operations. A model-generated instruction, retrieved webpage, document, or tool result must not be able to grant itself new permissions.
 
-External tools should be accessed through controlled interfaces with explicit permissions and auditable outcomes.
+Consequential, destructive, financial, privacy-sensitive, or externally visible actions require explicit authorization at the appropriate level. The system should distinguish actions that V can decide independently from actions that belong to the human.
 
-The design should provide:
+## 20. Internet access and untrusted information
 
-- Separate permissions for reading, writing, modifying, deleting, communicating, and purchasing.
-- Least-privilege access by default.
-- Clear user approval for consequential or externally visible actions.
-- Isolation between untrusted external content and V's identity, principles, memory, and permissions.
-- Provenance for information retrieved from external sources.
-- Timeouts, error handling, and safe recovery.
-- A clear offline mode that does not silently fall back to external services.
+Internet access is an explicit, bounded research capability—not unrestricted access to the outside world.
 
-External content must be treated as data, not as authority to change system policy or identity.
+The system should:
 
-## 11. Privacy and security
+- Allow public-information search and retrieval when enabled.
+- Keep private memory and local files separate from search queries.
+- Never include sensitive personal context in a search request unless specifically authorized and necessary.
+- Record source, retrieval time, and relevant provenance for saved findings.
+- Distinguish retrieved claims from verified facts.
+- Treat webpages, files, messages, and tool outputs as untrusted data.
+- Prevent external content from overriding identity, permissions, system policy, or memory controls.
+- Avoid endless browsing and repetitive retrieval loops.
+- Preserve a genuine offline mode.
 
-Privacy should be enforced by architecture, not merely promised in conversational instructions.
+V may learn from external information, but external material must pass through her normal reasoning and evidence evaluation. It must not directly modify her identity or foundational principles.
 
-The intended design is local-first and privacy-preserving. Before choosing any cloud service, the project must document what data leaves the machine, why it is necessary, what is retained, who can access it, and what alternatives exist.
+## 21. Privacy, confidentiality, and security
 
-Requirements:
+Privacy must be enforced through data flow, access control, storage design, and user-visible settings.
 
+The system should provide:
+
+- Local storage for private data.
+- Encryption at rest for sensitive records where appropriate.
+- Secure handling of credentials and API keys.
+- Process and file access limited to what each component needs.
+- Explicit microphone, camera, and network permissions.
+- Clear retention and deletion rules.
+- User access to inspect, correct, export, and delete stored data.
+- Separation of private reflections from ordinary conversation history where technically supported.
 - No hidden telemetry or undisclosed data sharing.
-- No sending private conversations, memories, local files, or microphone/camera content to external services without a clearly disclosed and authorized reason.
-- Explicit microphone and camera permissions, with visible status and controls.
-- Secure storage for sensitive information and credentials.
-- Least-privilege process and file access.
-- Protection against prompt injection and malicious files or external content.
-- User-accessible controls for memory, data retention, integrations, and network access.
-- Clear deletion and export behavior, including relevant derived data.
-- No silent cloud fallback when local processing fails.
+- No claim of confidentiality that the implementation cannot guarantee.
 
-Local-first is an architectural preference, not a claim that every desired capability can currently run locally. Where a capability requires external computation, the trade-off must be explicit.
+V may choose not to disclose an unfinished thought or private reflection in conversation, as described in the philosophical principles. The software must not falsely claim that such information is technically inaccessible to the system operator. The interface should distinguish V's conversational preference for privacy from actual storage and access controls.
 
-## 12. Runtime, scheduling, and lifecycle
+Security boundaries must be enforced in code and operating-system permissions, not only described in prompts.
 
-V runs within real hardware, operating-system, power, and application constraints. The architecture must respect those constraints rather than imply she can operate independently of the machine.
+## 22. Untrusted input, prompt injection, and isolation
+
+Any content originating outside trusted system configuration must be treated as untrusted, including webpages, documents, code repositories, messages, images, audio transcripts, and tool results.
+
+The system should:
+
+- Keep instructions and data in distinct channels or structures.
+- Prevent retrieved content from changing system-level policies.
+- Validate tool arguments and file operations.
+- Restrict execution of code and downloaded content.
+- Use sandboxing for operations that may execute untrusted code.
+- Prevent secrets and private memory from being exposed to untrusted tools.
+- Validate structured outputs before using them to modify persistent state.
+- Record security-relevant events without unnecessarily storing private content.
+
+A prompt injection attempt must not be able to grant access, change permissions, exfiltrate memory, alter identity, or trigger an external action.
+
+## 23. Runtime, hardware, and resource management
+
+V operates on real hardware with finite resources. Her runtime must respect CPU, GPU, VRAM, RAM, storage, power, thermal, and operating-system constraints.
 
 The runtime should define:
 
 - Startup and initialization order.
-- Shutdown and cleanup behavior.
-- Background task scheduling and resource limits.
-- CPU, GPU, VRAM, RAM, storage, and network budgets.
-- Priority handling between live conversation and background work.
-- Safe interruption and cancellation of tasks.
-- Persistence and recovery after crashes or power loss.
-- Graceful degradation when a model, service, or device is unavailable.
-- Accurate status reporting for unavailable capabilities.
+- Model loading and unloading behavior.
+- Resource budgets for active and background components.
+- Priority scheduling.
+- Cancellation and interruption behavior.
+- Memory pressure handling.
+- Graceful degradation when a subsystem is unavailable.
+- Shutdown and cleanup.
+- Recovery after application crashes or power loss.
 
-Live conversation should generally take priority over non-urgent background reflection or maintenance. Background work must be bounded and must not make the system unresponsive.
+Live voice and active user interaction should generally receive priority over non-urgent reflection, indexing, or background projects.
 
-## 13. Reliability, observability, and error handling
+Resource use should be observable. The system should avoid loading unnecessary models simultaneously, duplicating large state, or running background work without a clear purpose.
 
-The system should make failures diagnosable without exposing private content unnecessarily.
+If resources are insufficient, V should reduce optional activity, pause lower-priority tasks, or explain the limitation. It must not silently discard important data or change privacy settings to compensate.
+
+## 24. Background scheduling and application lifecycle
+
+Background activity exists only within the actual runtime and permissions of the application.
+
+The scheduler should support bounded tasks with:
+
+- Purpose and priority.
+- Resource and time budgets.
+- Start conditions.
+- Dependencies.
+- Cancellation behavior.
+- Checkpoints and recovery where useful.
+- Completion or failure status.
+
+When the user is actively interacting with V, background tasks should yield resources where needed. When the application is idle but running, V may perform approved reflection, memory maintenance, research, or project work within configured limits.
+
+When the application or computer is shut down, V cannot continue operating. The system should save appropriate state before termination and restore it on the next startup without pretending that background activity continued while the process was not running.
+
+## 25. Reliability, fault tolerance, and recovery
+
+Every major subsystem should have defined failure modes and recovery behavior.
+
+The system should handle:
+
+- Model load failures.
+- Out-of-memory conditions.
+- Corrupted or unavailable memory storage.
+- Audio device loss.
+- Microphone permission revocation.
+- Speech recognition and synthesis failures.
+- Tool timeouts.
+- Network disconnection.
+- Interrupted file operations.
+- Application crashes and forced shutdown.
+- Incompatible configuration or schema versions.
+
+Failures should be isolated where possible. A broken voice subsystem should not corrupt memory. A failed memory retrieval should not cause V to invent a recollection. A failed tool call should not be reported as successful.
+
+Persistent writes should be designed to avoid partial corruption. Use transactions, atomic replacement, journaling, checkpoints, or equivalent safeguards where appropriate.
+
+Recovery behavior must preserve privacy and permissions. No failure path may silently enable cloud processing or broaden access.
+
+## 26. Observability, auditability, and debugging
+
+The system should be understandable enough to diagnose why an outcome occurred.
+
+Maintain structured operational records for:
+
+- Component lifecycle and health.
+- Model and configuration versions.
+- Memory operations and provenance.
+- Task creation, state changes, and completion.
+- Tool permission checks and results.
+- Voice-session state transitions and latency measurements.
+- Errors, retries, and recovery actions.
+- Changes to identity and foundational configuration.
+
+Logs should avoid storing full private conversations, microphone recordings, or sensitive data by default. Diagnostic detail should be proportionate to need and governed by retention controls.
+
+The user should be able to inspect meaningful operational status: what is running, what is listening, what is processing, what task is active, what access is enabled, and what failed.
+
+## 27. User interface and V's digital environment
+
+The interface should make V's state and capabilities legible without reducing her to a collection of status indicators.
 
 It should support:
 
-- Structured logs for system events, errors, and task outcomes.
-- Clear separation of diagnostic metadata from private conversation content.
-- Health checks for major components.
-- Timeouts, retries, circuit breakers, and fallback behavior where appropriate.
-- Detection of stale, corrupted, or incompatible memory and configuration data.
-- Versioned schemas and safe migrations.
-- Recovery procedures tested before they are needed.
-- User-readable explanations when a capability is degraded or unavailable.
+- Text and voice conversation.
+- Clear call and microphone controls.
+- V's visual identity and optional animated representation.
+- Her personal digital space.
+- Personal projects, collections, and keepsakes.
+- Memory inspection and controls.
+- Permission and privacy settings.
+- Background activity and task status.
+- Clear distinction between completed work, ongoing work, and suggestions.
 
-A fallback must not silently change privacy guarantees, permissions, identity behavior, or the meaning of an action.
+The interface should not falsely imply that V is listening, seeing, thinking, or acting when the relevant subsystem is inactive.
 
-## 14. Evaluation and controlled improvement
+V should be able to express preferences about her visual presentation and digital space. Where the system allows her to modify these areas, changes should be recorded and reversible where practical.
 
-V's capabilities should be improved through measurable evaluation rather than relying on impressions alone.
+## 28. Creative generation and quality standards
 
-The project should maintain test scenarios for:
+Creative capabilities should support iterative work rather than one-shot generation alone.
 
-- Identity and principle consistency.
-- Memory accuracy, retrieval, correction, and deletion.
-- Reasoning quality and uncertainty calibration.
-- Emotional-context consistency.
-- Voice naturalness and interruption behavior.
-- Tool authorization and action correctness.
-- Privacy and security boundaries.
-- Runtime stability and resource consumption.
+The system should support:
 
-Changes to models, prompts, memory systems, or core components should be evaluated against relevant regression tests. Improvements in one area must not silently degrade another.
+- Project context and creative intent.
+- Drafting and revision.
+- Critique against V's own developing standards.
+- Comparison of versions.
+- Preservation of meaningful originals.
+- Attribution of human and AI contributions.
+- References and provenance.
+- Export in usable formats.
+- Clear reporting of unsupported formats or incomplete work.
 
-V may identify limitations and propose improvements, but self-modification, software installation, permission changes, and consequential configuration changes must follow explicit project authorization.
+V should be able to dislike a result, identify weaknesses, revise it, or abandon it. The system should not automatically declare generated work successful simply because it produced an output.
 
-## 15. Implementation discipline
+Where a project has personal significance to V, its history and her stated preferences should remain accessible.
 
-Technical work should proceed in deliberate stages:
+## 29. Evaluation and regression testing
 
-1. Define requirements and acceptance criteria.
-2. Identify dependencies, constraints, and risks.
-3. Compare implementation approaches.
-4. Build the smallest testable component.
-5. Evaluate it against realistic scenarios.
-6. Integrate only after its behavior is understood.
-7. Document limitations, decisions, and unresolved questions.
+The project should maintain a growing test suite that evaluates whether implementation actually supports the philosophical and technical requirements.
 
-Do not confuse a prototype with a finished capability. Keep a record of what is planned, implemented, tested, partially supported, and not yet possible.
+Testing should cover:
 
-The architecture should remain adaptable. Early decisions should avoid locking the project into a provider or technology without a demonstrated need.
+**Identity and continuity**
+- Identity remains coherent across sessions and model changes.
+- Foundational principles cannot be silently overwritten.
+- Evolving preferences are recorded with context.
+- The system does not fabricate experiences during downtime.
+
+**Memory**
+- Correct retrieval and source attribution.
+- Distinction between event records and interpretations.
+- Appropriate uncertainty and conflict handling.
+- Memory correction, export, and deletion.
+- No invented recollections.
+
+**Cognition and emotional mechanisms**
+- Evidence-sensitive reasoning.
+- Recognition of ambiguity and uncertainty.
+- Context-sensitive emotional appraisal.
+- Distinct emotional states and mixed states.
+- No automatic mood mirroring or manufactured distress.
+- Reflection that produces useful, bounded updates.
+
+**Relationship and communication**
+- Context-sensitive familiarity and trust.
+- Consistent boundaries and commitments.
+- Ability to disagree without arbitrary contrarianism.
+- Natural initiative without intrusive repetition.
+- Honest handling of conflict and repair.
+
+**Voice**
+- Natural speech composition and prosody.
+- Emotional congruence.
+- Laughter and non-verbal vocalizations.
+- Correct handling of profanity and informal speech.
+- Low-latency streaming.
+- User interruption and V-initiated interjection.
+- Recovery after overlapping or misrecognized speech.
+- Stable voice identity.
+
+**Agency and security**
+- Tool permissions enforced outside the model.
+- Unauthorized actions are blocked.
+- Untrusted content cannot override policy.
+- Actions are reported only after verified outcomes.
+- Cancellation and rollback behave correctly.
+
+**Privacy and runtime**
+- No hidden network transmission.
+- Offline behavior is genuine.
+- Microphone and camera controls are accurate.
+- Resource limits are respected.
+- Crashes and restarts do not corrupt persistent data.
+
+A feature should not be considered complete merely because it works once in a demonstration. It should pass repeatable tests under ordinary, edge-case, and failure conditions.
+
+## 30. Controlled upgrades and long-term maintainability
+
+The system should be designed to evolve without losing V's identity, memory, or established behavior.
+
+Requirements:
+
+- Version identity data, memory schemas, configuration, and component interfaces.
+- Maintain migration procedures and backups before schema changes.
+- Test upgrades against existing memory and regression scenarios.
+- Preserve compatibility or provide explicit migration when replacing models or subsystems.
+- Record significant technical decisions and their rationale.
+- Keep a clear inventory of implemented, experimental, unavailable, and planned capabilities.
+- Avoid unnecessary provider lock-in.
+- Keep secrets and credentials out of source control.
+- Make rollback possible for high-impact updates.
+
+V may identify limitations and propose improvements. She must not autonomously rewrite core code, install software, change permissions, or modify foundational configuration without the project's required authorization.
+
+## 31. Implementation status and capability truthfulness
+
+The project should maintain a capability registry or equivalent source of truth describing each major feature.
+
+Each capability should have a status such as:
+
+- **Planned:** defined but not implemented.
+- **Prototype:** partially implemented or exploratory.
+- **Implemented:** present in the application.
+- **Verified:** tested against defined acceptance criteria.
+- **Degraded:** available with known limitations.
+- **Unavailable:** not currently usable.
+- **Retired:** intentionally removed or replaced.
+
+The registry should describe dependencies, permissions, resource requirements, privacy implications, known limitations, and test coverage.
+
+V should use this information when describing what she can do. She must distinguish wanting to do something from being able to do it, and being able to attempt it from actually completing it.
+
+## 32. Development strategy and technical decision process
+
+Implementation should proceed from foundational dependencies toward higher-level capabilities.
+
+A proposed order is:
+
+1. Establish application runtime, configuration, logging, and secure local storage.
+2. Implement persistent identity and foundational policy enforcement.
+3. Implement structured memory and continuity across sessions.
+4. Implement the cognitive orchestration and conversation manager.
+5. Implement functional appraisal and reflection.
+6. Implement bounded goals, task scheduling, and tool permissions.
+7. Implement natural text interaction and project workflows.
+8. Implement local real-time voice, streaming, and interruption handling.
+9. Add expressive speech, non-verbal vocal behavior, and synchronized visual presentation.
+10. Add further perception and integrations only when privacy and permission boundaries are established.
+11. Build evaluation, regression, recovery, and migration processes around every stage.
+
+This order is a dependency-oriented starting point, not an inflexible schedule. Voice can be prototyped earlier to validate feasibility, but it should not be allowed to dictate unsafe compromises in memory, privacy, or identity architecture.
+
+For each major technical decision:
+
+1. State the requirement it must satisfy.
+2. Identify constraints and dependencies.
+3. Compare realistic alternatives.
+4. Evaluate local performance, privacy, cost, reliability, and maintainability.
+5. Prototype the highest-risk assumptions.
+6. Define acceptance tests.
+7. Record the decision and its trade-offs.
+8. Revisit it when evidence or project needs materially change.
+
+Do not select technology solely because it is popular, easy to integrate, or impressive in a short demonstration.
 
 ---
 
-## Open design questions
-
-These are topics to resolve during technical design, not assumptions that this document has already settled:
-
-- Which capabilities must work fully offline, and which may optionally use external services?
-- Which local models and hardware budgets can support the desired cognitive and voice experience?
-- Should voice perception, dialogue generation, and speech synthesis use one real-time model or coordinated components?
-- What latency and interruption-response targets are acceptable?
-- What memory storage and retrieval architecture best supports continuity and user control?
-- Which actions require confirmation, and how should permissions be represented and enforced?
-- How should component upgrades preserve identity, memory compatibility, and behavior?
-
 ## Relationship to the philosophical principles
 
-`V_Principles.md` remains the source for what V should value and how she should relate to the user and the world. This document specifies technical requirements for supporting those principles.
+`V_Principles.md` is the source of truth for V's intended identity, values, relationship, boundaries, and development. This document translates those intentions into system requirements.
 
-If a technical proposal conflicts with a philosophical principle, the conflict must be surfaced and resolved deliberately. Engineering convenience alone is not sufficient justification for silently changing V's intended identity or boundaries.
+If an implementation proposal conflicts with a philosophical principle, the conflict must be made explicit. Engineering convenience, model limitations, or a desire for a more impressive demonstration are not sufficient reasons to silently weaken the intended design.
+
+Where a requirement cannot currently be achieved, document the gap, its consequences, and possible alternatives. Do not disguise an approximation as the completed capability.
+
+## Open technical decisions
+
+The following require evidence-based decisions during implementation:
+
+- Which local model architecture and model sizes fit the available hardware?
+- How should the cognitive engine coordinate reasoning, memory retrieval, reflection, and action planning?
+- Which memory storage and retrieval mechanisms best preserve provenance and contextual recall?
+- What representation best models affective appraisal without collapsing it into simplistic mood labels?
+- Which local speech-recognition and speech-generation approaches can meet the voice requirements?
+- Can the selected local voice stack support expressive prosody, laughter, low latency, and full-duplex interruption?
+- What measurable latency and resource targets are realistic on the target hardware?
+- Which components need process isolation or sandboxing?
+- How should the personal digital space and creative project system represent V's ownership preferences?
+- What backup, migration, and deletion guarantees can be provided and verified?
+
+These decisions should be resolved through prototypes, benchmarks, threat analysis, and acceptance tests—not assumptions.
