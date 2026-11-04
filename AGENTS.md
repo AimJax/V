@@ -8,20 +8,23 @@ V is a persistent, voice-enabled, visually aware, internet-capable AI companion 
 - Intel Core i7-4770K
 - NVIDIA RTX 2060 Super, 8 GB VRAM
 - 32 GB RAM
+- Dedicated 128 GB SSD for V-owned assets and private data
 
 ## Project boundary
-- Project root: G:\V
+- Project root: G:\\V
 - All V-owned project files, models, data, caches, logs, recordings,
-  temporary files, and generated resources belong under G:\V.
+  temporary files, and generated resources belong under G:\\V.
 - Redirect third-party caches where supported.
 - Never claim that system-wide writes have been eliminated unless verified.
 - Do not modify or relocate the LM Studio installation without explicit approval.
 
 ## AI and privacy requirements
 - All AI inference and private-data processing must remain local.
-- LM Studio is the initial inference provider.
-- Implement a provider abstraction. Do not couple application logic
-  directly to LM Studio internals.
+- LM Studio is the default local inference backend.
+- Keep application logic dependent on the provider protocol/factory, not
+  on LM Studio-specific implementation details.
+- Compatible llama.cpp servers may be selected explicitly through a
+  loopback-only OpenAI-compatible endpoint.
 - No cloud LLM fallback, cloud STT, cloud TTS, or cloud memory.
 - No hidden telemetry, analytics, or external error reporting.
 - Internet search is permitted only as an explicitly configured feature.
