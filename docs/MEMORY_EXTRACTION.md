@@ -9,8 +9,7 @@
 - Each extraction request processes one user message at a time.
 - Only user-authored messages belonging to the queued conversation are accepted.
 - Memories require an exact source quotation.
-- The stored memory content is the verbatim evidence excerpt, not an
-  LLM-generated paraphrase.
+- The stored memory content is the verbatim evidence excerpt, not an LLM-generated paraphrase.
 - Only explicit statements are accepted in this initial version.
 - Low-confidence and sensitive candidates are rejected.
 - Duplicate memory keys cannot silently overwrite existing memories.
@@ -28,8 +27,7 @@ Default maximum jobs per idle cycle: 3.
 
 ## Limitations
 - Existing historical conversations are not automatically imported.
-- Semantic embedding retrieval is not yet integrated.
+- Semantic retrieval is implemented separately through the hybrid retrieval subsystem; see `MEMORY_RETRIEVAL.md`.
 - Inferred pattern extraction is intentionally disabled.
-- Memory correction is available through the storage API but not yet exposed
-  as a conversational command.
+- Memory correction is available through the storage API but not yet exposed as a conversational command.
 - Data is stored locally in SQLite without database encryption.
