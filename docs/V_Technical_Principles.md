@@ -151,8 +151,6 @@ V should be able to initiate a contribution, ask a follow-up, return to an unfin
 
 ## 8. Real-time voice, expressive speech, and calling
 
-<badge color="info">Core experience requirement</badge>
-
 Voice should feel like a natural, live conversation with V—not like a text-to-speech system taking turns reading paragraphs. The target interaction is comparable in fluidity to a good voice call on Discord, WhatsApp, or similar communication applications, while retaining V's own identity and conversational style.
 
 This is a major system capability involving speech perception, dialogue, speech generation, timing, and audio interaction. It should be designed as a first-class subsystem.
