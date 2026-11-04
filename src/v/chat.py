@@ -21,7 +21,7 @@ from v.memory.store import MemoryStore
 from v.memory.worker import MemoryWorker
 from v.providers.base import ChatMessage
 from v.providers.errors import ProviderError
-from v.providers.lm_studio import LMStudioProvider
+from v.providers.factory import create_chat_provider
 
 
 def load_personality(settings: dict) -> str:
@@ -187,13 +187,7 @@ async def run_chat() -> int:
             memory_store = MemoryStore(memory_database)
             extraction_queue = ExtractionQueue(memory_database)
 
-        provider = LMStudioProvider(
-            base_url=llm["base_url"],
-            model=model,
-            timeout_seconds=float(
-                llm.get("request_timeout_seconds", 120)
-            ),
-        )
+        provider = create_chat_provider(llm)
 
         history_limit = int(llm.get("history_messages", 24))
         temperature = float(llm.get("temperature", 0.7))
@@ -229,7 +223,7 @@ async def run_chat() -> int:
 
         print("\nV — Local AI Companion")
         print("======================")
-        print("Connecting to LM Studio...")
+        print(f"Connecting to local inference backend ({llm.get('provider', 'lm_studio')})...")
 
         available_models = await provider.list_models()
 
@@ -541,7 +535,7 @@ async def run_chat() -> int:
             print("\n")
 
     except ProviderError as error:
-        print(f"\nLM Studio connection failed: {error}")
+        print(f"\nLocal inference connection failed: {error}")
         print("Check the LM Studio local server.")
         return 1
 
