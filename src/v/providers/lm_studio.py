@@ -1,4 +1,4 @@
-"""Local LM Studio provider using its OpenAI-compatible API."""
+"""Local local inference server provider using its OpenAI-compatible API."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from v.providers.errors import (
 )
 
 
-class LMStudioProvider:
-    """Communicate with a local LM Studio inference server."""
+class OpenAICompatibleLocalProvider:
+    """Communicate with a local local inference server inference server."""
 
     def __init__(
         self,
@@ -54,7 +54,7 @@ class LMStudioProvider:
             or parsed.fragment
         ):
             raise ValueError(
-                "LM Studio must use a local HTTP endpoint "
+                "local inference server must use a local HTTP endpoint "
                 "(localhost, 127.0.0.1, or ::1)."
             )
 
@@ -88,7 +88,7 @@ class LMStudioProvider:
         if not selected:
             raise ModelNotConfiguredError(
                 "No chat model is configured. Select a conversational "
-                "model in LM Studio and configure its model identifier."
+                "model in local inference server and configure its model identifier."
             )
 
         return selected
@@ -133,7 +133,7 @@ class LMStudioProvider:
 
     def _request_error(self, error: httpx.RequestError) -> ProviderConnectionError:
         return ProviderConnectionError(
-            f"Could not reach LM Studio at {self.base_url}: {error}"
+            f"Could not reach local inference server at {self.base_url}: {error}"
         )
 
     async def list_models(self) -> list[str]:
@@ -164,7 +164,7 @@ class LMStudioProvider:
 
         except (ValueError, KeyError, TypeError) as error:
             raise ProviderProtocolError(
-                f"Unexpected response from LM Studio model endpoint: {error}"
+                f"Unexpected response from local inference server model endpoint: {error}"
             ) from error
 
     async def chat(
@@ -210,7 +210,7 @@ class LMStudioProvider:
 
         except (ValueError, KeyError, IndexError, TypeError) as error:
             raise ProviderProtocolError(
-                f"Unexpected chat response from LM Studio: {error}"
+                f"Unexpected chat response from local inference server: {error}"
             ) from error
 
     async def _iterate_stream(
@@ -245,7 +245,7 @@ class LMStudioProvider:
                         event = json.loads(data)
                     except json.JSONDecodeError as error:
                         raise ProviderProtocolError(
-                            "LM Studio returned invalid streaming JSON."
+                            "local inference server returned invalid streaming JSON."
                         ) from error
 
                     if isinstance(event, dict) and "error" in event:
@@ -298,8 +298,11 @@ class LMStudioProvider:
         if self._owns_client:
             await self._client.aclose()
 
-    async def __aenter__(self) -> LMStudioProvider:
+    async def __aenter__(self) -> OpenAICompatibleLocalProvider:
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback) -> None:
         await self.aclose()
+
+# Backward-compatible name for existing imports and tests.
+LMStudioProvider = OpenAICompatibleLocalProvider
