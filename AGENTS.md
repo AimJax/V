@@ -11,9 +11,9 @@ V is a persistent, voice-enabled, visually aware, internet-capable AI companion 
 - Dedicated 128 GB SSD for V-owned assets and private data
 
 ## Project boundary
-- Project root: G:\\V
+- Project root: G:\V
 - All V-owned project files, models, data, caches, logs, recordings,
-  temporary files, and generated resources belong under G:\\V.
+  temporary files, and generated resources belong under G:\V.
 - Redirect third-party caches where supported.
 - Never claim that system-wide writes have been eliminated unless verified.
 - Do not modify or relocate the LM Studio installation without explicit approval.
