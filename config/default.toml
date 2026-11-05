@@ -24,6 +24,13 @@ allowed_hosts = []
 [web_retrieval]
 enabled = false
 
+[identity]
+automatic_development = true
+evaluation_interval_turns = 5
+minimum_confidence = 0.78
+max_context_characters = 8000
+max_pending_proposals = 10
+
 [memory]
 enabled = true
 automatic_extraction = true
