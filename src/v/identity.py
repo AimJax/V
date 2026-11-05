@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import tempfile
 import sqlite3
 import uuid
 
@@ -554,6 +556,221 @@ class IdentityStore:
             }
             for row in rows
         ]
+
+    def export_backup(
+        self,
+        destination: Path | str,
+        *,
+        overwrite: bool = False,
+    ) -> Path:
+        """Write an explicit, versioned plaintext identity backup atomically."""
+        target = Path(destination).expanduser().resolve()
+        if target.exists() and not overwrite:
+            raise FileExistsError(f"Identity backup already exists: {target}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with closing(self._connect()) as connection:
+            profile = dict(connection.execute(
+                "SELECT * FROM identity_profile WHERE identifier = 'v'"
+            ).fetchone())
+            traits = [
+                dict(row) for row in connection.execute(
+                    "SELECT * FROM identity_traits ORDER BY created_at, id"
+                )
+            ]
+            proposals = [
+                dict(row) for row in connection.execute(
+                    "SELECT * FROM identity_proposals ORDER BY created_at, id"
+                )
+            ]
+            revisions = [
+                dict(row) for row in connection.execute(
+                    "SELECT * FROM identity_revisions ORDER BY revision"
+                )
+            ]
+        payload = {
+            "format": "v-identity-backup",
+            "format_version": 1,
+            "exported_at": _timestamp(),
+            "profile": profile,
+            "traits": traits,
+            "proposals": proposals,
+            "revisions": revisions,
+        }
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                newline="\\n",
+                dir=target.parent,
+                prefix=f".{target.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                json.dump(payload, temporary, ensure_ascii=False, indent=2)
+                temporary.write("\\n")
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            if target.exists() and not overwrite:
+                raise FileExistsError(f"Identity backup already exists: {target}")
+            os.replace(temporary_path, target)
+            return target
+        finally:
+            if temporary_path is not None and temporary_path.exists():
+                temporary_path.unlink()
+
+    def import_backup(
+        self,
+        source: Path | str,
+        *,
+        replace: bool = False,
+    ) -> IdentitySnapshot:
+        """Restore a validated backup; replacing the current identity is explicit."""
+        if not replace:
+            raise ValueError("Identity restore requires explicit replace=True.")
+        backup_path = Path(source).expanduser().resolve()
+        payload = json.loads(backup_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or payload.get("format") != "v-identity-backup":
+            raise ValueError("File is not a V identity backup.")
+        if payload.get("format_version") != 1:
+            raise ValueError("Unsupported identity backup version.")
+
+        profile = payload.get("profile")
+        traits = payload.get("traits")
+        proposals = payload.get("proposals")
+        revisions = payload.get("revisions")
+        if not isinstance(profile, dict) or profile.get("identifier") != "v":
+            raise ValueError("Identity backup profile is invalid.")
+        if not isinstance(traits, list) or not isinstance(proposals, list) or not isinstance(revisions, list):
+            raise ValueError("Identity backup collections are invalid.")
+        if len(traits) > 1000 or len(proposals) > 5000 or len(revisions) > 10000:
+            raise ValueError("Identity backup exceeds supported record limits.")
+
+        display_name = _validate_text(profile.get("display_name"), "Display name", 80)
+        summary = _validate_text(profile.get("summary"), "Identity summary", 2000)
+        revision = profile.get("revision")
+        if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
+            raise ValueError("Identity backup revision is invalid.")
+        if profile.get("schema_version") != IDENTITY_SCHEMA_VERSION:
+            raise ValueError("Unsupported identity schema version.")
+
+        validated_traits = []
+        seen_ids = set()
+        for item in traits:
+            if not isinstance(item, dict):
+                raise ValueError("Identity backup contains an invalid trait.")
+            trait_id = _validate_text(item.get("id"), "Trait ID", 80)
+            if trait_id in seen_ids:
+                raise ValueError("Identity backup contains duplicate trait IDs.")
+            seen_ids.add(trait_id)
+            category = item.get("category")
+            origin = item.get("origin")
+            status = item.get("status")
+            if category not in TRAIT_CATEGORIES or origin not in TRAIT_ORIGINS or status not in TRAIT_STATUSES:
+                raise ValueError("Identity backup contains unsupported trait metadata.")
+            foundational = item.get("foundational")
+            if not isinstance(foundational, (bool, int)) or foundational not in (0, 1, False, True):
+                raise ValueError("Identity backup contains an invalid foundational flag.")
+            validated_traits.append((
+                trait_id, category,
+                _validate_text(item.get("description"), "Trait description", MAX_DESCRIPTION),
+                origin, status, _validate_confidence(item.get("confidence")),
+                _validate_text(item.get("rationale"), "Rationale", MAX_RATIONALE),
+                _json(_validate_evidence(json.loads(item["evidence_refs_json"]))),
+                int(bool(foundational)),
+                _validate_text(item.get("first_observed_at"), "First observed timestamp", 80),
+                item.get("last_reviewed_at"),
+                _validate_text(item.get("created_at"), "Created timestamp", 80),
+                _validate_text(item.get("updated_at"), "Updated timestamp", 80),
+            ))
+
+        validated_proposals = []
+        for item in proposals:
+            if not isinstance(item, dict):
+                raise ValueError("Identity backup contains an invalid proposal.")
+            if item.get("category") not in TRAIT_CATEGORIES:
+                raise ValueError("Identity backup contains an unsupported proposal category.")
+            if item.get("origin") not in {"user_stated", "model_proposed", "behaviorally_observed"}:
+                raise ValueError("Identity backup contains an unsupported proposal origin.")
+            if item.get("status") not in PROPOSAL_STATUSES:
+                raise ValueError("Identity backup contains an unsupported proposal status.")
+            validated_proposals.append((
+                _validate_text(item.get("id"), "Proposal ID", 80),
+                item["category"],
+                _validate_text(item.get("description"), "Proposal description", MAX_DESCRIPTION),
+                item["origin"],
+                _validate_confidence(item.get("confidence")),
+                _validate_text(item.get("rationale"), "Proposal rationale", MAX_RATIONALE),
+                _json(_validate_evidence(json.loads(item["evidence_refs_json"]))),
+                item["status"],
+                _validate_text(item.get("created_at"), "Proposal timestamp", 80),
+                item.get("reviewed_at"),
+                str(item.get("reviewer_note", ""))[:1000],
+            ))
+
+        validated_revisions = []
+        revision_numbers = set()
+        for item in revisions:
+            if not isinstance(item, dict):
+                raise ValueError("Identity backup contains an invalid revision.")
+            number = item.get("revision")
+            if isinstance(number, bool) or not isinstance(number, int) or number < 1 or number in revision_numbers:
+                raise ValueError("Identity backup contains an invalid revision number.")
+            revision_numbers.add(number)
+            validated_revisions.append((
+                number,
+                _validate_text(item.get("action"), "Revision action", 100),
+                item.get("trait_id"),
+                item.get("proposal_id"),
+                _json(json.loads(item["snapshot_json"])),
+                _validate_text(item.get("created_at"), "Revision timestamp", 80),
+            ))
+
+        now = _timestamp()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute("DELETE FROM identity_traits")
+            connection.execute("DELETE FROM identity_proposals")
+            connection.execute("DELETE FROM identity_revisions")
+            connection.execute(
+                """
+                UPDATE identity_profile
+                SET display_name = ?, summary = ?, schema_version = ?,
+                    revision = ?, updated_at = ?
+                WHERE identifier = 'v'
+                """,
+                (display_name, summary, IDENTITY_SCHEMA_VERSION, revision, now),
+            )
+            connection.executemany(
+                """
+                INSERT INTO identity_traits
+                    (id, category, description, origin, status, confidence,
+                     rationale, evidence_refs_json, foundational,
+                     first_observed_at, last_reviewed_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                validated_traits,
+            )
+            connection.executemany(
+                """
+                INSERT INTO identity_proposals
+                    (id, category, description, origin, confidence, rationale,
+                     evidence_refs_json, status, created_at, reviewed_at, reviewer_note)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                validated_proposals,
+            )
+            connection.executemany(
+                """
+                INSERT INTO identity_revisions
+                    (revision, action, trait_id, proposal_id, snapshot_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                validated_revisions,
+            )
+            connection.commit()
+        return self.get_snapshot()
 
     def render_context(self, *, max_characters: int = MAX_CONTEXT_CHARACTERS) -> str:
         if isinstance(max_characters, bool) or not isinstance(max_characters, int) or max_characters < 100:
