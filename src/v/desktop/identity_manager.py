@@ -73,7 +73,7 @@ class IdentityManagerDialog(QDialog):
         for button in (
             self.propose_button, self.edit_button, self.accept_button,
             self.reject_button, self.defer_button, self.refresh_button,
-            self.close_button,
+            self.export_button, self.import_button, self.close_button,
         ):
             actions.addWidget(button)
         layout.addLayout(actions)
@@ -120,7 +120,7 @@ class IdentityManagerDialog(QDialog):
         self.history_list.clear()
         for revision in revisions:
             item = QListWidgetItem(
-                f"Revision {revision['revision']}  ·  {revision['action']}\\n"
+                f"Revision {revision['revision']}  ·  {revision['action']}\n"
                 f"{revision['created_at']}"
             )
             item.setData(Qt.ItemDataRole.UserRole, ("revision", revision))
@@ -180,11 +180,11 @@ class IdentityManagerDialog(QDialog):
             return
         _kind, revision = current.data(Qt.ItemDataRole.UserRole)
         self.details.setPlainText(
-            f"Revision: {revision['revision']}\\n"
-            f"Action: {revision['action']}\\n"
-            f"Trait ID: {revision['trait_id'] or '—'}\\n"
-            f"Proposal ID: {revision['proposal_id'] or '—'}\\n"
-            f"Details: {revision['details']}\\n"
+            f"Revision: {revision['revision']}\n"
+            f"Action: {revision['action']}\n"
+            f"Trait ID: {revision['trait_id'] or '—'}\n"
+            f"Proposal ID: {revision['proposal_id'] or '—'}\n"
+            f"Details: {revision['details']}\n"
             f"Timestamp: {revision['created_at']}"
         )
         self._set_selection_state()
@@ -255,7 +255,7 @@ class IdentityManagerDialog(QDialog):
             return
         trait = selected[1]
         description, accepted = QInputDialog.getMultiLineText(
-            self, "Edit developed trait", "Description:", trait.description
+            self, "Edit selected identity trait", "Description:", trait.description
         )
         if accepted and description.strip() and description.strip() != trait.description:
             self.trait_update_requested.emit(
