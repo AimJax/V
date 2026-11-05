@@ -474,8 +474,9 @@ class IdentityStore:
         rationale: str | None = None,
         confidence: float | None = None,
         reviewer_note: str = "",
+        allow_foundational: bool = False,
     ) -> IdentityTrait:
-        """Apply an explicit user correction; foundational traits are protected."""
+        """Apply an explicit user correction; seed edits require explicit opt-in."""
         changes: dict[str, Any] = {}
         if description is not None:
             changes["description"] = _validate_text(description, "Trait description", MAX_DESCRIPTION)
@@ -500,11 +501,13 @@ class IdentityStore:
             if row is None:
                 connection.rollback()
                 raise KeyError(f"Identity trait not found: {trait_id}")
-            if row["foundational"]:
+            if row["foundational"] and not allow_foundational:
                 connection.rollback()
                 raise ValueError(
-                    "Foundational traits are immutable in this editor; change the seed guidance deliberately."
+                    "Foundational traits require an explicit user-authorized edit."
                 )
+            if row["foundational"]:
+                changes["origin"] = "user_stated"
             assignments = ", ".join(f"{key} = ?" for key in changes)
             connection.execute(
                 f"UPDATE identity_traits SET {assignments}, updated_at = ?, last_reviewed_at = ? WHERE id = ?",
