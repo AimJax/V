@@ -1,8 +1,30 @@
 # Phase 1 — Persistent Identity
 
-**Status:** Planned  
+**Status:** In progress  
 **Priority:** First implementation phase  
 **Objective:** Give V a durable identity independent of the active system prompt, model, conversation, and application process.
+
+## Implementation status on the active branch
+
+The first implementation slice is now present:
+
+- A separate local SQLite identity database at `data/identity/identity.sqlite3`; it does not reuse or duplicate the memory database.
+- A versioned identity profile, foundational seed traits, developed traits, reviewable proposals, and an append-only revision event history.
+- Initial seed traits derived from checked-in personality and product philosophy guidance, with source references.
+- Bounded identity context injected into both CLI and desktop chat assembly.
+- User-facing desktop Identity Manager for inspecting traits, proposing changes, reviewing proposals, editing traits, and inspecting revision history.
+- Explicit accept/reject/defer workflow. Model/behavior proposals require evidence references; they do not alter identity until reviewed.
+- Explicit user corrections can edit foundational traits; ordinary proposal acceptance can only add developed traits.
+- Versioned JSON export and validated restore. Restore requires an explicit confirmation and replaces identity data; backups are plaintext and remain local unless the user chooses another destination.
+- CLI commands for identity inspection, proposal creation, and review.
+
+Still required before Phase 1 can be marked verified:
+
+- Run the full Windows CI suite successfully on the final commit and resolve any failures.
+- Complete an end-to-end manual desktop check on the target Windows installation.
+- Verify continuity after changing the configured local model and restarting V.
+- Implement evidence-based candidate generation from V's own behavior/experience. The current proposal workflow is available, but proposals are not yet generated automatically.
+- Review migration and backup recovery behavior against real user data before declaring the phase complete.
 
 ## 1. Intended result
 
