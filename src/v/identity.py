@@ -565,6 +565,8 @@ class IdentityStore:
     ) -> Path:
         """Write an explicit, versioned plaintext identity backup atomically."""
         target = Path(destination).expanduser().resolve()
+        if target == self.database_path:
+            raise ValueError("Identity backups cannot overwrite the live identity database.")
         if target.exists() and not overwrite:
             raise FileExistsError(f"Identity backup already exists: {target}")
         target.parent.mkdir(parents=True, exist_ok=True)
