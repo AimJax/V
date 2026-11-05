@@ -24,6 +24,7 @@ from v.desktop.service import DesktopSnapshot, DesktopTurnResult
 from v.desktop.settings_dialog import SettingsDialog
 from v.desktop.memory_manager import MemoryManagerDialog
 from v.desktop.memory_backfill_dialog import MemoryBackfillDialog
+from v.desktop.identity_manager import IdentityManagerDialog
 from v.desktop.thread import DesktopRuntimeThread
 from v.providers.base import ChatMessage
 from v.voice.recorder import PushToTalkRecorder
@@ -204,6 +205,7 @@ class DesktopWindow(QMainWindow):
         self._last_snapshot: DesktopSnapshot | None = None
         self.memory_manager_dialog: MemoryManagerDialog | None = None
         self.memory_backfill_dialog: MemoryBackfillDialog | None = None
+        self.identity_manager_dialog: IdentityManagerDialog | None = None
         self.settings_dialog: SettingsDialog | None = None
         self._voice_recorder: PushToTalkRecorder | None = None
         self._speech_player = None
@@ -247,6 +249,8 @@ class DesktopWindow(QMainWindow):
         self.runtime.voice_turn_completed.connect(self._on_voice_turn_completed)
         self.runtime.operation_failed.connect(self._on_operation_failed)
         self.runtime.session_changed.connect(self._on_session_changed)
+        self.runtime.identity_ready.connect(self._on_identity_ready)
+        self.runtime.identity_failed.connect(self._on_identity_failed)
 
         if auto_start:
             self.runtime.start()
@@ -274,6 +278,10 @@ class DesktopWindow(QMainWindow):
         self.settings_button = QPushButton("Settings")
         self.settings_button.clicked.connect(self._open_settings)
         self.settings_button.setEnabled(False)
+
+        self.identity_button = QPushButton("Identity")
+        self.identity_button.clicked.connect(self._open_identity_manager)
+        self.identity_button.setEnabled(False)
 
         self.memory_manager_button = QPushButton("Memory manager")
         self.memory_manager_button.clicked.connect(self._open_memory_manager)
@@ -303,6 +311,7 @@ class DesktopWindow(QMainWindow):
         layout.addSpacing(10)
         layout.addWidget(self.new_chat_button)
         layout.addWidget(self.settings_button)
+        layout.addWidget(self.identity_button)
         layout.addWidget(self.memory_manager_button)
         layout.addSpacing(14)
         layout.addWidget(recent_label)
@@ -469,6 +478,7 @@ class DesktopWindow(QMainWindow):
 
         self.new_chat_button.setEnabled(True)
         self.memory_manager_button.setEnabled(True)
+        self.identity_button.setEnabled(True)
         self.settings_button.setEnabled(True)
         self.conversation_list.setEnabled(True)
         self._configure_voice(snapshot)
@@ -484,6 +494,7 @@ class DesktopWindow(QMainWindow):
     def _on_startup_failed(self, message: str) -> None:
         self._ready = False
         self.memory_manager_button.setEnabled(False)
+        self.identity_button.setEnabled(False)
         self.settings_button.setEnabled(False)
         self.voice_button.setEnabled(False)
         self.connection_label.setText("NOT CONNECTED")
@@ -531,6 +542,31 @@ class DesktopWindow(QMainWindow):
         self.settings_dialog.raise_()
         self.settings_dialog.activateWindow()
         self.runtime.get_settings()
+
+    def _open_identity_manager(self) -> None:
+        if not self._ready or self._busy:
+            return
+
+        if self.identity_manager_dialog is None:
+            dialog = IdentityManagerDialog(self)
+            dialog.refresh_requested.connect(self.runtime.get_identity)
+            dialog.review_requested.connect(self.runtime.review_identity_proposal)
+            dialog.trait_update_requested.connect(self.runtime.update_identity_trait)
+            dialog.proposal_requested.connect(self.runtime.propose_identity_trait)
+            self.runtime.identity_ready.connect(dialog.set_data)
+            self.runtime.identity_failed.connect(dialog.show_error)
+            self.identity_manager_dialog = dialog
+
+        self.identity_manager_dialog.show()
+        self.identity_manager_dialog.raise_()
+        self.identity_manager_dialog.activateWindow()
+        self.runtime.get_identity()
+
+    def _on_identity_ready(self, _snapshot, _proposals) -> None:
+        self.statusBar().showMessage("V's persistent identity is up to date.")
+
+    def _on_identity_failed(self, message: str) -> None:
+        self.statusBar().showMessage(f"Identity operation failed: {message}")
 
     def _open_memory_manager(self) -> None:
         if not self._ready or self._busy:
