@@ -455,7 +455,7 @@ class DesktopRuntimeThread(QThread):
         self._post("select", conversation_id)
 
 
-    def export_identity(self, destination: str, *, overwrite: bool = False) -> None:
+    def export_identity(self, destination: str, overwrite: bool = False) -> None:
         self._post("identity_export", (destination, overwrite))
 
     def import_identity(self, source: str) -> None:
