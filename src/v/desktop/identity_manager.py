@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog,
+    QFileDialog,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -26,6 +27,8 @@ class IdentityManagerDialog(QDialog):
     review_requested = Signal(str, str)
     trait_update_requested = Signal(str, dict)
     proposal_requested = Signal(str, str)
+    export_requested = Signal(str)
+    import_requested = Signal(str)
 
     CATEGORIES = [
         "temperament", "communication", "value", "boundary",
@@ -63,6 +66,8 @@ class IdentityManagerDialog(QDialog):
         self.reject_button = QPushButton("Reject")
         self.defer_button = QPushButton("Defer")
         self.refresh_button = QPushButton("Refresh")
+        self.export_button = QPushButton("Export backup")
+        self.import_button = QPushButton("Restore backup")
         self.close_button = QPushButton("Close")
 
         for button in (
@@ -82,6 +87,8 @@ class IdentityManagerDialog(QDialog):
         self.reject_button.clicked.connect(lambda: self._review("reject"))
         self.defer_button.clicked.connect(lambda: self._review("defer"))
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
+        self.export_button.clicked.connect(self._export_backup)
+        self.import_button.clicked.connect(self._import_backup)
         self.close_button.clicked.connect(self.close)
         self._set_selection_state()
 
@@ -190,6 +197,38 @@ class IdentityManagerDialog(QDialog):
         self.reject_button.setEnabled(is_proposal)
         self.defer_button.setEnabled(is_proposal)
         self.edit_button.setEnabled(is_editable_trait)
+
+    def _export_backup(self) -> None:
+        path, _selected = QFileDialog.getSaveFileName(
+            self,
+            "Export V identity backup",
+            "v-identity-backup.json",
+            "JSON files (*.json)",
+        )
+        if path:
+            self.export_requested.emit(path)
+
+    def _import_backup(self) -> None:
+        path, _selected = QFileDialog.getOpenFileName(
+            self,
+            "Restore V identity backup",
+            "",
+            "JSON files (*.json)",
+        )
+        if path:
+            answer = QMessageBox.warning(
+                self,
+                "Replace current identity?",
+                "Restoring this backup replaces V's current identity, proposals, and revision history. Continue?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if answer == QMessageBox.StandardButton.Yes:
+                self.import_requested.emit(path)
+
+    def on_backup_completed(self, message: str) -> None:
+        QMessageBox.information(self, "Identity backup", message)
+        self.refresh_requested.emit()
 
     def _review(self, decision: str) -> None:
         selected = self._selected()
