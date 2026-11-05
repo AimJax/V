@@ -515,7 +515,8 @@ async def run_chat() -> int:
         print("\nCommands: /help, /new, /sessions, /resume N,")
         print("          /memory, /memory search TEXT, /memory status,")
         print("          /memory correct ID FIELD VALUE, /memory delete ID,")
-        print("          /memory retry, /exit")
+        print("          /memory retry, /identity, /identity proposals,")
+        print("          /identity propose CATEGORY DESCRIPTION, /identity accept ID, /exit")
         print("\nV is ready.\n")
 
         # Resume pending extraction jobs after application restart.
@@ -563,6 +564,72 @@ async def run_chat() -> int:
 
             if command == "/sessions":
                 _print_sessions(conversation_store)
+                continue
+
+
+            if command == "/identity" or command.startswith("/identity "):
+                parts = user_input.split(maxsplit=3)
+                subcommand = parts[1].casefold() if len(parts) > 1 else "show"
+
+                if subcommand in {"show", "status"}:
+                    snapshot = identity_store.get_snapshot()
+                    print(f"\\n{snapshot.display_name} — persistent identity (revision {snapshot.revision})")
+                    print(snapshot.summary)
+                    for trait in snapshot.traits:
+                        kind = "foundational" if trait.foundational else "developed"
+                        print(f"  [{kind}; {trait.status}; {trait.category}] {trait.description}")
+                    print()
+                    continue
+
+                if subcommand == "proposals":
+                    proposals = identity_store.list_proposals(status="pending")
+                    if not proposals:
+                        print("\\nNo pending identity proposals.\\n")
+                    else:
+                        for proposal in proposals:
+                            print(f"\\nID: {proposal.id}")
+                            print(f"[{proposal.category}; {proposal.origin}; confidence {proposal.confidence:.2f}] {proposal.description}")
+                            print(f"Rationale: {proposal.rationale}")
+                            print(f"Evidence: {', '.join(proposal.evidence_refs) or 'User-stated'}")
+                        print()
+                    continue
+
+                if subcommand == "propose":
+                    if len(parts) < 4:
+                        print("Usage: /identity propose CATEGORY DESCRIPTION\\n")
+                        continue
+                    try:
+                        proposal = identity_store.create_proposal(
+                            category=parts[2].casefold(),
+                            description=parts[3],
+                            rationale="Explicitly proposed by the user in the local CLI.",
+                            evidence_refs=[],
+                            confidence=1.0,
+                            origin="user_stated",
+                        )
+                    except (TypeError, ValueError) as error:
+                        print(f"Identity proposal failed: {error}\\n")
+                    else:
+                        print(f"Identity proposal queued for review: {proposal.id}\\n")
+                    continue
+
+                if subcommand in {"accept", "reject", "defer"}:
+                    if len(parts) != 3:
+                        print(f"Usage: /identity {subcommand} PROPOSAL_ID\\n")
+                        continue
+                    try:
+                        proposal = identity_store.review_proposal(
+                            parts[2].strip(),
+                            decision="accept" if subcommand == "accept" else subcommand,
+                        )
+                    except (KeyError, ValueError) as error:
+                        print(f"Identity review failed: {error}\\n")
+                    else:
+                        identity_context = identity_store.render_context()
+                        print(f"Identity proposal {proposal.status}. Current revision: {identity_store.get_snapshot().revision}.\\n")
+                    continue
+
+                print("Unknown identity command. Use /identity or /help.\\n")
                 continue
 
             if command == "/memory" or command == "/memory list":
