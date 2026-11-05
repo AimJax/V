@@ -453,6 +453,43 @@ class ConversationStore:
             for row in rows
         ]
 
+    def list_recent_message_records(self, limit: int = 40) -> list[StoredMessage]:
+        """Return bounded recent messages across conversations with stable IDs."""
+        if not 1 <= limit <= 500:
+            raise ValueError("Recent message limit must be between 1 and 500.")
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT id, conversation_id, role, content, created_at
+                FROM messages
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        rows.reverse()
+        return [
+            StoredMessage(
+                id=row["id"],
+                conversation_id=row["conversation_id"],
+                role=row["role"],
+                content=row["content"],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+
+    def count_messages_by_role(self, role: str) -> int:
+        """Count stored messages for one supported conversation role."""
+        if role not in {"user", "assistant"}:
+            raise ValueError("Unsupported message role.")
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM messages WHERE role = ?",
+                (role,),
+            ).fetchone()
+        return int(row[0])
+
     def count_messages(self, conversation_id: str) -> int:
         with closing(self._connect()) as connection:
             row = connection.execute(
