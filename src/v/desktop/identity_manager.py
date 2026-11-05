@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog,
@@ -27,7 +29,7 @@ class IdentityManagerDialog(QDialog):
     review_requested = Signal(str, str)
     trait_update_requested = Signal(str, dict)
     proposal_requested = Signal(str, str)
-    export_requested = Signal(str)
+    export_requested = Signal(str, bool)
     import_requested = Signal(str)
 
     CATEGORIES = [
@@ -206,7 +208,27 @@ class IdentityManagerDialog(QDialog):
             "JSON files (*.json)",
         )
         if path:
-            self.export_requested.emit(path)
+            answer = QMessageBox.warning(
+                self,
+                "Export plaintext identity backup?",
+                "This JSON backup is unencrypted and contains V's identity, proposals, and revision history. Anyone with access to the file can read it. Continue?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            overwrite = Path(path).exists()
+            if overwrite:
+                answer = QMessageBox.warning(
+                    self,
+                    "Replace existing backup?",
+                    "The selected backup file already exists. Replace it?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                    QMessageBox.StandardButton.Cancel,
+                )
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
+            self.export_requested.emit(path, overwrite)
 
     def _import_backup(self) -> None:
         path, _selected = QFileDialog.getOpenFileName(
@@ -219,7 +241,7 @@ class IdentityManagerDialog(QDialog):
             answer = QMessageBox.warning(
                 self,
                 "Replace current identity?",
-                "Restoring this backup replaces V's current identity, proposals, and revision history. Continue?",
+                "This backup is plaintext. Restoring it replaces V's current identity, proposals, and revision history. Continue?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
                 QMessageBox.StandardButton.Cancel,
             )
