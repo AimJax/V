@@ -165,6 +165,21 @@ def build_memory_retrieval_query(
     )
 
 
+def build_system_context(
+    personality: str,
+    *,
+    identity_context: str | None = None,
+    memory_context: str | None = None,
+) -> str:
+    """Compose bounded domain contexts without mixing their persistence."""
+    sections = [personality.strip()]
+    if identity_context:
+        sections.append(identity_context.strip())
+    if memory_context:
+        sections.append(memory_context.strip())
+    return "\n\n".join(section for section in sections if section)
+
+
 def _build_messages(
     personality: str,
     store: ConversationStore,
@@ -175,14 +190,11 @@ def _build_messages(
     identity_context: str | None = None,
 ) -> list[ChatMessage]:
     """Build one system message plus the selected conversation history."""
-    system_content = personality
-
-    if identity_context:
-        system_content += "\n\n" + identity_context
-
-    if memory_context:
-        system_content += "\n\n" + memory_context
-
+    system_content = build_system_context(
+        personality,
+        identity_context=identity_context,
+        memory_context=memory_context,
+    )
     return [
         ChatMessage(role="system", content=system_content),
         *store.get_recent_messages(conversation.id, history_limit),
