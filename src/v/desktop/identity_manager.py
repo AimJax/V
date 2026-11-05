@@ -99,7 +99,8 @@ class IdentityManagerDialog(QDialog):
             f"{snapshot.display_name}  ·  revision {snapshot.revision}\n"
             f"{snapshot.summary}\n"
             "Foundational traits are seeded from checked-in product guidance. "
-            "Developed traits require review and retain evidence references."
+            "Developed traits require review and retain evidence references. "
+            "Local behavior reviews may suggest candidates; nothing is applied automatically."
         )
         self.traits_list.clear()
         for trait in snapshot.traits:
