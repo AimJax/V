@@ -56,7 +56,7 @@ class IdentityManagerDialog(QDialog):
 
         actions = QHBoxLayout()
         self.propose_button = QPushButton("Propose trait")
-        self.edit_button = QPushButton("Edit developed trait")
+        self.edit_button = QPushButton("Edit selected trait")
         self.accept_button = QPushButton("Accept")
         self.reject_button = QPushButton("Reject")
         self.defer_button = QPushButton("Defer")
@@ -155,9 +155,7 @@ class IdentityManagerDialog(QDialog):
     def _set_selection_state(self) -> None:
         selected = self._selected()
         is_proposal = bool(selected and selected[0] == "proposal")
-        is_editable_trait = bool(
-            selected and selected[0] == "trait" and not selected[1].foundational
-        )
+        is_editable_trait = bool(selected and selected[0] == "trait")
         self.accept_button.setEnabled(is_proposal)
         self.reject_button.setEnabled(is_proposal)
         self.defer_button.setEnabled(is_proposal)
@@ -184,7 +182,7 @@ class IdentityManagerDialog(QDialog):
 
     def _edit_trait(self) -> None:
         selected = self._selected()
-        if not selected or selected[0] != "trait" or selected[1].foundational:
+        if not selected or selected[0] != "trait":
             return
         trait = selected[1]
         description, accepted = QInputDialog.getMultiLineText(
