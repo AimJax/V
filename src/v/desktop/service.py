@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from v.chat import _configured_data_path, load_personality
+from v.chat import _configured_data_path, build_system_context, load_personality
 from v.core.config import load_settings, project_root
 from v.core.network import NetworkPolicy
 from v.conversations.store import Conversation, ConversationStore
@@ -371,11 +371,11 @@ class DesktopService:
                 # Memory failures must never prevent the user from chatting.
                 memory_context = None
 
-        system_content = self.personality
-        if self.identity_context:
-            system_content += '\n\n' + self.identity_context
-        if memory_context:
-            system_content += "\n\n" + memory_context
+        system_content = build_system_context(
+            self.personality,
+            identity_context=self.identity_context,
+            memory_context=memory_context,
+        )
 
         messages = [
             ChatMessage(role="system", content=system_content),
