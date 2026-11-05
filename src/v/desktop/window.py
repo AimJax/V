@@ -553,6 +553,9 @@ class DesktopWindow(QMainWindow):
             dialog.review_requested.connect(self.runtime.review_identity_proposal)
             dialog.trait_update_requested.connect(self.runtime.update_identity_trait)
             dialog.proposal_requested.connect(self.runtime.propose_identity_trait)
+            dialog.export_requested.connect(self.runtime.export_identity)
+            dialog.import_requested.connect(self.runtime.import_identity)
+            self.runtime.identity_backup_completed.connect(dialog.on_backup_completed)
             self.runtime.identity_ready.connect(dialog.set_data)
             self.runtime.identity_failed.connect(dialog.show_error)
             self.identity_manager_dialog = dialog
