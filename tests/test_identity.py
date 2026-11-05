@@ -183,6 +183,61 @@ class IdentityStoreTests(unittest.TestCase):
         self.assertIn("Persistent identity context", context)
         self.assertIn("honesty", context.casefold())
 
+    def test_identity_backup_round_trip_preserves_traits_proposals_and_history(self):
+        with temporary_directory() as temp:
+            root = Path(temp)
+            source = IdentityStore(root / "source.sqlite3")
+            proposal = source.create_proposal(
+                category="interest",
+                description="Enjoys astronomy.",
+                rationale="Explicit user proposal.",
+                evidence_refs=[],
+                confidence=1.0,
+                origin="user_stated",
+            )
+            source.review_proposal(proposal.id, decision="accept")
+            backup = source.export_backup(root / "identity.json")
+
+            restored = IdentityStore(root / "restored.sqlite3")
+            snapshot = restored.import_backup(backup, replace=True)
+
+        self.assertEqual(snapshot.revision, 2)
+        self.assertTrue(any("astronomy" in trait.description for trait in snapshot.traits))
+        self.assertEqual(len(restored.list_revisions()), 2)
+        self.assertEqual(restored.list_proposals(status="all")[0].status, "accepted")
+
+    def test_identity_restore_requires_explicit_replacement(self):
+        with temporary_directory() as temp:
+            root = Path(temp)
+            store = IdentityStore(root / "identity.sqlite3")
+            backup = store.export_backup(root / "identity.json")
+
+            with self.assertRaisesRegex(ValueError, "replace=True"):
+                store.import_backup(backup)
+
+    def test_invalid_identity_backup_does_not_replace_existing_state(self):
+        import json
+
+        with temporary_directory() as temp:
+            root = Path(temp)
+            store = IdentityStore(root / "identity.sqlite3")
+            before = store.get_snapshot()
+            invalid = root / "invalid.json"
+            invalid.write_text(
+                json.dumps({"format": "not-an-identity-backup"}),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ValueError):
+                store.import_backup(invalid, replace=True)
+            after = store.get_snapshot()
+
+        self.assertEqual(after.revision, before.revision)
+        self.assertEqual(
+            [trait.description for trait in after.traits],
+            [trait.description for trait in before.traits],
+        )
+
     def test_validation_rejects_invalid_categories_and_confidence(self):
         with temporary_directory() as temp:
             store = IdentityStore(Path(temp) / "identity.sqlite3")
