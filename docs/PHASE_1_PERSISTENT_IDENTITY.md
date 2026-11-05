@@ -31,6 +31,28 @@ Still required before Phase 1 can be marked verified:
 - Verify the automatic review cadence and proposal quality with real local-model conversations. The automated tests validate evidence gates and lifecycle behavior, but cannot establish the quality of the selected model's judgments.
 - Review migration and backup recovery behavior against real user data before declaring the phase complete.
 
+## Target-machine sign-off checklist
+
+The automated Windows workflow validates the code on a clean runner. Complete these checks on the actual `G:\\V` installation before changing the phase status to **verified**:
+
+1. Update the existing `network-policy-and-offline-mode` checkout with a fast-forward pull; do not reset or replace the working directory.
+2. Run the project test suite from the existing virtual environment:
+   ```powershell
+   & "G:/V/.venv/Scripts/python.exe" -m pytest -q
+   ```
+3. Launch the desktop app:
+   ```powershell
+   & "G:/V/.venv/Scripts/python.exe" -m v desktop
+   ```
+4. Open **Identity** in the sidebar. Confirm that the foundational traits, revision number, proposed-changes tab, revision-history tab, and backup controls render correctly.
+5. Complete at least five assistant turns across saved conversations. Allow the local background review to finish, then reopen or refresh Identity and inspect any proposed changes. Confirm that candidates cite at least two distinct assistant-message IDs and that none are applied without explicit acceptance.
+6. Accept one disposable test proposal, restart V, and confirm that the developed trait and revision persist. Reject or defer another proposal and confirm it does not become a trait.
+7. If another local model is already installed, switch the configured model and restart V. Confirm that the identity revision and traits remain unchanged.
+8. Export a plaintext identity backup to a private local location. Restore it only after confirming that the selected backup is the intended one; verify that traits, proposals, and revision history are restored.
+9. Confirm that `data/identity/identity.sqlite3` and exported backups remain outside Git.
+
+Automatic development can be disabled without removing identity persistence by setting `[identity].automatic_development = false` in local configuration. The default review interval is every five assistant responses across saved conversations; candidates remain pending until explicitly reviewed.
+
 ## 1. Intended result
 
 V should have a stable identity loaded at startup, supplied selectively to the conversation runtime, inspectable, and safely evolvable. Identity is not a transcript summary or a personality prompt. It is structured application state with explicit semantics, versioning, provenance, and controlled update rules.
