@@ -220,6 +220,22 @@ class IdentityStore:
             )
             connection.commit()
             self._seed_if_empty(connection)
+            profile = connection.execute(
+                "SELECT schema_version FROM identity_profile WHERE identifier = 'v'"
+            ).fetchone()
+            if profile is None:
+                raise RuntimeError("V's identity profile could not be initialized.")
+            stored_version = int(profile["schema_version"])
+            if stored_version > IDENTITY_SCHEMA_VERSION:
+                raise RuntimeError(
+                    f"Identity schema {stored_version} is newer than supported "
+                    f"schema {IDENTITY_SCHEMA_VERSION}."
+                )
+            if stored_version < IDENTITY_SCHEMA_VERSION:
+                raise RuntimeError(
+                    f"Identity schema {stored_version} requires a migration to "
+                    f"{IDENTITY_SCHEMA_VERSION}; refusing to modify the database."
+                )
 
     def _seed_if_empty(self, connection: sqlite3.Connection) -> None:
         existing = connection.execute(
