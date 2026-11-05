@@ -13,11 +13,14 @@ class IdentityStoreTests(unittest.TestCase):
         with temporary_directory() as temp:
             path = Path(temp) / "identity.sqlite3"
             IdentityStore(path)
-            with sqlite3.connect(path) as connection:
+            connection = sqlite3.connect(path)
+            try:
                 connection.execute(
                     "UPDATE identity_profile SET schema_version = 999 WHERE identifier = 'v'"
                 )
                 connection.commit()
+            finally:
+                connection.close()
 
             with self.assertRaisesRegex(RuntimeError, "newer than supported"):
                 IdentityStore(path)
