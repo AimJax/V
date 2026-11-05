@@ -535,6 +535,26 @@ class IdentityStore:
             connection.commit()
         return self._trait(updated)
 
+    def list_revisions(self, limit: int = 100) -> list[dict[str, Any]]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+            raise ValueError("Revision limit must be between 1 and 500.")
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT * FROM identity_revisions ORDER BY revision DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [
+            {
+                "revision": int(row["revision"]),
+                "action": row["action"],
+                "trait_id": row["trait_id"],
+                "proposal_id": row["proposal_id"],
+                "details": json.loads(row["snapshot_json"]),
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+
     def render_context(self, *, max_characters: int = MAX_CONTEXT_CHARACTERS) -> str:
         if isinstance(max_characters, bool) or not isinstance(max_characters, int) or max_characters < 100:
             raise ValueError("Identity context limit must be at least 100 characters.")
