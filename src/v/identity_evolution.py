@@ -117,7 +117,7 @@ class IdentityEvolution:
 
         payload_records: list[dict[str, Any]] = []
         remaining = self.max_context_characters
-        for record in records:
+        for record in reversed(records):
             text = record.content.strip()
             if not text:
                 continue
@@ -132,6 +132,7 @@ class IdentityEvolution:
                 continue
             payload_records.append(entry)
             remaining -= encoded_size
+        payload_records.reverse()
         allowed_assistant = {
             item["message_id"]: item["content"]
             for item in payload_records
@@ -187,8 +188,11 @@ class IdentityEvolution:
             category = candidate.get("category")
             description = candidate.get("description")
             rationale = candidate.get("rationale")
+            raw_confidence = candidate.get("confidence")
+            if isinstance(raw_confidence, bool):
+                continue
             try:
-                confidence = float(candidate.get("confidence"))
+                confidence = float(raw_confidence)
             except (TypeError, ValueError):
                 continue
             if category not in TRAIT_CATEGORIES or category == "boundary":
