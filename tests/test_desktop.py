@@ -1,10 +1,11 @@
+import gc
 import os
 import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QLabel
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 
 from v.conversations.store import Conversation
 from v.desktop.service import DesktopSnapshot
@@ -17,11 +18,22 @@ class DesktopWindowTests(unittest.TestCase):
     def setUpClass(cls):
         cls.application = QApplication.instance() or QApplication([])
 
+    @classmethod
+    def tearDownClass(cls):
+        cls.application.processEvents()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        cls.application.quit()
+        cls.application = None
+        gc.collect()
+
     def setUp(self):
         self.window = DesktopWindow(auto_start=False)
 
     def tearDown(self):
         self.window.close()
+        self.window.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        self.application.processEvents()
 
     def _snapshot(self):
         conversation = Conversation(
