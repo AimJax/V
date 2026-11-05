@@ -132,6 +132,21 @@ class IdentityStoreTests(unittest.TestCase):
                     description="A model rewrote the core identity.",
                 )
 
+    def test_foundational_trait_can_only_be_changed_with_explicit_user_authorization(self):
+        with temporary_directory() as temp:
+            store = IdentityStore(Path(temp) / "identity.sqlite3")
+            trait = store.get_snapshot().traits[0]
+            updated = store.update_trait(
+                trait.id,
+                description="User-approved correction to a seed trait.",
+                allow_foundational=True,
+                reviewer_note="Explicitly corrected by the user.",
+            )
+
+        self.assertTrue(updated.foundational)
+        self.assertEqual(updated.origin, "user_stated")
+        self.assertEqual(updated.description, "User-approved correction to a seed trait.")
+
     def test_developed_trait_can_be_corrected_with_revision_history(self):
         with temporary_directory() as temp:
             store = IdentityStore(Path(temp) / "identity.sqlite3")
