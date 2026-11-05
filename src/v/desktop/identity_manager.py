@@ -129,7 +129,10 @@ class IdentityManagerDialog(QDialog):
         self._set_selection_state()
 
     def _selected(self):
-        listing = self.proposals_list if self.tabs.currentWidget() is self.proposals_list else self.traits_list
+        current_tab = self.tabs.currentWidget()
+        if current_tab is self.history_list:
+            return None
+        listing = self.proposals_list if current_tab is self.proposals_list else self.traits_list
         item = listing.currentItem()
         return item.data(Qt.ItemDataRole.UserRole) if item else None
 
