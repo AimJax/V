@@ -7,6 +7,21 @@ from v.identity import IdentityStore
 
 
 class IdentityStoreTests(unittest.TestCase):
+    def test_newer_identity_schema_is_rejected_without_mutation(self):
+        import sqlite3
+
+        with temporary_directory() as temp:
+            path = Path(temp) / "identity.sqlite3"
+            IdentityStore(path)
+            with sqlite3.connect(path) as connection:
+                connection.execute(
+                    "UPDATE identity_profile SET schema_version = 999 WHERE identifier = 'v'"
+                )
+                connection.commit()
+
+            with self.assertRaisesRegex(RuntimeError, "newer than supported"):
+                IdentityStore(path)
+
     def test_seeded_identity_persists_across_restarts(self):
         with temporary_directory() as temp:
             path = Path(temp) / "identity.sqlite3"
