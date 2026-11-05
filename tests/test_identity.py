@@ -200,11 +200,13 @@ class IdentityStoreTests(unittest.TestCase):
 
             restored = IdentityStore(root / "restored.sqlite3")
             snapshot = restored.import_backup(backup, replace=True)
+            history_count = len(restored.list_revisions())
+            proposal_status = restored.list_proposals(status="all")[0].status
 
         self.assertEqual(snapshot.revision, 2)
         self.assertTrue(any("astronomy" in trait.description for trait in snapshot.traits))
-        self.assertEqual(len(restored.list_revisions()), 2)
-        self.assertEqual(restored.list_proposals(status="all")[0].status, "accepted")
+        self.assertEqual(history_count, 2)
+        self.assertEqual(proposal_status, "accepted")
 
     def test_identity_restore_requires_explicit_replacement(self):
         with temporary_directory() as temp:
