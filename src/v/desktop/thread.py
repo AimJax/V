@@ -196,6 +196,7 @@ class DesktopRuntimeThread(QThread):
                     self.identity_ready.emit(
                         service.identity_snapshot(),
                         service.identity_proposals(),
+                        service.identity_revisions(),
                     )
                 except Exception as error:
                     self.identity_failed.emit(str(error))
@@ -209,6 +210,7 @@ class DesktopRuntimeThread(QThread):
                     self.identity_ready.emit(
                         service.identity_snapshot(),
                         service.identity_proposals(),
+                        service.identity_revisions(),
                     )
                 except Exception as error:
                     self.identity_failed.emit(str(error))
@@ -221,6 +223,7 @@ class DesktopRuntimeThread(QThread):
                     self.identity_ready.emit(
                         service.identity_snapshot(),
                         service.identity_proposals(),
+                        service.identity_revisions(),
                     )
                 except Exception as error:
                     self.identity_failed.emit(str(error))
