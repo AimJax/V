@@ -703,7 +703,11 @@ class DesktopService:
     def update_identity_trait(self, trait_id: str, changes: dict):
         if self.identity_store is None:
             raise RuntimeError("Identity service is not available.")
-        trait = self.identity_store.update_trait(trait_id, **changes)
+        trait = self.identity_store.update_trait(
+            trait_id,
+            allow_foundational=True,
+            **changes,
+        )
         self.identity_context = self.identity_store.render_context()
         return trait
 
