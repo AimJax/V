@@ -34,6 +34,7 @@ from v.providers.lm_studio import LMStudioProvider
 from v.voice.service import LocalVoiceService
 from v.voice.streaming import SpeechTextSegmenter, clean_speech_text
 from v.identity import IdentityStore
+from v.identity_evolution import IdentityEvolution
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +108,8 @@ class DesktopService:
         self.memory_store: MemoryStore | None = None
         self.identity_store: IdentityStore | None = None
         self.identity_context = ''
+        self.identity_evolution: IdentityEvolution | None = None
+        self._identity_evolution_task: asyncio.Task | None = None
         self.extraction_queue: ExtractionQueue | None = None
         self.memory_worker: MemoryWorker | None = None
         self.memory_backfill_store: MemoryBackfillStore | None = None
@@ -222,6 +225,26 @@ class DesktopService:
                         memory_settings.get("max_jobs_per_idle_cycle", 3)
                     ),
                 )
+
+        identity_settings = self.settings.get("identity", {})
+        if identity_settings.get("automatic_development", True):
+            self.identity_evolution = IdentityEvolution(
+                self.provider,
+                self.conversation_store,
+                self.identity_store,
+                evaluation_interval_turns=int(
+                    identity_settings.get("evaluation_interval_turns", 5)
+                ),
+                minimum_confidence=float(
+                    identity_settings.get("minimum_confidence", 0.78)
+                ),
+                max_context_characters=int(
+                    identity_settings.get("max_context_characters", 8000)
+                ),
+                max_pending_proposals=int(
+                    identity_settings.get("max_pending_proposals", 10)
+                ),
+            )
 
         if memory_retrieval and self.memory_store is not None:
             embedding_model = str(
@@ -344,6 +367,14 @@ class DesktopService:
         )
         speech_segmenter = SpeechTextSegmenter() if speech_enabled else None
 
+        if self._identity_evolution_task is not None and not self._identity_evolution_task.done():
+            self._identity_evolution_task.cancel()
+            await asyncio.gather(
+                self._identity_evolution_task,
+                return_exceptions=True,
+            )
+        self._identity_evolution_task = None
+
         if self.memory_worker is not None:
             await self.memory_worker.cancel()
 
@@ -427,7 +458,11 @@ class DesktopService:
                 source_message_id,
             )
 
-        if self.memory_worker is not None:
+        if self.identity_evolution is not None:
+            self._identity_evolution_task = asyncio.create_task(
+                self._run_identity_evolution()
+            )
+        elif self.memory_worker is not None:
             await self.memory_worker.schedule()
 
         latest = self.conversation_store.get_conversation(self.conversation.id)
@@ -438,6 +473,25 @@ class DesktopService:
             response=response,
             snapshot=self.snapshot(),
         )
+
+    async def _run_identity_evolution(self) -> None:
+        """Review behavior off the chat path, then resume queued memory work."""
+        try:
+            if self.identity_evolution is not None:
+                await self.identity_evolution.evaluate_if_due()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # Identity reflection is optional and must never interrupt conversation.
+            pass
+        finally:
+            if (
+                self.memory_worker is not None
+                and self.extraction_queue is not None
+                and self.extraction_queue.count("pending")
+            ):
+                await self.memory_worker.schedule()
+            self._identity_evolution_task = None
 
     async def _run_speech_worker(self) -> None:
         """Warm Kokoro once, then synthesize queued segments outside chat generation."""
@@ -861,6 +915,14 @@ class DesktopService:
 
     async def close(self) -> None:
         """Stop background workers and close local clients."""
+        if self._identity_evolution_task is not None:
+            self._identity_evolution_task.cancel()
+            await asyncio.gather(
+                self._identity_evolution_task,
+                return_exceptions=True,
+            )
+            self._identity_evolution_task = None
+
         if self._speech_worker_task is not None:
             self.interrupt_speech()
             if self._speech_queue is not None:
