@@ -685,6 +685,11 @@ class DesktopService:
             raise RuntimeError("Identity service is not available.")
         return self.identity_store.get_snapshot()
 
+    def identity_revisions(self):
+        if self.identity_store is None:
+            raise RuntimeError("Identity service is not available.")
+        return self.identity_store.list_revisions()
+
     def identity_proposals(self, status: str = "pending"):
         if self.identity_store is None:
             raise RuntimeError("Identity service is not available.")
