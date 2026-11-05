@@ -80,7 +80,7 @@ class IdentityEvolutionTests(unittest.IsolatedAsyncioTestCase):
         self.add_turn("Question one", "First assistant response.")
         self.add_turn("Question two", "Second assistant response.")
         provider = self.make_provider()
-        payload = json.loads(provider.response)
+        payload = json.loads(json.dumps(provider.response))
         payload["candidates"][0]["evidence"][0]["quote"] = "invented text"
         provider.response = payload
         proposals = await self.evaluator(provider).evaluate_recent_behavior()
