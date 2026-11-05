@@ -668,6 +668,18 @@ class DesktopService:
         return memories
 
 
+    def create_identity_proposal(self, category: str, description: str):
+        if self.identity_store is None:
+            raise RuntimeError("Identity service is not available.")
+        return self.identity_store.create_proposal(
+            category=category,
+            description=description,
+            rationale="Explicitly proposed by the user in Identity Manager.",
+            evidence_refs=[],
+            confidence=1.0,
+            origin="user_stated",
+        )
+
     def identity_snapshot(self):
         if self.identity_store is None:
             raise RuntimeError("Identity service is not available.")
