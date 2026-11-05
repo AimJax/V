@@ -17,13 +17,18 @@ The first implementation slice is now present:
 - Explicit user corrections can edit foundational traits; ordinary proposal acceptance can only add developed traits.
 - Versioned JSON export and validated restore. Restore requires an explicit confirmation and replaces identity data; backups are plaintext and remain local unless the user chooses another destination.
 - CLI commands for identity inspection, proposal creation, and review.
+- Conservative local identity-development review, run every configured number of assistant turns using the configured local model. It analyzes bounded recent conversation records, requires exact excerpts from at least two distinct V assistant messages, rejects unsupported or low-confidence candidates, deduplicates existing traits/proposals, and queues suggestions for explicit user review. It never commits a model-generated identity change automatically.
+- Identity review runs as cancellable background work in the desktop runtime and yields to the next user turn; the CLI performs the review after the configured interval.
 
 Still required before Phase 1 can be marked verified:
 
 - Run the full Windows CI suite successfully on the final commit and resolve any failures.
 - Complete an end-to-end manual desktop check on the target Windows installation.
 - Verify continuity after changing the configured local model and restarting V.
-- Implement evidence-based candidate generation from V's own behavior/experience. The current proposal workflow is available, but proposals are not yet generated automatically.
+- Run the full Windows CI suite successfully against the final implementation commit.
+- Complete an end-to-end manual desktop check on the target Windows installation.
+- Verify continuity after changing the configured local model and restarting V.
+- Verify the automatic review cadence and proposal quality with real local-model conversations. The automated tests validate evidence gates and lifecycle behavior, but cannot establish the quality of the selected model's judgments.
 - Review migration and backup recovery behavior against real user data before declaring the phase complete.
 
 ## 1. Intended result
