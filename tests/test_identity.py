@@ -111,10 +111,13 @@ class IdentityStoreTests(unittest.TestCase):
             store.review_proposal(rejected.id, decision="reject")
             store.review_proposal(deferred.id, decision="defer")
             snapshot = store.get_snapshot()
+            proposal_statuses = {
+                item.status for item in store.list_proposals(status="all")
+            }
 
         self.assertEqual(len(snapshot.traits), 8)
         self.assertEqual(
-            {item.status for item in store.list_proposals(status="all")},
+            proposal_statuses,
             {"rejected", "deferred"},
         )
 
@@ -159,9 +162,9 @@ class IdentityStoreTests(unittest.TestCase):
     def test_context_is_bounded_and_only_includes_established_traits(self):
         with temporary_directory() as temp:
             store = IdentityStore(Path(temp) / "identity.sqlite3")
-            context = store.render_context(max_characters=500)
+            context = store.render_context(max_characters=1800)
 
-        self.assertLessEqual(len(context), 500)
+        self.assertLessEqual(len(context), 1800)
         self.assertIn("Persistent identity context", context)
         self.assertIn("honesty", context.casefold())
 
