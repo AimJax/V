@@ -619,7 +619,7 @@ class IdentityStore:
             with tempfile.NamedTemporaryFile(
                 mode="w",
                 encoding="utf-8",
-                newline="\\n",
+                newline="\n",
                 dir=target.parent,
                 prefix=f".{target.name}.",
                 suffix=".tmp",
@@ -627,7 +627,7 @@ class IdentityStore:
             ) as temporary:
                 temporary_path = Path(temporary.name)
                 json.dump(payload, temporary, ensure_ascii=False, indent=2)
-                temporary.write("\\n")
+                temporary.write("\n")
                 temporary.flush()
                 os.fsync(temporary.fileno())
             if target.exists() and not overwrite:
