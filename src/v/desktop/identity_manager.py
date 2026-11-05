@@ -45,8 +45,10 @@ class IdentityManagerDialog(QDialog):
         self.tabs = QTabWidget()
         self.traits_list = QListWidget()
         self.proposals_list = QListWidget()
+        self.history_list = QListWidget()
         self.tabs.addTab(self.traits_list, "Identity traits")
         self.tabs.addTab(self.proposals_list, "Proposed changes")
+        self.tabs.addTab(self.history_list, "Revision history")
         layout.addWidget(self.tabs, 1)
 
         self.details = QPlainTextEdit()
@@ -73,6 +75,7 @@ class IdentityManagerDialog(QDialog):
 
         self.traits_list.currentItemChanged.connect(self._show_trait)
         self.proposals_list.currentItemChanged.connect(self._show_proposal)
+        self.history_list.currentItemChanged.connect(self._show_revision)
         self.propose_button.clicked.connect(self._propose_trait)
         self.edit_button.clicked.connect(self._edit_trait)
         self.accept_button.clicked.connect(lambda: self._review("accept"))
@@ -82,7 +85,7 @@ class IdentityManagerDialog(QDialog):
         self.close_button.clicked.connect(self.close)
         self._set_selection_state()
 
-    def set_data(self, snapshot, proposals) -> None:
+    def set_data(self, snapshot, proposals, revisions) -> None:
         self.summary.setText(
             f"{snapshot.display_name}  ·  revision {snapshot.revision}\n"
             f"{snapshot.summary}\n"
@@ -106,6 +109,15 @@ class IdentityManagerDialog(QDialog):
             )
             item.setData(Qt.ItemDataRole.UserRole, ("proposal", proposal))
             self.proposals_list.addItem(item)
+
+        self.history_list.clear()
+        for revision in revisions:
+            item = QListWidgetItem(
+                f"Revision {revision['revision']}  ·  {revision['action']}\\n"
+                f"{revision['created_at']}"
+            )
+            item.setData(Qt.ItemDataRole.UserRole, ("revision", revision))
+            self.history_list.addItem(item)
 
         if self.traits_list.count():
             self.traits_list.setCurrentRow(0)
@@ -149,6 +161,21 @@ class IdentityManagerDialog(QDialog):
             f"Rationale: {proposal.rationale}\n"
             f"Evidence: {', '.join(proposal.evidence_refs) or 'User-stated'}\n"
             f"Created: {proposal.created_at}"
+        )
+        self._set_selection_state()
+
+    def _show_revision(self, current, _previous=None) -> None:
+        if current is None:
+            self._set_selection_state()
+            return
+        _kind, revision = current.data(Qt.ItemDataRole.UserRole)
+        self.details.setPlainText(
+            f"Revision: {revision['revision']}\\n"
+            f"Action: {revision['action']}\\n"
+            f"Trait ID: {revision['trait_id'] or '—'}\\n"
+            f"Proposal ID: {revision['proposal_id'] or '—'}\\n"
+            f"Details: {revision['details']}\\n"
+            f"Timestamp: {revision['created_at']}"
         )
         self._set_selection_state()
 
