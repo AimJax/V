@@ -562,7 +562,7 @@ class DesktopWindow(QMainWindow):
         self.identity_manager_dialog.activateWindow()
         self.runtime.get_identity()
 
-    def _on_identity_ready(self, _snapshot, _proposals) -> None:
+    def _on_identity_ready(self, _snapshot, _proposals, _revisions) -> None:
         self.statusBar().showMessage("V's persistent identity is up to date.")
 
     def _on_identity_failed(self, message: str) -> None:
