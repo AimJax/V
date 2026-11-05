@@ -554,6 +554,12 @@ async def run_chat() -> int:
                 print("  /memory confirm ID    - Confirm a saved memory is still true")
                 print("  /memory delete ID     - Permanently delete a memory")
                 print("  /memory retry         - Retry failed extraction jobs")
+                print("  /identity             - Show V persistent identity")
+                print("  /identity proposals   - List pending identity changes")
+                print("  /identity propose CATEGORY DESCRIPTION - Propose a developed trait")
+                print("  /identity accept ID   - Accept a proposed trait")
+                print("  /identity reject ID   - Reject a proposed trait")
+                print("  /identity defer ID    - Defer a proposed trait")
                 print("  /exit                 - Exit V\n")
                 continue
 
