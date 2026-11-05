@@ -44,6 +44,7 @@ class DesktopRuntimeThread(QThread):
     identity_ready = Signal(object, object, object)
     identity_failed = Signal(str)
     identity_changed = Signal()
+    identity_backup_completed = Signal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -175,6 +176,30 @@ class DesktopRuntimeThread(QThread):
                     )
                 except Exception as error:
                     self.operation_failed.emit(str(error))
+                continue
+
+            if command == "identity_export":
+                try:
+                    destination, overwrite = payload
+                    self.identity_backup_completed.emit(
+                        service.export_identity(destination, overwrite=overwrite)
+                    )
+                except Exception as error:
+                    self.identity_failed.emit(str(error))
+                continue
+
+            if command == "identity_import":
+                try:
+                    self.identity_backup_completed.emit(
+                        service.import_identity(str(payload))
+                    )
+                    self.identity_ready.emit(
+                        service.identity_snapshot(),
+                        service.identity_proposals(),
+                        service.identity_revisions(),
+                    )
+                except Exception as error:
+                    self.identity_failed.emit(str(error))
                 continue
 
             if command == "identity_get":
@@ -429,6 +454,12 @@ class DesktopRuntimeThread(QThread):
     def select_conversation(self, conversation_id: str) -> None:
         self._post("select", conversation_id)
 
+
+    def export_identity(self, destination: str, *, overwrite: bool = False) -> None:
+        self._post("identity_export", (destination, overwrite))
+
+    def import_identity(self, source: str) -> None:
+        self._post("identity_import", source)
 
     def get_identity(self) -> None:
         self._post("identity_get")
