@@ -24,6 +24,7 @@ from v.memory.retrieval import (
 from v.memory.store import MemoryStore
 from v.memory.worker import MemoryWorker
 from v.identity import IdentityStore
+from v.identity_evolution import IdentityEvolution
 from v.providers.base import ChatMessage
 from v.providers.errors import ProviderError
 from v.providers.lm_studio import LMStudioProvider
@@ -351,6 +352,7 @@ async def run_chat() -> int:
     embedding_provider = None
     memory_worker = None
     identity_store = None
+    identity_evolution = None
 
     try:
         personality = load_personality(settings)
@@ -429,6 +431,26 @@ async def run_chat() -> int:
                 ),
                 max_jobs_per_cycle=int(
                     memory_settings.get("max_jobs_per_idle_cycle", 3)
+                ),
+            )
+
+        identity_settings = settings.get("identity", {})
+        if identity_settings.get("automatic_development", True):
+            identity_evolution = IdentityEvolution(
+                provider,
+                conversation_store,
+                identity_store,
+                evaluation_interval_turns=int(
+                    identity_settings.get("evaluation_interval_turns", 5)
+                ),
+                minimum_confidence=float(
+                    identity_settings.get("minimum_confidence", 0.78)
+                ),
+                max_context_characters=int(
+                    identity_settings.get("max_context_characters", 8000)
+                ),
+                max_pending_proposals=int(
+                    identity_settings.get("max_pending_proposals", 10)
                 ),
             )
 
@@ -868,6 +890,14 @@ async def run_chat() -> int:
                     "assistant",
                     response,
                 )
+
+                if identity_evolution is not None:
+                    proposals = await identity_evolution.evaluate_if_due()
+                    if proposals:
+                        print(
+                            f"\n[Identity review: {len(proposals)} candidate(s) "
+                            "queued. Use /identity proposals to inspect them.]"
+                        )
 
                 if extraction_queue is not None:
                     extraction_queue.enqueue(
