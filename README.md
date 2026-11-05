@@ -6,6 +6,10 @@ V is a local-first AI companion for Windows.
 
 V is intended to feel organic, personal, and continuous — a distinct presence rather than a generic chatbot with a persona layered on top. The project's interaction north star, design principles, and guidance for AI contributors are documented in [Product Philosophy](docs/PRODUCT_PHILOSOPHY.md). Read this before making substantial changes to personality, conversation, memory, voice, or vision.
 
+## Development roadmap
+
+Development is organized into five phases. See the [V Development Roadmap](docs/DEVELOPMENT_ROADMAP.md) and the [Phase 1 — Persistent Identity](docs/PHASE_1_PERSISTENT_IDENTITY.md) implementation specification.
+
 ## Target hardware
 - Windows 10 22H2
 - Intel Core i7-4770K
