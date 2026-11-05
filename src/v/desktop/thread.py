@@ -41,6 +41,9 @@ class DesktopRuntimeThread(QThread):
     settings_ready = Signal(object)
     settings_saved = Signal(str)
     settings_operation_failed = Signal(str)
+    identity_ready = Signal(object, object)
+    identity_failed = Signal(str)
+    identity_changed = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -172,6 +175,54 @@ class DesktopRuntimeThread(QThread):
                     )
                 except Exception as error:
                     self.operation_failed.emit(str(error))
+                continue
+
+            if command == "identity_get":
+                try:
+                    self.identity_ready.emit(
+                        service.identity_snapshot(),
+                        service.identity_proposals(),
+                    )
+                except Exception as error:
+                    self.identity_failed.emit(str(error))
+                continue
+
+            if command == "identity_review":
+                try:
+                    proposal_id, decision = payload
+                    service.review_identity_proposal(proposal_id, decision)
+                    self.identity_changed.emit()
+                    self.identity_ready.emit(
+                        service.identity_snapshot(),
+                        service.identity_proposals(),
+                    )
+                except Exception as error:
+                    self.identity_failed.emit(str(error))
+                continue
+
+            if command == "identity_update":
+                try:
+                    trait_id, changes = payload
+                    service.update_identity_trait(trait_id, changes)
+                    self.identity_changed.emit()
+                    self.identity_ready.emit(
+                        service.identity_snapshot(),
+                        service.identity_proposals(),
+                    )
+                except Exception as error:
+                    self.identity_failed.emit(str(error))
+                continue
+
+            if command == "identity_propose":
+                try:
+                    category, description = payload
+                    service.create_identity_proposal(category, description)
+                    self.identity_ready.emit(
+                        service.identity_snapshot(),
+                        service.identity_proposals(),
+                    )
+                except Exception as error:
+                    self.identity_failed.emit(str(error))
                 continue
 
             if command == "settings_get":
@@ -373,6 +424,19 @@ class DesktopRuntimeThread(QThread):
 
     def select_conversation(self, conversation_id: str) -> None:
         self._post("select", conversation_id)
+
+
+    def get_identity(self) -> None:
+        self._post("identity_get")
+
+    def review_identity_proposal(self, proposal_id: str, decision: str) -> None:
+        self._post("identity_review", (proposal_id, decision))
+
+    def update_identity_trait(self, trait_id: str, changes: dict) -> None:
+        self._post("identity_update", (trait_id, changes))
+
+    def propose_identity_trait(self, category: str, description: str) -> None:
+        self._post("identity_propose", (category, description))
 
     def get_settings(self) -> None:
         self._post("settings_get")
