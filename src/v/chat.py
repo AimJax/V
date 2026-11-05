@@ -23,6 +23,7 @@ from v.memory.retrieval import (
 )
 from v.memory.store import MemoryStore
 from v.memory.worker import MemoryWorker
+from v.identity import IdentityStore
 from v.providers.base import ChatMessage
 from v.providers.errors import ProviderError
 from v.providers.lm_studio import LMStudioProvider
@@ -171,9 +172,13 @@ def _build_messages(
     history_limit: int,
     *,
     memory_context: str | None = None,
+    identity_context: str | None = None,
 ) -> list[ChatMessage]:
     """Build one system message plus the selected conversation history."""
     system_content = personality
+
+    if identity_context:
+        system_content += "\n\n" + identity_context
 
     if memory_context:
         system_content += "\n\n" + memory_context
@@ -333,9 +338,12 @@ async def run_chat() -> int:
     provider = None
     embedding_provider = None
     memory_worker = None
+    identity_store = None
 
     try:
         personality = load_personality(settings)
+        identity_store = IdentityStore(_configured_data_path(settings, "identity_db"))
+        identity_context = identity_store.render_context()
 
         conversation_store = ConversationStore(
             _configured_data_path(settings, "conversation_db")
@@ -485,6 +493,7 @@ async def run_chat() -> int:
         print(f"Connected: {model}")
         print(f"Network policy: {network_policy.mode_label}")
         print(f"Conversation database: {conversation_store.database_path}")
+        print(f"Identity database: {identity_store.database_path}")
 
         if memory_store is not None:
             print(f"Memory database: {memory_store.database_path}")
@@ -731,6 +740,7 @@ async def run_chat() -> int:
                 conversation,
                 history_limit,
                 memory_context=memory_context,
+                identity_context=identity_context,
             )
 
             messages.append(
