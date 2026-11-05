@@ -41,7 +41,7 @@ class DesktopRuntimeThread(QThread):
     settings_ready = Signal(object)
     settings_saved = Signal(str)
     settings_operation_failed = Signal(str)
-    identity_ready = Signal(object, object)
+    identity_ready = Signal(object, object, object)
     identity_failed = Signal(str)
     identity_changed = Signal()
 
@@ -182,6 +182,7 @@ class DesktopRuntimeThread(QThread):
                     self.identity_ready.emit(
                         service.identity_snapshot(),
                         service.identity_proposals(),
+                        service.identity_revisions(),
                     )
                 except Exception as error:
                     self.identity_failed.emit(str(error))
