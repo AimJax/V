@@ -6,6 +6,7 @@ from support import temporary_directory
 
 from v.chat import (
     _build_messages,
+    build_system_context,
     build_memory_retrieval_query,
     _correct_memory,
     load_personality,
@@ -24,6 +25,25 @@ class ChatTests(unittest.TestCase):
 
         self.assertIn("You are V", personality)
         self.assertGreater(len(personality), 50)
+
+    def test_identity_context_is_included_separately_from_memory(self):
+        system = build_system_context(
+            "Base personality.",
+            identity_context="Persistent identity context.",
+            memory_context="Relevant episodic memory.",
+        )
+
+        self.assertLess(system.index("Base personality."), system.index("Persistent identity context."))
+        self.assertLess(system.index("Persistent identity context."), system.index("Relevant episodic memory."))
+
+    def test_empty_identity_context_does_not_change_existing_prompt(self):
+        system = build_system_context(
+            "Base personality.",
+            identity_context="",
+            memory_context=None,
+        )
+
+        self.assertEqual(system, "Base personality.")
 
     def test_history_trimming_preserves_system_message(self):
         messages = [
