@@ -601,7 +601,7 @@ async def run_chat() -> int:
 
                 if subcommand in {"show", "status"}:
                     snapshot = identity_store.get_snapshot()
-                    print(f"\\n{snapshot.display_name} — persistent identity (revision {snapshot.revision})")
+                    print(f"\n{snapshot.display_name} — persistent identity (revision {snapshot.revision})")
                     print(snapshot.summary)
                     for trait in snapshot.traits:
                         kind = "foundational" if trait.foundational else "developed"
@@ -612,10 +612,10 @@ async def run_chat() -> int:
                 if subcommand == "proposals":
                     proposals = identity_store.list_proposals(status="pending")
                     if not proposals:
-                        print("\\nNo pending identity proposals.\\n")
+                        print("\nNo pending identity proposals.\n")
                     else:
                         for proposal in proposals:
-                            print(f"\\nID: {proposal.id}")
+                            print(f"\nID: {proposal.id}")
                             print(f"[{proposal.category}; {proposal.origin}; confidence {proposal.confidence:.2f}] {proposal.description}")
                             print(f"Rationale: {proposal.rationale}")
                             print(f"Evidence: {', '.join(proposal.evidence_refs) or 'User-stated'}")
@@ -624,7 +624,7 @@ async def run_chat() -> int:
 
                 if subcommand == "propose":
                     if len(parts) < 4:
-                        print("Usage: /identity propose CATEGORY DESCRIPTION\\n")
+                        print("Usage: /identity propose CATEGORY DESCRIPTION\n")
                         continue
                     try:
                         proposal = identity_store.create_proposal(
@@ -636,14 +636,14 @@ async def run_chat() -> int:
                             origin="user_stated",
                         )
                     except (TypeError, ValueError) as error:
-                        print(f"Identity proposal failed: {error}\\n")
+                        print(f"Identity proposal failed: {error}\n")
                     else:
-                        print(f"Identity proposal queued for review: {proposal.id}\\n")
+                        print(f"Identity proposal queued for review: {proposal.id}\n")
                     continue
 
                 if subcommand in {"accept", "reject", "defer"}:
                     if len(parts) != 3:
-                        print(f"Usage: /identity {subcommand} PROPOSAL_ID\\n")
+                        print(f"Usage: /identity {subcommand} PROPOSAL_ID\n")
                         continue
                     try:
                         proposal = identity_store.review_proposal(
@@ -651,13 +651,13 @@ async def run_chat() -> int:
                             decision="accept" if subcommand == "accept" else subcommand,
                         )
                     except (KeyError, ValueError) as error:
-                        print(f"Identity review failed: {error}\\n")
+                        print(f"Identity review failed: {error}\n")
                     else:
                         identity_context = identity_store.render_context()
-                        print(f"Identity proposal {proposal.status}. Current revision: {identity_store.get_snapshot().revision}.\\n")
+                        print(f"Identity proposal {proposal.status}. Current revision: {identity_store.get_snapshot().revision}.\n")
                     continue
 
-                print("Unknown identity command. Use /identity or /help.\\n")
+                print("Unknown identity command. Use /identity or /help.\n")
                 continue
 
             if command == "/memory" or command == "/memory list":
