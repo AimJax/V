@@ -680,6 +680,19 @@ class DesktopService:
             origin="user_stated",
         )
 
+    def export_identity(self, destination: str, *, overwrite: bool = False) -> str:
+        if self.identity_store is None:
+            raise RuntimeError("Identity service is not available.")
+        path = self.identity_store.export_backup(destination, overwrite=overwrite)
+        return f"Exported V's identity backup to {path}. The JSON file is unencrypted."
+
+    def import_identity(self, source: str) -> str:
+        if self.identity_store is None:
+            raise RuntimeError("Identity service is not available.")
+        snapshot = self.identity_store.import_backup(source, replace=True)
+        self.identity_context = self.identity_store.render_context()
+        return f"Restored V's identity revision {snapshot.revision} from the selected backup."
+
     def identity_snapshot(self):
         if self.identity_store is None:
             raise RuntimeError("Identity service is not available.")
