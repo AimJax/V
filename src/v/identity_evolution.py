@@ -7,7 +7,6 @@ candidate must be grounded in exact excerpts from multiple assistant messages.
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
 from v.conversations.store import ConversationStore
