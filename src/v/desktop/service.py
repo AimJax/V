@@ -33,6 +33,7 @@ from v.providers.errors import ProviderError, ProviderProtocolError
 from v.providers.lm_studio import LMStudioProvider
 from v.voice.service import LocalVoiceService
 from v.voice.streaming import SpeechTextSegmenter, clean_speech_text
+from v.identity import IdentityStore
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +105,8 @@ class DesktopService:
         self.embedding_provider: LMStudioEmbeddingProvider | None = None
         self.conversation_store: ConversationStore | None = None
         self.memory_store: MemoryStore | None = None
+        self.identity_store: IdentityStore | None = None
+        self.identity_context = ''
         self.extraction_queue: ExtractionQueue | None = None
         self.memory_worker: MemoryWorker | None = None
         self.memory_backfill_store: MemoryBackfillStore | None = None
@@ -140,6 +143,10 @@ class DesktopService:
             raise ValueError("No chat model is configured in config/default.toml.")
 
         self.personality = load_personality(self.settings)
+        self.identity_store = IdentityStore(
+            _configured_data_path(self.settings, 'identity_db')
+        )
+        self.identity_context = self.identity_store.render_context()
         self.conversation_store = ConversationStore(
             _configured_data_path(self.settings, "conversation_db")
         )
@@ -365,6 +372,8 @@ class DesktopService:
                 memory_context = None
 
         system_content = self.personality
+        if self.identity_context:
+            system_content += '\n\n' + self.identity_context
         if memory_context:
             system_content += "\n\n" + memory_context
 
@@ -657,6 +666,34 @@ class DesktopService:
             ]
 
         return memories
+
+
+    def identity_snapshot(self):
+        if self.identity_store is None:
+            raise RuntimeError("Identity service is not available.")
+        return self.identity_store.get_snapshot()
+
+    def identity_proposals(self, status: str = "pending"):
+        if self.identity_store is None:
+            raise RuntimeError("Identity service is not available.")
+        return self.identity_store.list_proposals(status=status)
+
+    def review_identity_proposal(self, proposal_id: str, decision: str):
+        if self.identity_store is None:
+            raise RuntimeError("Identity service is not available.")
+        proposal = self.identity_store.review_proposal(
+            proposal_id,
+            decision=decision,
+        )
+        self.identity_context = self.identity_store.render_context()
+        return proposal
+
+    def update_identity_trait(self, trait_id: str, changes: dict):
+        if self.identity_store is None:
+            raise RuntimeError("Identity service is not available.")
+        trait = self.identity_store.update_trait(trait_id, **changes)
+        self.identity_context = self.identity_store.render_context()
+        return trait
 
     async def run_memory_backfill(
         self,
