@@ -47,6 +47,17 @@ V is intended to feel like an organic, continuous, distinct presence — not a g
 - Configurable providers, models, voice, vision, memory, search, and performance.
 - Complete Windows desktop application with background operation controls.
 
+## Persistent identity rules
+
+- Treat `src/v/identity.py` as the authoritative persistence boundary for V's identity.
+- Keep identity in its own local database; do not store it as ordinary user memory or merge it into the conversation database.
+- Keep foundational traits, developed traits, proposals, temporary affect, memories, goals, capabilities, and permissions distinct.
+- Model-generated identity changes are untrusted proposals. They require evidence references and explicit review before they can alter developed identity.
+- Ordinary proposal acceptance must never rewrite foundational traits or application security policy.
+- User-authorized corrections must be auditable and retain revision history.
+- Include only bounded, relevant identity context in model prompts. Do not duplicate full memory or capability records.
+- Keep identity databases and backups out of Git. Identity backups are plaintext; disclose this before export/restore.
+
 ## Architecture
 - Keep UI, conversation, inference, voice, vision, memory, and search
   in separate modules.
