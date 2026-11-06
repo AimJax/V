@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timezone
 
 from v.memory.models import Memory
@@ -185,7 +186,7 @@ def _exclude_noncurrent_memories(
     if is_historical_query(query) or not memories:
         return memories
     try:
-        with memory_store._connect() as connection:
+        with closing(memory_store._connect()) as connection:
             tables = {
                 row[0] for row in connection.execute(
                     "SELECT name FROM sqlite_master WHERE type='table'"
