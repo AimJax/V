@@ -78,6 +78,13 @@ class ContinuityStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_memory_derivations_source
                     ON memory_derivations(source_memory_id);
+                CREATE TRIGGER IF NOT EXISTS continuity_source_changed
+                AFTER UPDATE OF content, subject, provenance, source_conversation_id,
+                                source_message_id ON memories
+                BEGIN
+                    UPDATE memory_derivations SET state='rejected'
+                    WHERE source_memory_id=OLD.id AND state='accepted';
+                END;
 
                 CREATE TABLE IF NOT EXISTS memory_commitments (
                     id TEXT PRIMARY KEY,
@@ -130,7 +137,7 @@ class ContinuityStore:
                 VALUES (?, ?, ?, ?)
                 ON CONFLICT(memory_id) DO UPDATE SET
                     valid_from=COALESCE(excluded.valid_from, memory_temporal.valid_from),
-                    valid_until=excluded.valid_until
+                    valid_until=COALESCE(excluded.valid_until, memory_temporal.valid_until)
             """, (memory_id, start, end, _now()))
             db.commit()
             return dict(db.execute(
