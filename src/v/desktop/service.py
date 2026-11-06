@@ -26,6 +26,7 @@ from v.memory.hybrid_retrieval import HybridMemoryRetriever
 from v.memory.queue import ExtractionQueue
 from v.memory.retrieval import build_memory_context, retrieve_relevant_memories
 from v.memory.store import MemoryStore
+from v.memory.continuity import ContinuityStore
 from v.memory.worker import MemoryWorker
 from v.desktop.settings_store import save_local_desktop_settings
 from v.providers.base import ChatMessage
@@ -106,6 +107,7 @@ class DesktopService:
         self.embedding_provider: LMStudioEmbeddingProvider | None = None
         self.conversation_store: ConversationStore | None = None
         self.memory_store: MemoryStore | None = None
+        self.continuity_store: ContinuityStore | None = None
         self.identity_store: IdentityStore | None = None
         self.identity_context = ''
         self.identity_evolution: IdentityEvolution | None = None
@@ -194,6 +196,7 @@ class DesktopService:
         if memory_enabled:
             memory_path = _configured_data_path(self.settings, "memory_db")
             self.memory_store = MemoryStore(memory_path)
+            self.continuity_store = ContinuityStore(memory_path)
             self.extraction_queue = ExtractionQueue(memory_path)
             self.memory_backfill_store = MemoryBackfillStore(memory_path)
 
@@ -912,6 +915,36 @@ class DesktopService:
             f"Restored {restored} record(s); skipped {skipped} identical record(s). "
             "Existing memories were not overwritten or deleted."
         )
+
+    def list_memory_commitments(self, *, state: str = "open", limit: int = 100) -> list[dict]:
+        if self.continuity_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        return self.continuity_store.list_commitments(state=state, limit=limit)
+
+    def create_memory_commitment(self, title: str, **fields) -> dict:
+        if self.continuity_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        return self.continuity_store.create_commitment(title, **fields)
+
+    def update_memory_commitment(self, commitment_id: str, state: str) -> dict:
+        if self.continuity_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        return self.continuity_store.update_commitment(commitment_id, state)
+
+    def set_memory_temporal_state(self, memory_id: str, state: str, **fields) -> dict:
+        if self.continuity_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        return self.continuity_store.set_memory_state(memory_id, state, **fields)
+
+    def memory_derivation_sources(self, memory_id: str) -> list[dict]:
+        if self.continuity_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        return self.continuity_store.derivation_sources(memory_id)
+
+    def review_memory_derivation(self, memory_id: str, decision: str) -> int:
+        if self.continuity_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        return self.continuity_store.review_derivation(memory_id, decision)
 
     async def close(self) -> None:
         """Stop background workers and close local clients."""
