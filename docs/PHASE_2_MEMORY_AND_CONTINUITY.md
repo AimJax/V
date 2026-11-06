@@ -1,7 +1,19 @@
 # Phase 2 — Memory and Continuity
 
-**Status:** Planned  
+**Status:** In progress  
 **Objective:** Evolve the existing memory implementation into coherent, time-aware autobiographical continuity without replacing working infrastructure or weakening evidence quality.
+
+## Implementation status on the active branch
+
+The first implementation slice is present:
+
+- src/v/memory/continuity.py adds temporal validity metadata, lifecycle states (current, superseded, corrected, disputed, expired), and explicit replacement references in the existing memory SQLite database.
+- Derived-record provenance can be registered against one or more existing source memories. New derivations remain pending until explicitly accepted or rejected; source edits invalidate accepted derivations, and source deletion removes dependent references through foreign-key behavior.
+- Prospective commitments can be created with due dates, optional recurrence descriptions, source-memory links, and open/completed/cancelled lifecycle states.
+- DesktopService initializes the continuity layer alongside the existing MemoryStore and exposes methods for temporal state, derivation review, and commitment lifecycle operations.
+- tests/test_memory_continuity.py covers timezone validation, temporal ranges, evidence references and review, and prospective commitment lifecycle.
+
+This is an initial foundation, not completion of Phase 2. The existing retrieval module already contains episodic timeline ranking and historical-query handling; the next work is to integrate temporal lifecycle state into retrieval and context assembly, then add evidence-linked consolidation and user-facing inspection controls.
 
 ## 1. Intended result
 
@@ -83,8 +95,8 @@ Run extraction, backfill, consolidation, and embedding work as cancellable backg
 
 ## 9. Implementation milestones
 
-1. Inventory memory schemas, extraction, retrieval, graph, backup, UI, and tests.
-2. Define canonical semantics for episodic, semantic, procedural, prospective, and derived autobiographical records.
+1. **In progress:** Inventory memory schemas, extraction, retrieval, graph, backup, UI, and tests; preserve existing SQLite memory and retrieval infrastructure.
+2. **In progress:** Define canonical semantics for episodic, semantic, procedural, prospective, and derived autobiographical records; temporal lifecycle and prospective commitment storage are implemented as the first slice.
 3. Add only necessary schema extensions with versioned migrations.
 4. Implement temporal validity and supersession rules.
 5. Implement evidence-linked consolidation and invalidation.
