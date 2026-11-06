@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import sqlite3
 from datetime import datetime, timezone
 
 from v.memory.models import Memory
@@ -175,6 +176,43 @@ def expand_related_memories(
     return selected
 
 
+def _exclude_noncurrent_memories(
+    memory_store: MemoryStore,
+    memories: list[Memory],
+    query: str,
+) -> list[Memory]:
+    """Avoid presenting superseded records as current; retain them for history queries."""
+    if is_historical_query(query) or not memories:
+        return memories
+    try:
+        with memory_store._connect() as connection:
+            tables = {
+                row[0] for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+            if "memory_temporal" not in tables:
+                return memories
+            ids = [memory.id for memory in memories]
+            placeholders = ",".join("?" for _ in ids)
+            states = {
+                row["memory_id"]: row["state"]
+                for row in connection.execute(
+                    f"SELECT memory_id, state FROM memory_temporal "
+                    f"WHERE memory_id IN ({placeholders})",
+                    ids,
+                )
+            }
+    except (sqlite3.Error, AttributeError):
+        # Temporal metadata is an optional additive layer; retrieval must survive
+        # an unavailable metadata table or read-only database.
+        return memories
+    return [
+        memory for memory in memories
+        if states.get(memory.id, "current") == "current"
+    ]
+
+
 def retrieve_relevant_memories(
     memory_store: MemoryStore,
     query: str,
@@ -201,6 +239,7 @@ def retrieve_relevant_memories(
         query,
         limit=limit,
     )
+    resolved = _exclude_noncurrent_memories(memory_store, resolved, query)
     return expand_related_memories(memory_store, resolved, limit=limit)
 
 
