@@ -60,6 +60,10 @@ class MemoryContextPreviewDialog(QDialog):
         self.output.setPlaceholderText("Selected memories and assembled model context appear here.")
         root.addWidget(self.output, 1)
 
+    def closeEvent(self, event) -> None:
+        self.cancel_requested.emit()
+        super().closeEvent(event)
+
     def _preview(self) -> None:
         query = self.query_input.text().strip()
         if not query:
