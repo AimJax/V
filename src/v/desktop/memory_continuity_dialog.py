@@ -37,8 +37,8 @@ class MemoryContinuityDialog(QDialog):
         self.memory_id = memory_id
         self._snapshot: dict = {}
         self.setWindowTitle("V — Memory Continuity")
-        self.resize(820, 700)
-        self.setMinimumSize(680, 560)
+        self.resize(900, 860)
+        self.setMinimumSize(720, 680)
 
         root = QVBoxLayout(self)
         heading = QLabel("Memory continuity")
@@ -87,6 +87,23 @@ class MemoryContinuityDialog(QDialog):
         temporal_actions.addStretch(1)
         temporal_actions.addWidget(self.refresh_button)
         root.addLayout(temporal_actions)
+
+        timeline_title = QLabel("Subject timeline")
+        timeline_title.setStyleSheet("font-weight: 650; margin-top: 8px;")
+        root.addWidget(timeline_title)
+        self.timeline_table = QTableWidget(0, 4)
+        self.timeline_table.setHorizontalHeaderLabels(
+            ["Source date", "Type", "Lifecycle", "Record"]
+        )
+        self.timeline_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+        self.timeline_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+        self.timeline_table.setMinimumHeight(110)
+        self.timeline_table.horizontalHeader().setStretchLastSection(True)
+        root.addWidget(self.timeline_table)
 
         divider = QLabel("Derived memory evidence")
         divider.setStyleSheet("font-weight: 650; margin-top: 8px;")
@@ -178,6 +195,22 @@ class MemoryContinuityDialog(QDialog):
         self.valid_from_input.setText(temporal.get("valid_from") or "")
         self.valid_until_input.setText(temporal.get("valid_until") or "")
         self.note_input.setPlainText(temporal.get("note") or "")
+
+        timeline = snapshot.get("timeline", [])
+        self.timeline_table.setRowCount(len(timeline))
+        for row, item in enumerate(timeline):
+            values = (
+                item.get("source_date") or "Date not recorded",
+                item["memory_type"],
+                item.get("temporal_state", "unspecified"),
+                item["content"],
+            )
+            for column, value in enumerate(values):
+                cell = QTableWidgetItem(str(value))
+                cell.setData(Qt.ItemDataRole.UserRole, item["memory_id"])
+                if column == 3:
+                    cell.setToolTip(item["memory_id"])
+                self.timeline_table.setItem(row, column, cell)
 
         self.derivation_list.clear()
         sources = snapshot.get("derivation_sources", [])
