@@ -753,7 +753,7 @@ class MemoryExtractor:
             return 0, len(candidates)
         created = skipped = 0
         existing_commitments = self.continuity_store.list_commitments(
-            state="all", limit=10_000
+            state="all", limit=500
         )
         for candidate in candidates:
             try:
