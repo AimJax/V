@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -120,6 +121,71 @@ If there are no useful memories, return:
 """.strip()
 
 
+PROSPECTIVE_SYSTEM_PROMPT = """
+You identify explicit future commitments made by the USER in the supplied messages.
+
+Only capture a concrete action the user clearly says they intend, need, or agree to do,
+or a follow-up/reminder the user explicitly asks to keep track of. Do not turn assistant
+suggestions, hypothetical plans, wishes, questions, or vague possibilities into
+commitments. Do not infer that V has permission to perform the action. Recording a
+commitment does not schedule a reminder or authorize an external action.
+
+Use the original message timestamp and timezone. Resolve relative due dates only when
+the source message makes them unambiguous. If no due date is stated or safely resolvable,
+use null. Recurrence is descriptive text only; do not invent a schedule. Evidence must
+be an exact quotation from the source user message, no more than 600 characters.
+Do not include sensitive personal information.
+
+Return only valid JSON:
+{
+  "commitments": [
+    {
+      "source_message_id": 123,
+      "title": "Finish the Project V test pass",
+      "description": "Run the tests before packaging the build.",
+      "subject": "Project V",
+      "due_at": "2026-11-10T17:00:00+07:00",
+      "recurrence": null,
+      "evidence": "I'll finish the test pass before packaging."
+    }
+  ]
+}
+If no explicit commitment exists, return {"commitments": []}.
+""".strip()
+
+
+PROSPECTIVE_HINT_PATTERN = re.compile(
+    r"\b(?:i(?:'ll| will| need to| have to| plan to| intend to)|"
+    r"we(?:'ll| will| need to)|remind me|don't let me forget|"
+    r"follow up|i should|i must)\b",
+    re.IGNORECASE,
+)
+
+
+def _parse_commitment_response(raw: str) -> list[dict]:
+    content = raw.strip()
+    if content.startswith("```"):
+        content = re.sub(
+            r"^```(?:json)?\s*", "", content, count=1, flags=re.IGNORECASE
+        )
+        content = re.sub(r"\s*```$", "", content, count=1)
+    try:
+        payload = json.loads(content)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", content, flags=re.DOTALL)
+        if match is None:
+            raise ValueError("The model did not return valid commitment JSON.")
+        payload = json.loads(match.group(0))
+    if not isinstance(payload, dict):
+        raise ValueError("Commitment extraction response must be an object.")
+    candidates = payload.get("commitments")
+    if not isinstance(candidates, list) or not all(
+        isinstance(item, dict) for item in candidates
+    ):
+        raise ValueError("Commitment extraction response has no valid commitments array.")
+    return candidates
+
+
 SENSITIVE_TERMS = (
     "password",
     "passcode",
@@ -177,6 +243,8 @@ class ExtractionReport:
     memories_created: int = 0
     candidates_skipped: int = 0
     conflicts_queued: int = 0
+    commitments_created: int = 0
+    commitment_candidates_skipped: int = 0
 
 
 def _normalize_text(value: str) -> str:
@@ -295,6 +363,7 @@ class MemoryExtractor:
         *,
         min_confidence: float = 0.90,
         conflict_store=None,
+        continuity_store=None,
     ) -> None:
         if not math.isfinite(min_confidence) or not 0 <= min_confidence <= 1:
             raise ValueError("min_confidence must be between 0 and 1.")
@@ -305,6 +374,7 @@ class MemoryExtractor:
         self.queue = queue
         self.min_confidence = min_confidence
         self.conflict_store = conflict_store
+        self.continuity_store = continuity_store
 
     async def extract_candidates(
         self,
@@ -497,6 +567,203 @@ class MemoryExtractor:
             )
 
         return validated, skipped
+
+    async def extract_commitment_candidates(self, messages: list) -> tuple[list[dict], int]:
+        """Extract explicit future commitments without scheduling external reminders."""
+        if self.continuity_store is None:
+            return [], 0
+        source_messages = {
+            message.id: message
+            for message in messages
+            if message.role == "user"
+            and message.content.strip()
+            and PROSPECTIVE_HINT_PATTERN.search(message.content)
+        }
+        if not source_messages:
+            return [], 0
+
+        requests = []
+        for message_id, message in source_messages.items():
+            context = self.conversation_store.get_surrounding_messages(
+                message_id,
+                before=1,
+                after=1,
+                max_chars_per_message=1000,
+            )
+            requests.append({
+                "source_message_id": message_id,
+                "source_conversation_id": message.conversation_id,
+                "source_created_at": message.created_at,
+                "user_message": message.content[:5000],
+                "surrounding_context": [
+                    {
+                        "message_id": item.id,
+                        "role": item.role,
+                        "created_at": item.created_at,
+                        "content": item.content,
+                    }
+                    for item in context
+                ],
+            })
+
+        response = await self.provider.chat(
+            [
+                ChatMessage(role="system", content=PROSPECTIVE_SYSTEM_PROMPT),
+                ChatMessage(
+                    role="user",
+                    content=json.dumps(requests, ensure_ascii=False),
+                ),
+            ],
+            temperature=0.1,
+            max_tokens=700,
+        )
+        raw = _parse_commitment_response(response.content)
+        validated = []
+        skipped = 0
+        seen = set()
+        for candidate in raw:
+            message_id = candidate.get("source_message_id")
+            if (
+                isinstance(message_id, bool)
+                or not isinstance(message_id, int)
+                or message_id not in source_messages
+            ):
+                skipped += 1
+                continue
+            message = source_messages[message_id]
+            title = candidate.get("title")
+            description = candidate.get("description", "")
+            subject = candidate.get("subject", "User")
+            due_at = candidate.get("due_at")
+            recurrence = candidate.get("recurrence")
+            evidence = candidate.get("evidence")
+            if (
+                not isinstance(title, str)
+                or not 1 <= len(title.strip()) <= 240
+                or not isinstance(description, str)
+                or len(description) > 4000
+                or not isinstance(subject, str)
+                or not subject.strip()
+                or not isinstance(evidence, str)
+                or not 1 <= len(evidence.strip()) <= 600
+                or (
+                    recurrence is not None
+                    and (not isinstance(recurrence, str) or len(recurrence) > 200)
+                )
+            ):
+                skipped += 1
+                continue
+            if due_at is not None:
+                if not isinstance(due_at, str):
+                    skipped += 1
+                    continue
+                try:
+                    parsed_due = datetime.fromisoformat(
+                        due_at.replace("Z", "+00:00")
+                    )
+                    if parsed_due.tzinfo is None:
+                        raise ValueError("Due dates must include a timezone.")
+                    due_at = parsed_due.astimezone(timezone.utc).isoformat(
+                        timespec="milliseconds"
+                    )
+                except ValueError:
+                    skipped += 1
+                    continue
+            normalized_evidence = _normalize_text(evidence)
+            if (
+                len(normalized_evidence) < 6
+                or normalized_evidence not in _normalize_text(message.content)
+                or _contains_sensitive_content(
+                    message.content, evidence, title, description, subject
+                )
+            ):
+                skipped += 1
+                continue
+            key = (message_id, title.strip().casefold(), due_at)
+            if key in seen:
+                skipped += 1
+                continue
+            seen.add(key)
+            validated.append({
+                "source_message_id": message_id,
+                "source_conversation_id": message.conversation_id,
+                "source_created_at": message.created_at,
+                "title": title.strip(),
+                "description": description.strip(),
+                "subject": subject.strip(),
+                "due_at": due_at,
+                "recurrence": recurrence.strip() if isinstance(recurrence, str) else None,
+                "evidence": evidence.strip(),
+            })
+        return validated, skipped
+
+    def _source_memory_for_commitment(self, candidate: dict):
+        existing = self.memory_store.list_memories(limit=10_000)
+        for memory in existing:
+            if (
+                memory.source_message_id == candidate["source_message_id"]
+                and memory.source_conversation_id == candidate["source_conversation_id"]
+                and memory.evidence
+                and _normalize_text(memory.evidence)
+                == _normalize_text(candidate["evidence"])
+            ):
+                return memory
+
+        evidence_digest = hashlib.sha256(
+            candidate["evidence"].encode("utf-8")
+        ).hexdigest()[:12]
+        memory_key = (
+            f"prospective.source.{candidate['source_conversation_id']}."
+            f"{candidate['source_message_id']}.{evidence_digest}"
+        )
+        existing_by_key = self.memory_store.get_memory_by_key(memory_key)
+        if existing_by_key is not None:
+            return existing_by_key
+        return self.memory_store.create_memory(
+            content=candidate["evidence"],
+            memory_type="episodic",
+            subject=candidate["subject"],
+            memory_key=memory_key,
+            provenance="explicit",
+            confidence=0.95,
+            importance=3,
+            source_conversation_id=candidate["source_conversation_id"],
+            source_message_id=candidate["source_message_id"],
+            source_created_at=candidate["source_created_at"],
+            evidence=candidate["evidence"],
+        )
+
+    def _store_commitment_candidates(self, candidates: list[dict]) -> tuple[int, int]:
+        if self.continuity_store is None:
+            return 0, len(candidates)
+        created = skipped = 0
+        existing_commitments = self.continuity_store.list_commitments(
+            state="all", limit=10_000
+        )
+        for candidate in candidates:
+            try:
+                source_memory = self._source_memory_for_commitment(candidate)
+                duplicate = any(
+                    item["source_memory_id"] == source_memory.id
+                    and item["title"].casefold() == candidate["title"].casefold()
+                    and item["due_at"] == candidate["due_at"]
+                    for item in existing_commitments
+                )
+                if duplicate:
+                    skipped += 1
+                    continue
+                commitment = self.continuity_store.create_commitment(
+                    candidate["title"],
+                    description=candidate["description"],
+                    due_at=candidate["due_at"],
+                    recurrence=candidate["recurrence"],
+                    source_memory_id=source_memory.id,
+                )
+                existing_commitments.append(commitment)
+                created += 1
+            except (KeyError, TypeError, ValueError):
+                skipped += 1
+        return created, skipped
 
     async def process_pending(self, limit: int = 5) -> ExtractionReport:
         jobs = self.queue.list_pending(limit=limit)
