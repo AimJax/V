@@ -145,7 +145,7 @@ class MemoryStore:
     This initial implementation does not retain a hidden deletion archive.
     """
 
-    SCHEMA_VERSION = 5
+    SCHEMA_VERSION = 6
 
     def __init__(
         self,
@@ -229,6 +229,7 @@ class MemoryStore:
                             'profile',
                             'preference',
                             'episodic',
+                            'procedural',
                             'relationship',
                             'project',
                             'fact',
@@ -450,6 +451,12 @@ class MemoryStore:
                 """
             )
 
+            schema_row = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='memories'"
+            ).fetchone()
+            if schema_row is not None and "'procedural'" not in schema_row["sql"]:
+                self._migrate_procedural_memory_type(connection)
+
             if version < self.SCHEMA_VERSION:
                 self._rebuild_all_relationships(connection)
 
@@ -457,6 +464,145 @@ class MemoryStore:
                 f"PRAGMA user_version = {self.SCHEMA_VERSION}"
             )
             connection.commit()
+
+        tables = {
+            row["name"]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        if "memory_temporal" in tables:
+            from v.memory.continuity import ContinuityStore
+
+            ContinuityStore(self.database_path)
+
+    @staticmethod
+    def _migrate_procedural_memory_type(connection: sqlite3.Connection) -> None:
+        """Rebuild the constrained memory table while preserving dependent data."""
+        connection.commit()
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.execute("PRAGMA legacy_alter_table = ON")
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            for trigger in (
+                "memories_ai",
+                "memories_ad",
+                "memories_au",
+                "memory_evidence_source_update",
+                "continuity_source_changed",
+                "continuity_memory_delete",
+            ):
+                connection.execute(f"DROP TRIGGER IF EXISTS {trigger}")
+
+            connection.execute("ALTER TABLE memories RENAME TO memories_old")
+            connection.execute(
+                """
+                CREATE TABLE memories (
+                    id TEXT PRIMARY KEY,
+                    memory_type TEXT NOT NULL CHECK (
+                        memory_type IN (
+                            'profile', 'preference', 'episodic', 'procedural',
+                            'relationship', 'project', 'fact', 'inferred_pattern'
+                        )
+                    ),
+                    subject TEXT NOT NULL DEFAULT '',
+                    content TEXT NOT NULL CHECK (length(trim(content)) > 0),
+                    memory_key TEXT,
+                    provenance TEXT NOT NULL CHECK (
+                        provenance IN ('explicit', 'inferred')
+                    ),
+                    confidence REAL NOT NULL CHECK (
+                        confidence >= 0 AND confidence <= 1
+                    ),
+                    importance INTEGER NOT NULL CHECK (importance BETWEEN 1 AND 5),
+                    source_conversation_id TEXT,
+                    source_message_id INTEGER,
+                    source_created_at TEXT,
+                    evidence TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    last_confirmed_at TEXT,
+                    subject_key TEXT NOT NULL DEFAULT ''
+                )
+                """
+            )
+            fields = (
+                "id, memory_type, subject, content, memory_key, provenance, confidence, "
+                "importance, source_conversation_id, source_message_id, source_created_at, "
+                "evidence, created_at, updated_at, last_confirmed_at, subject_key"
+            )
+            connection.execute(
+                f"INSERT INTO memories ({fields}) SELECT {fields} FROM memories_old"
+            )
+            connection.execute("DROP TABLE memories_old")
+
+            connection.executescript(
+                """
+                CREATE UNIQUE INDEX idx_memories_key
+                    ON memories(memory_key)
+                    WHERE memory_key IS NOT NULL AND memory_type != 'episodic';
+                CREATE INDEX idx_memories_type ON memories(memory_type);
+                CREATE INDEX idx_memories_provenance ON memories(provenance);
+                CREATE INDEX idx_memories_importance ON memories(importance DESC);
+                CREATE INDEX idx_memories_subject_key ON memories(subject_key);
+                CREATE INDEX idx_memories_source_message
+                    ON memories(source_conversation_id, source_message_id);
+                CREATE INDEX idx_memories_episodic_key
+                    ON memories(memory_key) WHERE memory_type='episodic';
+
+                CREATE TRIGGER memories_ai
+                AFTER INSERT ON memories
+                BEGIN
+                    INSERT INTO memories_fts(rowid, content, subject)
+                    VALUES (new.rowid, new.content, new.subject);
+                END;
+
+                CREATE TRIGGER memories_ad
+                AFTER DELETE ON memories
+                BEGIN
+                    INSERT INTO memories_fts(memories_fts, rowid, content, subject)
+                    VALUES ('delete', old.rowid, old.content, old.subject);
+                END;
+
+                CREATE TRIGGER memories_au
+                AFTER UPDATE ON memories
+                BEGIN
+                    INSERT INTO memories_fts(memories_fts, rowid, content, subject)
+                    VALUES ('delete', old.rowid, old.content, old.subject);
+                    INSERT INTO memories_fts(rowid, content, subject)
+                    VALUES (new.rowid, new.content, new.subject);
+                END;
+
+                CREATE TRIGGER memory_evidence_source_update
+                AFTER UPDATE OF memory_type, provenance, content, evidence, subject
+                ON memories
+                WHEN OLD.memory_type != 'inferred_pattern'
+                BEGIN
+                    DELETE FROM memories
+                    WHERE id IN (
+                        SELECT pattern_memory_id
+                        FROM memory_evidence
+                        WHERE source_memory_id = OLD.id
+                    );
+                END;
+                """
+            )
+            connection.execute(
+                "INSERT INTO memories_fts(memories_fts) VALUES ('rebuild')"
+            )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.execute("PRAGMA legacy_alter_table = OFF")
+            connection.execute("PRAGMA foreign_keys = ON")
+
+        violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+        if violations:
+            raise RuntimeError(
+                "Memory type migration produced foreign-key violations."
+            )
 
     @staticmethod
     def _insert_memory_link(connection, memory_a_id, memory_b_id,
