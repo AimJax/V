@@ -236,9 +236,9 @@ class MemoryExtractorTests(unittest.IsolatedAsyncioTestCase):
 
         report = await extractor.process_pending()
 
-        self.assertEqual(report.commitments_created, 1)
-        self.assertEqual(report.commitment_candidates_skipped, 0)
         self.assertEqual(provider.calls, 2)
+        self.assertEqual(report.commitment_candidates_skipped, 0)
+        self.assertEqual(report.commitments_created, 1)
         commitment = continuity.list_commitments(state="all")[0]
         self.assertEqual(commitment["title"], "Finish the Project V test pass")
         self.assertIsNotNone(commitment["source_memory_id"])
