@@ -132,11 +132,27 @@ Run extraction, backfill, consolidation, and embedding work as cancellable backg
 
 Run from the project root with V's Python environment active:
 
+- `python -m pytest` — complete automated test suite.
 - `python -m v memory evaluate` — isolated synthetic retrieval benchmark.
 - `python -m v memory evaluate --personal` — read-only evaluation against this PC's saved memories. Question generation and embedding calls use the configured local inference endpoint. Generated cases remain in memory; the command does not modify saved memories or the embedding cache.
-- `python -m pytest` — complete automated test suite.
+- `python -m v desktop` — launch the desktop application for the runtime smoke test.
 
-The personal evaluation is the required target-PC check after Windows CI. Review the per-question misses and false positives before considering the configured retrieval threshold calibrated. The benchmark reports a candidate threshold but never changes configuration automatically.
+The personal evaluation is the required target-PC check after Windows CI. Review per-question misses and false positives before considering the configured retrieval threshold calibrated. The benchmark reports a candidate threshold but never changes configuration automatically.
+
+### Desktop smoke-test checklist
+
+Use a throwaway test conversation and synthetic details rather than introducing sensitive personal information.
+
+1. Start V with the configured local chat and embedding models. Confirm both report ready without a cloud fallback.
+2. State a clear future intention with a due date, such as: "I'll finish the local memory test by Friday." Allow the memory worker to process the message.
+3. Open Memory Manager → Continuity. Confirm the commitment appears with its source-memory reference and exact source quotation. Confirm the UI states that no notification was scheduled.
+4. Ask V what remains to be done. Confirm the relevant open commitment is included in recall. Use Recall Preview on an elliptical follow-up and confirm the displayed retrieval query includes the preceding user topic.
+5. Create several explicit, related memories across at least two conversations. Run consolidation. Confirm the generated summary remains pending review and exposes all supporting source records.
+6. Accept the summary, confirm it can be recalled, then edit one source record. Confirm the dependent summary becomes disputed and is excluded from present-focused retrieval while remaining available to historical inspection.
+7. Restart V and confirm the timeline, commitment state, and accepted derivation persist.
+
+The automated suite covers backup/restore, schema migration, and model-change reindexing. Do not test restore against the only live memory database; use a disposable database if performing a manual restore test.
+
 
 ## 12. Acceptance criteria
 
