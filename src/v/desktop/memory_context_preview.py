@@ -114,7 +114,6 @@ class MemoryContextPreviewDialog(QDialog):
             "",
             "SELECTED PROSPECTIVE COMMITMENTS",
         ])
-        commitments = result.get("commitments", [])
         if not commitments:
             lines.append("(none)")
         for item in commitments:
