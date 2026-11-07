@@ -154,6 +154,10 @@ class ContinuityStore:
             raise ValueError("note must be a string of at most 2000 characters.")
         if state == "superseded" and not superseded_by:
             raise ValueError("A superseded memory must identify its replacement.")
+        if state != "superseded" and superseded_by is not None:
+            raise ValueError("Only a superseded memory may identify a replacement.")
+        if superseded_by == memory_id:
+            raise ValueError("A memory cannot supersede itself.")
         with closing(self._connect()) as db:
             if db.execute("SELECT 1 FROM memories WHERE id=?", (memory_id,)).fetchone() is None:
                 raise KeyError(memory_id)
@@ -176,8 +180,14 @@ class ContinuityStore:
         self, derived_memory_id: str, source_memory_ids: list[str],
     ) -> int:
         """Register a model-derived record; it remains pending review."""
-        if not source_memory_ids or len(source_memory_ids) != len(set(source_memory_ids)):
-            raise ValueError("Provide one or more unique source memory IDs.")
+        if (
+            not isinstance(source_memory_ids, list)
+            or not source_memory_ids
+            or len(source_memory_ids) > 100
+            or any(not isinstance(item, str) or not item for item in source_memory_ids)
+            or len(source_memory_ids) != len(set(source_memory_ids))
+        ):
+            raise ValueError("Provide 1 to 100 unique, non-empty source memory IDs.")
         if derived_memory_id in source_memory_ids:
             raise ValueError("A derived memory cannot cite itself.")
         with closing(self._connect()) as db:
