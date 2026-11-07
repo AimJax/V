@@ -353,9 +353,19 @@ class MemoryRetrievalTests(unittest.TestCase):
                     "content": "I prefer practical solutions that can be tested.",
                 }]
             },
+            temporal_records={
+                derived.id: {
+                    "state": "disputed",
+                    "recorded_at": "2026-11-07T00:00:00+00:00",
+                    "valid_from": None,
+                    "valid_until": None,
+                    "superseded_by": None,
+                }
+            },
         )
 
         self.assertIn("derived_summary", context)
+        self.assertIn("temporal_state=disputed", context)
         self.assertIn("derived_from=source-123", context)
         self.assertIn("I prefer practical solutions that can be tested.", context)
 
