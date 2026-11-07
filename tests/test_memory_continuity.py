@@ -79,6 +79,42 @@ def test_derivation_source_list_is_bounded_and_well_formed(continuity):
     with pytest.raises(ValueError):
         continuity.add_derivation("derived", ["m1"] * 101)
 
+
+def test_source_edit_invalidates_accepted_derivation_and_marks_summary_disputed(continuity):
+    continuity.add_derivation("derived", ["m1", "m2"])
+    continuity.review_derivation("derived", "accepted")
+    continuity.ensure_temporal_record("derived")
+
+    with sqlite3.connect(continuity.database_path) as db:
+        db.execute("UPDATE memories SET content='corrected source' WHERE id='m1'")
+
+    sources = continuity.derivation_sources("derived")
+    assert {item["state"] for item in sources} == {"rejected"}
+    with sqlite3.connect(continuity.database_path) as db:
+        state = db.execute(
+            "SELECT state FROM memory_temporal WHERE memory_id='derived'"
+        ).fetchone()[0]
+    assert state == "disputed"
+
+
+def test_source_deletion_marks_dependent_summary_disputed(continuity):
+    continuity.add_derivation("derived", ["m1", "m2"])
+    continuity.review_derivation("derived", "accepted")
+    continuity.ensure_temporal_record("derived")
+
+    with sqlite3.connect(continuity.database_path) as db:
+        db.execute("DELETE FROM memories WHERE id='m1'")
+
+    with sqlite3.connect(continuity.database_path) as db:
+        state = db.execute(
+            "SELECT state FROM memory_temporal WHERE memory_id='derived'"
+        ).fetchone()[0]
+        remaining_links = db.execute(
+            "SELECT COUNT(*) FROM memory_derivations WHERE derived_memory_id='derived'"
+        ).fetchone()[0]
+    assert state == "disputed"
+    assert remaining_links == 0
+
 def test_commitments_track_due_dates_and_lifecycle(continuity):
     item = continuity.create_commitment(
         "Review the memory export", due_at="2026-11-10T12:00:00+07:00",
