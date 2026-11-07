@@ -401,10 +401,17 @@ class ContinuityStore:
                     (derived_memory_id,),
                 ).fetchone()[0]
                 if unresolved == 0:
-                    current = db.execute(
-                        "SELECT memory_key FROM memories WHERE id=?",
-                        (derived_memory_id,),
-                    ).fetchone()
+                    memory_columns = {
+                        row["name"] for row in db.execute("PRAGMA table_info(memories)")
+                    }
+                    current = (
+                        db.execute(
+                            "SELECT memory_key FROM memories WHERE id=?",
+                            (derived_memory_id,),
+                        ).fetchone()
+                        if "memory_key" in memory_columns
+                        else None
+                    )
                     memory_key = current["memory_key"] if current is not None else None
                     if (
                         isinstance(memory_key, str)
