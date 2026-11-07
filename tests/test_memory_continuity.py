@@ -105,6 +105,13 @@ def test_supersession_requires_a_distinct_replacement(continuity):
         continuity.set_memory_state("m1", "superseded", superseded_by="missing")
 
 
+
+def test_supersession_chains_cannot_form_cycles(continuity):
+    continuity.set_memory_state("m1", "superseded", superseded_by="m2")
+    with pytest.raises(ValueError, match="cycle"):
+        continuity.set_memory_state("m2", "superseded", superseded_by="m1")
+    assert continuity.temporal_record("m2")["state"] == "current"
+
 def test_derivation_source_list_is_bounded_and_well_formed(continuity):
     with pytest.raises(ValueError):
         continuity.add_derivation("derived", "m1")
