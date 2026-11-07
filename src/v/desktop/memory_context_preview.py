@@ -92,9 +92,12 @@ class MemoryContextPreviewDialog(QDialog):
                 (
                     f"[{memory['memory_type']}; {memory['provenance']}; "
                     f"confidence={memory['confidence']:.2f}; "
+                    f"temporal_state={memory.get('temporal_state', 'unspecified')}; "
                     f"id={memory['memory_id']}]"
                 ),
                 f"Subject: {memory['subject']}",
+                f"Valid: {memory.get('valid_from') or 'unbounded'} → "
+                f"{memory.get('valid_until') or 'unbounded'}",
                 f"Source date: {memory.get('source_created_at') or 'not recorded'}",
                 memory["content"],
             ])
