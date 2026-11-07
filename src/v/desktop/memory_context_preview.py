@@ -120,6 +120,8 @@ class MemoryContextPreviewDialog(QDialog):
             )
             if item.get("description"):
                 lines.append(f"  {item['description']}")
+            if item.get("source_evidence"):
+                lines.append(f"  Source evidence: {item['source_evidence']}")
         lines.extend([
             "",
             "EXACT MEMORY-CONTEXT BLOCK",
