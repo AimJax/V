@@ -398,8 +398,12 @@ class DesktopService:
                         limit=self.retrieval_limit,
                     )
                 derivation_sources = {}
+                temporal_records = {}
                 if self.continuity_store is not None:
                     for memory in memories:
+                        temporal_records[memory.id] = (
+                            self.continuity_store.temporal_record(memory.id)
+                        )
                         if memory.memory_type == "inferred_pattern":
                             derivation_sources[memory.id] = (
                                 self.continuity_store.derivation_sources(memory.id)
@@ -408,6 +412,7 @@ class DesktopService:
                     memories,
                     max_characters=self.retrieval_max_characters,
                     derivation_sources=derivation_sources,
+                    temporal_records=temporal_records,
                 )
             except Exception:
                 # Memory failures must never prevent the user from chatting.
@@ -965,8 +970,12 @@ class DesktopService:
             fallback_reason = None
 
         derivation_sources = {}
+        temporal_records = {}
         if self.continuity_store is not None:
             for memory in memories:
+                temporal_records[memory.id] = (
+                    self.continuity_store.temporal_record(memory.id)
+                )
                 if memory.memory_type == "inferred_pattern":
                     derivation_sources[memory.id] = (
                         self.continuity_store.derivation_sources(memory.id)
@@ -975,6 +984,7 @@ class DesktopService:
             memories,
             max_characters=self.retrieval_max_characters,
             derivation_sources=derivation_sources,
+            temporal_records=temporal_records,
         )
         return {
             "query": query,
