@@ -5,15 +5,21 @@
 
 ## Implementation status on the active branch
 
-The first implementation slice is present:
+**Status remains In progress.** The current branch now contains the following implementation:
 
-- src/v/memory/continuity.py adds temporal validity metadata, lifecycle states (current, superseded, corrected, disputed, expired), and explicit replacement references in the existing memory SQLite database.
-- Derived-record provenance can be registered against one or more existing source memories. New derivations remain pending until explicitly accepted or rejected; source edits invalidate accepted derivations, and source deletion removes dependent references through foreign-key behavior.
-- Prospective commitments can be created with due dates, optional recurrence descriptions, source-memory links, and open/completed/cancelled lifecycle states.
-- DesktopService initializes the continuity layer alongside the existing MemoryStore and exposes methods for temporal state, derivation review, and commitment lifecycle operations.
-- tests/test_memory_continuity.py covers timezone validation, temporal ranges, evidence references and review, and prospective commitment lifecycle.
+- The existing SQLite memory store remains authoritative; temporal and prospective metadata are additive tables in the same database.
+- Temporal records support current, superseded, corrected, disputed, and expired states; timezone-aware validity windows; and explicit replacement references.
+- Temporal lifecycle and validity can be changed atomically. Invalid transitions, self-supersession, and malformed source references are rejected.
+- Evidence-linked derivations are review-gated. New inferred patterns created while continuity is enabled are pending by default. Existing inferred patterns are migrated from their explicit evidence links into pending review.
+- Editing or deleting source evidence invalidates accepted dependent derivations. Dependent summaries are marked disputed when they remain in storage.
+- Prospective commitments support due dates, recurrence descriptions, source-memory links, and open/completed/cancelled states. They are stored as commitments only; they are not scheduled reminders or automations.
+- Backup format v4 exports and restores temporal records, derivations, and commitments in addition to memories and inferred-pattern evidence. Import remains compatible with v1, v2, and v3 backups, validates references, and merges atomically.
+- Present-focused retrieval excludes non-current or out-of-validity records and excludes derived records with pending/rejected provenance. Historical queries can still retrieve past or disputed records. Retrieval remains lexical-first with the existing semantic/relationship infrastructure and bounded context assembly.
+- The desktop Memory Manager now opens a continuity view for a selected memory. It exposes temporal lifecycle editing, validity dates, derivation-source inspection/review, and commitment creation/completion/cancellation.
+- A local-model consolidation pipeline groups related explicit memories, preserves source references, and creates inferred-pattern proposals. Each proposal remains pending review and is excluded from ordinary retrieval until accepted.
+- Consolidation runs as cancellable background work, yields to interactive chat, and does not compete with the historical backfill worker for the local model.
 
-This is an initial foundation, not completion of Phase 2. The existing retrieval module already contains episodic timeline ranking and historical-query handling; the next work is to integrate temporal lifecycle state into retrieval and context assembly, then add evidence-linked consolidation and user-facing inspection controls.
+The current implementation still requires automated Windows CI verification, a complete multi-session evaluation, and review of remaining retrieval and lifecycle edge cases before Phase 2 can be marked verified.
 
 ## 1. Intended result
 
@@ -95,14 +101,14 @@ Run extraction, backfill, consolidation, and embedding work as cancellable backg
 
 ## 9. Implementation milestones
 
-1. **In progress:** Inventory memory schemas, extraction, retrieval, graph, backup, UI, and tests; preserve existing SQLite memory and retrieval infrastructure.
-2. **In progress:** Define canonical semantics for episodic, semantic, procedural, prospective, and derived autobiographical records; temporal lifecycle and prospective commitment storage are implemented as the first slice.
-3. Add only necessary schema extensions with versioned migrations.
-4. Implement temporal validity and supersession rules.
-5. Implement evidence-linked consolidation and invalidation.
-6. Improve contextual retrieval and bounded context assembly.
-7. Extend desktop inspection, correction, merge, and lifecycle controls.
-8. Add realistic multi-conversation, multi-session continuity evaluations.
+1. **Implemented, verification pending:** Inventory existing memory schemas, extraction, retrieval, graph, backup, UI, and tests; preserve the existing SQLite infrastructure.
+2. **Implemented, verification pending:** Define and persist temporal lifecycle, prospective commitments, and evidence-linked derivation states.
+3. **Implemented, verification pending:** Add versioned continuity schema and v4 backup/restore with v1-v3 compatibility.
+4. **Implemented, verification pending:** Enforce temporal validity, supersession, and dependent-record invalidation.
+5. **In progress:** Evidence-linked consolidation proposals, duplicate avoidance, contradiction-aware summarization, and invalidation are implemented; broader evaluation remains.
+6. **In progress:** Present-focused validity filtering and review-gated derived retrieval are implemented; contextual ranking and end-to-end recall evaluation remain.
+7. **Implemented, verification pending:** Desktop continuity inspection, temporal editing, derivation review, and prospective commitment controls are connected to the runtime.
+8. **In progress:** Add realistic multi-conversation, multi-session, restart, migration, backup/restore, and target-Windows continuity evaluations.
 
 ## 10. Required tests
 
