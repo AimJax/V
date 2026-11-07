@@ -1,6 +1,7 @@
 import asyncio
 import unittest
 
+from contextlib import closing
 from pathlib import Path
 
 from support import temporary_directory
@@ -276,11 +277,12 @@ class MemoryRetrievalTests(unittest.TestCase):
         )
         self.assertIn(derived.id, {item.id for item in accepted})
 
-        with self.store._connect() as db:
+        with closing(self.store._connect()) as db:
             db.execute(
                 "UPDATE memories SET content='Corrected source statement.' WHERE id=?",
                 (source.id,),
             )
+            db.commit()
         invalidated = retrieve_relevant_memories(
             self.store, "monochrome pixel art palette"
         )
