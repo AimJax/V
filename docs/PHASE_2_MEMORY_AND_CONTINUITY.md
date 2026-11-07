@@ -16,6 +16,7 @@
 - Prospective commitments are extracted only from explicit user-stated future intent or reminder requests, with exact source quotations and source-memory links. They support due dates, descriptive recurrence, and open/completed/cancelled states. Relevant open commitments are selectively injected into chat context; completed commitments are available to historical queries. They are stored as commitments only; they are not scheduled reminders or automations.
 - Backup format v4 exports and restores temporal records, derivations, and commitments in addition to memories and inferred-pattern evidence. Import remains compatible with v1, v2, and v3 backups, validates references, and merges atomically.
 - Present-focused retrieval excludes non-current or out-of-validity records and excludes derived records with pending/rejected provenance. Historical queries can still retrieve past or disputed records. Retrieval remains lexical-first with the existing semantic/relationship infrastructure and bounded context assembly.
+- Elliptical follow-up questions can use the two most recent user turns from the same conversation to resolve references. This is activated only by follow-up cues; standalone questions are not mixed with unrelated history. The recall preview uses the same contextual query builder as chat.
 - The desktop Memory Manager now opens a continuity view for a selected memory. It exposes a chronological timeline grouped by topic key or memory type, temporal lifecycle editing, validity dates, derivation-source inspection/review, and commitment creation/completion/cancellation.
 - Contextual retrieval resolves elliptical follow-ups from recent user turns while leaving standalone queries untouched. Direct matches retain priority over optional associations.
 - A read-only recall preview runs the same contextual retrieval path as chat and displays the actual retrieval query, selected memories, selected commitments, source quotations, and the assembled memory-context block.
@@ -127,10 +128,20 @@ Run extraction, backfill, consolidation, and embedding work as cancellable backg
 - Backup/restore preserves all supported types, provenance, and relationships.
 - Migrations preserve existing memory and conversation data.
 
-## 11. Acceptance criteria
+## 11. Local verification
+
+Run from the project root with V's Python environment active:
+
+- `python -m v memory evaluate` — isolated synthetic retrieval benchmark.
+- `python -m v memory evaluate --personal` — read-only evaluation against this PC's saved memories. Question generation and embedding calls use the configured local inference endpoint. Generated cases remain in memory; the command does not modify saved memories or the embedding cache.
+- `python -m pytest` — complete automated test suite.
+
+The personal evaluation is the required target-PC check after Windows CI. Review the per-question misses and false positives before considering the configured retrieval threshold calibrated. The benchmark reports a candidate threshold but never changes configuration automatically.
+
+## 12. Acceptance criteria
 
 Phase 2 is verified when V maintains useful, evidence-linked, time-aware continuity across sessions; recalls relevant context naturally; distinguishes event, fact, inference, and summary; and lets the user inspect, correct, export, and delete memory without corruption.
 
-## 12. Explicitly out of scope
+## 13. Explicitly out of scope
 
 Identity definition/evolution (Phase 1), full appraisal/affect/motivation/reflection (Phase 3), new sensor/vision capabilities (Phase 4), and autonomous initiative/background projects (Phase 5).
