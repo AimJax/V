@@ -124,7 +124,7 @@ class MemoryContinuityDialog(QDialog):
         self.timeline_table.setSelectionBehavior(
             QTableWidget.SelectionBehavior.SelectRows
         )
-        self.timeline_table.setMinimumHeight(110)
+        self.timeline_table.setMinimumHeight(0)
         self.timeline_table.setMaximumHeight(190)
         timeline_header = self.timeline_table.horizontalHeader()
         timeline_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -137,7 +137,7 @@ class MemoryContinuityDialog(QDialog):
         divider.setStyleSheet("font-weight: 650; margin-top: 8px;")
         root.addWidget(divider)
         self.derivation_list = QListWidget()
-        self.derivation_list.setMinimumHeight(70)
+        self.derivation_list.setMinimumHeight(0)
         self.derivation_list.setMaximumHeight(150)
         root.addWidget(self.derivation_list)
         derivation_actions = QHBoxLayout()
@@ -175,7 +175,7 @@ class MemoryContinuityDialog(QDialog):
         self.commitment_table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers
         )
-        self.commitment_table.setMinimumHeight(90)
+        self.commitment_table.setMinimumHeight(0)
         self.commitment_table.setMaximumHeight(160)
         commitment_header = self.commitment_table.horizontalHeader()
         commitment_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -213,7 +213,36 @@ class MemoryContinuityDialog(QDialog):
         commitment_actions.addWidget(self.cancel_commitment_button)
         root.addLayout(commitment_actions)
 
+        self._fit_record_widget_heights()
         self.refresh()
+
+    @staticmethod
+    def _table_content_height(table: QTableWidget, maximum: int) -> int:
+        header_height = max(
+            table.horizontalHeader().height(),
+            table.horizontalHeader().sizeHint().height(),
+        )
+        rows_height = sum(
+            table.rowHeight(row) for row in range(table.rowCount())
+        )
+        return min(maximum, max(44, header_height + rows_height + 2 * table.frameWidth() + 4))
+
+    def _fit_record_widget_heights(self) -> None:
+        self.timeline_table.setFixedHeight(
+            self._table_content_height(self.timeline_table, 190)
+        )
+        self.commitment_table.setFixedHeight(
+            self._table_content_height(self.commitment_table, 160)
+        )
+        item_height = self.derivation_list.sizeHintForRow(0)
+        if item_height < 0:
+            item_height = self.derivation_list.fontMetrics().height() + 8
+        list_height = (
+            item_height * self.derivation_list.count()
+            + 2 * self.derivation_list.frameWidth()
+            + 4
+        )
+        self.derivation_list.setFixedHeight(min(150, max(44, list_height)))
 
     def refresh(self) -> None:
         self.status_label.setText("Loading continuity records…")
@@ -276,6 +305,7 @@ class MemoryContinuityDialog(QDialog):
                 if column == 3 and source_id:
                     cell.setToolTip(source_id)
                 self.commitment_table.setItem(row, column, cell)
+        self._fit_record_widget_heights()
         status_message = self._next_status_message
         self._next_status_message = None
         self.status_label.setText(
