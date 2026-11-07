@@ -137,6 +137,7 @@ def test_source_deletion_marks_dependent_summary_disputed(continuity):
     continuity.ensure_temporal_record("derived")
 
     with sqlite3.connect(continuity.database_path) as db:
+        db.execute("PRAGMA foreign_keys = ON")
         db.execute("DELETE FROM memories WHERE id='m1'")
 
     with sqlite3.connect(continuity.database_path) as db:
