@@ -99,6 +99,7 @@ class ContinuityStore:
                     WHERE source_memory_id=OLD.id AND state IN ('pending','accepted');
                     UPDATE memory_temporal
                     SET state='disputed',
+                        superseded_by=NULL,
                         note='A supporting source changed; this derived record requires review.'
                     WHERE memory_id IN (
                         SELECT derived_memory_id FROM memory_derivations
@@ -136,6 +137,7 @@ class ContinuityStore:
                     WHERE source_memory_id=OLD.id AND state IN ('pending','accepted');
                     UPDATE memory_temporal
                     SET state='disputed',
+                        superseded_by=NULL,
                         note='A supporting source was deleted; this derived record requires review.'
                     WHERE memory_id IN (
                         SELECT derived_memory_id FROM memory_derivations
