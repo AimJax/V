@@ -424,8 +424,21 @@ class DesktopService:
                     commitments = self.continuity_store.list_commitments(
                         state="all", limit=500
                     )
-                    commitment_context = build_commitment_context(
+                    selected_commitments = select_relevant_commitments(
                         commitments, user_message
+                    )
+                    for item in selected_commitments:
+                        source_id = item.get("source_memory_id")
+                        if source_id:
+                            try:
+                                source_memory = self.memory_store.get_memory(source_id)
+                            except KeyError:
+                                continue
+                            item["source_evidence"] = (
+                                source_memory.evidence or source_memory.content
+                            )
+                    commitment_context = build_commitment_context(
+                        selected_commitments, user_message
                     )
                     if commitment_context:
                         memory_context = (
@@ -1009,7 +1022,19 @@ class DesktopService:
             else []
         )
         selected_commitments = select_relevant_commitments(commitments, query)
-        commitment_context = build_commitment_context(commitments, query)
+        for item in selected_commitments:
+            source_id = item.get("source_memory_id")
+            if source_id and self.memory_store is not None:
+                try:
+                    source_memory = self.memory_store.get_memory(source_id)
+                except KeyError:
+                    continue
+                item["source_evidence"] = (
+                    source_memory.evidence or source_memory.content
+                )
+        commitment_context = build_commitment_context(
+            selected_commitments, query
+        )
         if commitment_context:
             context = ((context + "\n\n") if context else "") + commitment_context
         return {
@@ -1041,6 +1066,7 @@ class DesktopService:
                     "due_at": item["due_at"],
                     "state": item["state"],
                     "source_memory_id": item["source_memory_id"],
+                    "source_evidence": item.get("source_evidence"),
                 }
                 for item in selected_commitments
             ],
