@@ -131,8 +131,9 @@ suggestions, hypothetical plans, wishes, questions, or vague possibilities into
 commitments. Do not infer that V has permission to perform the action. Recording a
 commitment does not schedule a reminder or authorize an external action.
 
-Use the original message timestamp and timezone. Resolve relative due dates only when
-the source message makes them unambiguous. If no due date is stated or safely resolvable,
+Use the original message timestamp and the supplied local timezone when resolving
+relative dates. Resolve relative due dates only when the source message makes them
+unambiguous. If no due date is stated or safely resolvable,
 use null. Recurrence is descriptive text only; do not invent a schedule. Evidence must
 be an exact quotation from the source user message, no more than 600 characters.
 Do not include sensitive personal information.
@@ -596,6 +597,10 @@ class MemoryExtractor:
                 "source_message_id": message_id,
                 "source_conversation_id": message.conversation_id,
                 "source_created_at": message.created_at,
+                "local_timezone": (
+                    getattr(datetime.now().astimezone().tzinfo, "key", None)
+                    or str(datetime.now().astimezone().tzinfo)
+                ),
                 "user_message": message.content[:5000],
                 "surrounding_context": [
                     {
