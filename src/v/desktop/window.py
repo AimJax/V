@@ -643,6 +643,9 @@ class DesktopWindow(QMainWindow):
             self.runtime.memory_consolidation_failed.connect(
                 dialog.on_operation_failed
             )
+            self.runtime.memory_consolidation_cancelled.connect(
+                dialog.on_consolidation_cancelled
+            )
             self.runtime.memory_continuity_ready.connect(dialog.set_snapshot)
             self.runtime.memory_continuity_failed.connect(dialog.on_operation_failed)
             self.memory_continuity_dialog = dialog
