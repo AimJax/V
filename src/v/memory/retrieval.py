@@ -300,10 +300,13 @@ COMMITMENT_HISTORY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 COMMITMENT_STOP_WORDS = {
-    "about", "after", "before", "could", "does", "from", "have", "help",
-    "into", "just", "make", "need", "please", "that", "them", "then",
-    "there", "these", "they", "this", "those", "what", "when", "where",
-    "which", "will", "with", "would", "your", "you",
+    "about", "after", "also", "and", "are", "any", "before", "can",
+    "could", "did", "does", "for", "from", "have", "help", "into",
+    "just", "make", "may", "might", "need", "not", "our", "please",
+    "should", "some", "than", "that", "the", "their", "them", "then",
+    "there", "these", "they", "this", "those", "was", "were", "what",
+    "when", "where", "which", "who", "will", "with", "would", "your",
+    "you",
 }
 
 
