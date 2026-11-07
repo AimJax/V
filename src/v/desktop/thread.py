@@ -32,6 +32,8 @@ class DesktopRuntimeThread(QThread):
     memory_deleted = Signal(str)
     memory_backup_completed = Signal(str)
     memory_operation_failed = Signal(str)
+    memory_continuity_ready = Signal(object)
+    memory_continuity_failed = Signal(str)
     memory_backfill_progress = Signal(object)
     memory_backfill_completed = Signal(object)
     memory_backfill_paused = Signal()
@@ -359,6 +361,75 @@ class DesktopRuntimeThread(QThread):
                     self.memory_backfill_failed.emit(str(error))
                 continue
 
+            if command == "memory_continuity_get":
+                try:
+                    self.memory_continuity_ready.emit(
+                        service.memory_continuity_snapshot(str(payload))
+                    )
+                except Exception as error:
+                    self.memory_continuity_failed.emit(str(error))
+                continue
+
+            if command == "memory_continuity_state":
+                try:
+                    memory_id, state, replacement, note, valid_from, valid_until = payload
+                    if valid_from or valid_until:
+                        service.ensure_memory_temporal_record(
+                            memory_id,
+                            valid_from=valid_from or None,
+                            valid_until=valid_until or None,
+                        )
+                    service.set_memory_temporal_state(
+                        memory_id,
+                        state,
+                        superseded_by=replacement or None,
+                        note=note,
+                    )
+                    self.memory_continuity_ready.emit(
+                        service.memory_continuity_snapshot(memory_id)
+                    )
+                except Exception as error:
+                    self.memory_continuity_failed.emit(str(error))
+                continue
+
+            if command == "memory_derivation_review":
+                try:
+                    memory_id, decision = payload
+                    service.review_memory_derivation(memory_id, decision)
+                    self.memory_continuity_ready.emit(
+                        service.memory_continuity_snapshot(memory_id)
+                    )
+                except Exception as error:
+                    self.memory_continuity_failed.emit(str(error))
+                continue
+
+            if command == "memory_commitment_create":
+                try:
+                    title, description, due_at, memory_id = payload
+                    service.create_memory_commitment(
+                        title,
+                        description=description,
+                        due_at=due_at or None,
+                        source_memory_id=memory_id or None,
+                    )
+                    self.memory_continuity_ready.emit(
+                        service.memory_continuity_snapshot(memory_id)
+                    )
+                except Exception as error:
+                    self.memory_continuity_failed.emit(str(error))
+                continue
+
+            if command == "memory_commitment_update":
+                try:
+                    commitment_id, state, memory_id = payload
+                    service.update_memory_commitment(commitment_id, state)
+                    self.memory_continuity_ready.emit(
+                        service.memory_continuity_snapshot(memory_id)
+                    )
+                except Exception as error:
+                    self.memory_continuity_failed.emit(str(error))
+                continue
+
             if command == "memory_list":
                 try:
                     query, memory_type, provenance = payload
@@ -478,6 +549,42 @@ class DesktopRuntimeThread(QThread):
 
     def save_settings(self, changes: dict, personality: str) -> None:
         self._post("settings_save", (changes, personality))
+
+    def get_memory_continuity(self, memory_id: str) -> None:
+        self._post("memory_continuity_get", memory_id)
+
+    def update_memory_temporal_state(
+        self,
+        memory_id: str,
+        state: str,
+        replacement: str,
+        note: str,
+        valid_from: str,
+        valid_until: str,
+    ) -> None:
+        self._post(
+            "memory_continuity_state",
+            (memory_id, state, replacement, note, valid_from, valid_until),
+        )
+
+    def review_memory_derivation(self, memory_id: str, decision: str) -> None:
+        self._post("memory_derivation_review", (memory_id, decision))
+
+    def create_memory_commitment(
+        self, title: str, description: str, due_at: str, memory_id: str,
+    ) -> None:
+        self._post(
+            "memory_commitment_create",
+            (title, description, due_at, memory_id),
+        )
+
+    def update_memory_commitment(
+        self, commitment_id: str, state: str, memory_id: str,
+    ) -> None:
+        self._post(
+            "memory_commitment_update",
+            (commitment_id, state, memory_id),
+        )
 
     def list_memories(
         self,
