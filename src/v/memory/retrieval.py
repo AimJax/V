@@ -295,7 +295,8 @@ COMMITMENT_OVERVIEW_PATTERN = re.compile(
     re.IGNORECASE,
 )
 COMMITMENT_HISTORY_PATTERN = re.compile(
-    r"\b(completed|finished|cancelled|canceled|what did i do|what have i done)\b",
+    r"\b(complet(?:e|ed)|finish(?:ed)?|cancelled|canceled|"
+    r"what did i do|what have i done)\b",
     re.IGNORECASE,
 )
 COMMITMENT_STOP_WORDS = {
