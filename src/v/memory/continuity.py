@@ -78,10 +78,18 @@ class ContinuityStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_memory_derivations_source
                     ON memory_derivations(source_memory_id);
-                CREATE TRIGGER IF NOT EXISTS continuity_source_changed
+                DROP TRIGGER IF EXISTS continuity_source_changed;
+                CREATE TRIGGER continuity_source_changed
                 AFTER UPDATE OF content, subject, provenance, source_conversation_id,
                                 source_message_id ON memories
                 BEGIN
+                    UPDATE memory_temporal
+                    SET state='disputed',
+                        note='A supporting source changed; this derived record requires review.'
+                    WHERE memory_id IN (
+                        SELECT derived_memory_id FROM memory_derivations
+                        WHERE source_memory_id=OLD.id AND state='accepted'
+                    );
                     UPDATE memory_derivations SET state='rejected'
                     WHERE source_memory_id=OLD.id AND state='accepted';
                 END;
@@ -100,15 +108,23 @@ class ContinuityStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_memory_commitments_due
                     ON memory_commitments(state, due_at);
-                CREATE TRIGGER IF NOT EXISTS continuity_memory_delete
-                AFTER DELETE ON memories
+                DROP TRIGGER IF EXISTS continuity_memory_delete;
+                CREATE TRIGGER continuity_memory_delete
+                BEFORE DELETE ON memories
                 BEGIN
+                    UPDATE memory_temporal
+                    SET state='disputed',
+                        note='A supporting source was deleted; this derived record requires review.'
+                    WHERE memory_id IN (
+                        SELECT derived_memory_id FROM memory_derivations
+                        WHERE source_memory_id=OLD.id AND state='accepted'
+                    );
                     UPDATE memory_derivations
-                    SET state = 'rejected'
-                    WHERE source_memory_id = OLD.id AND state = 'accepted';
+                    SET state='rejected'
+                    WHERE source_memory_id=OLD.id AND state='accepted';
                     UPDATE memory_commitments
-                    SET source_memory_id = NULL
-                    WHERE source_memory_id = OLD.id;
+                    SET source_memory_id=NULL
+                    WHERE source_memory_id=OLD.id;
                 END;
             """)
             db.commit()
