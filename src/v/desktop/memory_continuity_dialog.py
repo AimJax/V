@@ -210,6 +210,10 @@ class MemoryContinuityDialog(QDialog):
         )
         self.refresh()
 
+    def on_consolidation_cancelled(self) -> None:
+        self.status_label.setText("Memory consolidation was cancelled. No unreviewed summary was applied.")
+        self.refresh()
+
     def _save_temporal(self) -> None:
         state = str(self.state_combo.currentData())
         replacement = self.replacement_input.text().strip()
