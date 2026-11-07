@@ -1,15 +1,26 @@
+import asyncio
 import unittest
 
 from pathlib import Path
 
 from support import temporary_directory
 
+from v.memory.embedding_store import EmbeddingStore
+from v.memory.hybrid_retrieval import HybridMemoryRetriever
 from v.memory.retrieval import (
     build_memory_context,
     meaningful_terms,
     retrieve_relevant_memories,
 )
 from v.memory.store import MemoryStore
+
+
+class FakeEmbeddingProvider:
+    async def embed_documents(self, texts):
+        return [[1.0, 0.0] for _ in texts]
+
+    async def embed_queries(self, texts):
+        return [[1.0, 0.0] for _ in texts]
 
 
 class MemoryRetrievalTests(unittest.TestCase):
@@ -275,6 +286,54 @@ class MemoryRetrievalTests(unittest.TestCase):
         )
         self.assertNotIn(derived.id, {item.id for item in invalidated})
 
+
+
+    def test_hybrid_retrieval_applies_temporal_filters_to_semantic_results(self):
+        from v.memory.continuity import ContinuityStore
+
+        primary = self.store.create_memory(
+            content="Project V is a local AI companion.",
+            memory_type="project",
+            subject="Project V",
+            source_conversation_id="conversation-current",
+            source_message_id=600,
+            importance=5,
+        )
+        outdated = self.store.create_memory(
+            content="Project V previously relied on remote cloud processing.",
+            memory_type="fact",
+            subject="Project V",
+            source_conversation_id="conversation-current",
+            source_message_id=600,
+            importance=4,
+        )
+        replacement = self.store.create_memory(
+            content="Project V now uses local inference.",
+            memory_type="fact",
+            subject="Project V",
+            source_conversation_id="conversation-later",
+            source_message_id=601,
+            importance=4,
+        )
+        ContinuityStore(self.database_path).set_memory_state(
+            outdated.id,
+            "superseded",
+            superseded_by=replacement.id,
+        )
+        retriever = HybridMemoryRetriever(
+            self.store,
+            EmbeddingStore(self.database_path),
+            FakeEmbeddingProvider(),
+            semantic_threshold=0.5,
+            limit=5,
+        )
+
+        results = asyncio.run(
+            retriever.retrieve("Project V local AI companion", limit=5)
+        )
+        result_ids = {item.id for item in results}
+        self.assertIn(primary.id, result_ids)
+        self.assertNotIn(outdated.id, result_ids)
 
     def test_empty_results_produce_no_context(self):
         self.assertIsNone(build_memory_context([]))
