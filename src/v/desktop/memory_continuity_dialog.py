@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -13,6 +14,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -38,10 +40,29 @@ class MemoryContinuityDialog(QDialog):
         self._snapshot: dict = {}
         self._next_status_message: str | None = None
         self.setWindowTitle("V — Memory Continuity")
-        self.resize(900, 860)
-        self.setMinimumSize(720, 680)
+        self.setWindowFlags(
+            self.windowFlags()
+            | Qt.WindowType.WindowMinMaxButtonsHint
+            | Qt.WindowType.WindowCloseButtonHint
+        )
+        self.setMinimumSize(560, 420)
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        available = screen.availableGeometry() if screen is not None else None
+        initial_width = min(900, available.width() - 40) if available else 900
+        initial_height = min(820, available.height() - 80) if available else 820
+        self.resize(max(560, initial_width), max(420, initial_height))
+        if available is not None:
+            self.move(available.center() - self.rect().center())
 
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        scroll = QScrollArea(self)
+        scroll.setObjectName("continuityScrollArea")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        content = QWidget()
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+        root = QVBoxLayout(content)
         heading = QLabel("Memory continuity")
         heading.setStyleSheet("font-size: 17pt; font-weight: 650;")
         self.memory_label = QLabel(f"Selected memory: {memory_id}")
