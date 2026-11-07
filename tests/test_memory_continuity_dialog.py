@@ -3,7 +3,7 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QScrollArea
 
 from v.desktop.memory_continuity_dialog import MemoryContinuityDialog
 
@@ -19,6 +19,14 @@ class MemoryContinuityDialogTests(unittest.TestCase):
     def tearDown(self):
         self.dialog.close()
         self.application.processEvents()
+
+    def test_dialog_is_scrollable_and_fits_available_screen(self):
+        scroll = self.dialog.findChild(QScrollArea, "continuityScrollArea")
+        self.assertIsNotNone(scroll)
+        self.assertTrue(scroll.widgetResizable())
+        available = self.dialog.screen().availableGeometry()
+        self.assertLessEqual(self.dialog.width(), available.width())
+        self.assertLessEqual(self.dialog.height(), available.height())
 
     def test_snapshot_displays_timeline_derivations_and_commitments(self):
         self.dialog.set_snapshot({
