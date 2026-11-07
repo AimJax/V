@@ -926,6 +926,13 @@ class DesktopService:
             "commitments": self.continuity_store.list_commitments(state="all", limit=500),
         }
 
+    def update_memory_temporal_record(self, memory_id: str, state: str, **fields) -> dict:
+        if self.continuity_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        return self.continuity_store.update_temporal_record(
+            memory_id, state, **fields
+        )
+
     def ensure_memory_temporal_record(self, memory_id: str, **fields) -> dict:
         if self.continuity_store is None:
             raise RuntimeError("Long-term memory is disabled in configuration.")
