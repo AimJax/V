@@ -206,7 +206,7 @@ class MemoryConsolidator:
 
         groups = self._source_groups()[:limit]
         created = skipped = failures = examined = 0
-        for (memory_type, _subject, memory_key), records in groups:
+        for _group_key, records in groups:
             if cancel_event is not None and cancel_event.is_set():
                 return ConsolidationReport(
                     examined, created, skipped, 0, failures, True
