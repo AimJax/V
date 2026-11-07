@@ -45,6 +45,56 @@ def meaningful_terms(query: str) -> list[str]:
 
 
 
+CONTEXTUAL_FOLLOWUP_PATTERN = re.compile(
+    r"\\b(?:it|its|that|this|those|them|there|same|instead|more|"
+    r"also|why|how so|what about|how about|which one|the other|"
+    r"continue|go on|and then|what next)\\b",
+    re.IGNORECASE,
+)
+
+
+def is_contextual_followup_query(query: str) -> bool:
+    """Identify elliptical turns that need the immediately preceding user topic."""
+    return bool(
+        isinstance(query, str)
+        and query.strip()
+        and CONTEXTUAL_FOLLOWUP_PATTERN.search(query)
+    )
+
+
+def build_contextual_memory_query(
+    query: str,
+    recent_messages: list,
+    *,
+    max_history_messages: int = 2,
+    max_characters: int = 1200,
+) -> str:
+    """Resolve short follow-ups using recent user turns, without polluting standalone searches."""
+    if not isinstance(query, str) or not query.strip():
+        return ""
+    if not is_contextual_followup_query(query):
+        return query.strip()
+    if max_history_messages < 1 or max_characters < 1:
+        raise ValueError("Contextual retrieval limits must be positive.")
+
+    history = [
+        item.content.strip()
+        for item in recent_messages
+        if getattr(item, "role", None) == "user"
+        and isinstance(getattr(item, "content", None), str)
+        and item.content.strip()
+    ][-max_history_messages:]
+    parts = history + [query.strip()]
+    # Preserve the current turn and newest history when the character budget is hit.
+    result = " ".join(parts)
+    if len(result) <= max_characters:
+        return result
+    current = query.strip()
+    remaining = max(0, max_characters - len(current) - 1)
+    context = " ".join(history)[-remaining:] if remaining else ""
+    return f"{context} {current}".strip()
+
+
 HISTORICAL_QUERY_PATTERN = re.compile(
     r"\b(?:when did|when was|what was|where was|where did|used to|"
     r"back then|at that time|previously|previous|earlier|historical|"
