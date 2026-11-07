@@ -137,7 +137,7 @@ Run from the project root with V's Python environment active:
 - `python -m v memory evaluate --personal` — read-only evaluation against this PC's saved memories. Question generation and embedding calls use the configured local inference endpoint. Generated cases remain in memory; the command does not modify saved memories or the embedding cache.
 - `python -m v desktop` — launch the desktop application for the runtime smoke test.
 
-The personal evaluation is the required target-PC check after Windows CI. Close the V desktop before running the CLI evaluations to avoid competing local model workloads; the local chat and embedding endpoints must be configured and available. Review per-question misses and false positives before considering the configured retrieval threshold calibrated. The benchmark reports a candidate threshold but never changes configuration automatically.
+The personal evaluation is the required target-PC check after Windows CI. Close the V desktop before running the CLI evaluations to avoid competing local model workloads; the local chat and embedding endpoints must be configured and available. If automatic question generation creates too much VRAM pressure, run `python -m v memory eval-init`, label the generated template, then pass its printed path to `python -m v memory evaluate --personal --cases <path>`; this skips chat-model question generation and uses only the embedding model. Review per-question misses and false positives before considering the configured retrieval threshold calibrated. The benchmark reports a candidate threshold but never changes configuration automatically.
 
 ### Desktop smoke-test checklist
 
