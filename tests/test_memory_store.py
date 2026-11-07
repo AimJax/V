@@ -101,6 +101,29 @@ class MemoryStoreTests(unittest.TestCase):
         )
         self.assertEqual(self.store.count_inferred_patterns(), 1)
 
+
+    def test_inferred_pattern_is_pending_review_when_continuity_is_enabled(self):
+        from v.memory.continuity import ContinuityStore
+
+        sources = self._create_pattern_sources()
+        continuity = ContinuityStore(self.database_path)
+        pattern = self.store.create_inferred_pattern(
+            content="The user repeatedly favors evidence-backed implementations.",
+            subject="User",
+            memory_key="pattern.evidence_backed",
+            confidence=0.95,
+            importance=4,
+            evidence_memory_ids=[item.id for item in sources],
+        )
+
+        linked_sources = continuity.derivation_sources(pattern.id)
+        self.assertEqual(len(linked_sources), 3)
+        self.assertEqual({item["state"] for item in linked_sources}, {"pending"})
+        self.assertEqual(
+            continuity.review_derivation(pattern.id, "accepted"),
+            3,
+        )
+
     def test_inferred_pattern_rejects_insufficient_or_non_explicit_sources(self):
         first = self.store.create_memory(
             content="First statement.",
