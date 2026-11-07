@@ -163,6 +163,28 @@ def test_commitments_track_due_dates_and_lifecycle(continuity):
     assert len(continuity.list_commitments(state="all")) == 1
 
 
+
+def test_temporal_derivation_and_commitment_state_survive_store_restart(continuity):
+    continuity.add_derivation("derived", ["m1", "m2"])
+    continuity.review_derivation("derived", "accepted")
+    continuity.update_temporal_record(
+        "derived",
+        "current",
+        valid_from="2026-01-01T00:00:00+00:00",
+        note="Reviewed summary.",
+    )
+    commitment = continuity.create_commitment(
+        "Continue the memory evaluation",
+        due_at="2026-11-12T09:00:00+07:00",
+        source_memory_id="m1",
+    )
+
+    reopened = ContinuityStore(continuity.database_path)
+
+    assert reopened.temporal_record("derived")["note"] == "Reviewed summary."
+    assert {item["state"] for item in reopened.derivation_sources("derived")} == {"accepted"}
+    assert reopened.list_commitments(state="all")[0]["id"] == commitment["id"]
+
 def test_commitment_rejects_bad_dates_and_missing_source(continuity):
     with pytest.raises(ValueError):
         continuity.create_commitment("   ")
