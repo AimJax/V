@@ -52,7 +52,7 @@ class MemoryStoreTests(unittest.TestCase):
             source_memory_id=original.id,
         )
         embeddings = EmbeddingStore(self.database_path)
-        embeddings.put(original, "embedding-v5", [0.1, 0.2])
+        embeddings.put(original.id, "embedding-v5", [0.1, 0.2])
 
         with closing(sqlite3.connect(self.database_path)) as connection:
             connection.execute("PRAGMA writable_schema=ON")
