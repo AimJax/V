@@ -161,8 +161,33 @@ class MemoryBackupTests(unittest.TestCase):
         self.assertEqual(self.target.get_memory(original.id), original)
 
 
-    def test_v3_backup_remains_importable_without_continuity_records(self):
+    def test_v3_backup_remains_importable_and_migrates_pattern_reviews(self):
+        from v.memory.continuity import ContinuityStore
+
         original = self.source.create_memory(content="A v3-compatible record.")
+        sources = []
+        for index, conversation_id in enumerate(
+            ("conversation-a", "conversation-a", "conversation-b"),
+            start=1,
+        ):
+            sources.append(
+                self.source.create_memory(
+                    content=f"Explicit evidence {index}.",
+                    memory_type="preference",
+                    subject="User",
+                    source_conversation_id=conversation_id,
+                    source_message_id=300 + index,
+                    evidence=f"Source quotation {index}.",
+                )
+            )
+        pattern = self.source.create_inferred_pattern(
+            content="An existing inferred pattern.",
+            subject="User",
+            memory_key="pattern.v3",
+            confidence=0.95,
+            importance=3,
+            evidence_memory_ids=[item.id for item in sources],
+        )
         export_backup(self.source, self.backup_path)
         payload = json.loads(self.backup_path.read_text(encoding="utf-8"))
         payload["version"] = 3
@@ -171,8 +196,13 @@ class MemoryBackupTests(unittest.TestCase):
         payload.pop("commitments")
         self.backup_path.write_text(json.dumps(payload), encoding="utf-8")
 
-        self.assertEqual(import_backup(self.target, self.backup_path), (1, 0))
+        self.assertEqual(import_backup(self.target, self.backup_path), (5, 0))
         self.assertEqual(self.target.get_memory(original.id), original)
+        continuity = ContinuityStore(self.target.database_path)
+        states = {
+            item["state"] for item in continuity.derivation_sources(pattern.id)
+        }
+        self.assertEqual(states, {"pending"})
 
     def test_export_refuses_to_overwrite_without_explicit_flag(self):
         self.source.create_memory(content="Backup test.")
