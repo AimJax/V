@@ -206,5 +206,82 @@ class MemoryBackupTests(unittest.TestCase):
             import_backup(self.target, self.backup_path)
 
 
+    def test_v4_backup_round_trip_preserves_continuity_records(self):
+        from v.memory.continuity import ContinuityStore
+
+        old = self.source.create_memory(content="The user used an older workflow.")
+        current = self.source.create_memory(content="The user now uses a revised workflow.")
+        summary = self.source.create_memory(
+            content="The user's workflow changed over time.",
+            memory_type="fact",
+            provenance="inferred",
+        )
+        continuity = ContinuityStore(self.source.database_path)
+        continuity.ensure_temporal_record(
+            old.id,
+            valid_from="2024-01-01T00:00:00+00:00",
+            valid_until="2025-01-01T00:00:00+00:00",
+        )
+        continuity.set_memory_state(
+            old.id,
+            "superseded",
+            superseded_by=current.id,
+            note="A newer explicit record replaced this one.",
+        )
+        continuity.add_derivation(summary.id, [old.id, current.id])
+        continuity.review_derivation(summary.id, "accepted")
+        commitment = continuity.create_commitment(
+            "Review the updated workflow",
+            due_at="2026-11-10T12:00:00+07:00",
+            source_memory_id=current.id,
+        )
+
+        path, exported = export_backup(self.source, self.backup_path)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["version"], 4)
+        self.assertEqual(len(payload["temporal_records"]), 1)
+        self.assertEqual(len(payload["derivations"]), 2)
+        self.assertEqual(len(payload["commitments"]), 1)
+
+        restored, skipped = import_backup(self.target, path)
+        self.assertEqual((exported, restored, skipped), (3, 3, 0))
+        target_continuity = ContinuityStore(self.target.database_path)
+        with self.target._connect() as connection:
+            temporal = connection.execute(
+                "SELECT * FROM memory_temporal WHERE memory_id=?", (old.id,)
+            ).fetchone()
+            derivations = connection.execute(
+                "SELECT state FROM memory_derivations WHERE derived_memory_id=?",
+                (summary.id,),
+            ).fetchall()
+            restored_commitment = connection.execute(
+                "SELECT * FROM memory_commitments WHERE id=?", (commitment["id"],)
+            ).fetchone()
+        self.assertEqual(temporal["state"], "superseded")
+        self.assertEqual(temporal["superseded_by"], current.id)
+        self.assertEqual({row["state"] for row in derivations}, {"accepted"})
+        self.assertEqual(dict(restored_commitment), commitment)
+
+        # A second import is idempotent across the continuity tables too.
+        self.assertEqual(import_backup(self.target, path), (0, 3))
+
+    def test_v4_backup_rejects_orphaned_continuity_references_atomically(self):
+        from v.memory.continuity import ContinuityStore
+
+        source = self.source.create_memory(content="Source memory.")
+        derived = self.source.create_memory(content="Derived memory.")
+        continuity = ContinuityStore(self.source.database_path)
+        continuity.add_derivation(derived.id, [source.id])
+        export_backup(self.source, self.backup_path)
+        payload = json.loads(self.backup_path.read_text(encoding="utf-8"))
+        payload["derivations"][0]["source_memory_id"] = "f" * 32
+        self.backup_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "backed-up memories"):
+            import_backup(self.target, self.backup_path)
+        self.assertEqual(self.target.count_memories(), 0)
+
+
+
 if __name__ == "__main__":
     unittest.main()
