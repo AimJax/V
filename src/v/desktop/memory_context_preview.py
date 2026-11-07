@@ -100,7 +100,7 @@ class MemoryContextPreviewDialog(QDialog):
             ])
         lines.extend([
             "",
-            "EXACT ASSEMBLED MODEL CONTEXT",
+            "EXACT MEMORY-CONTEXT BLOCK",
             result.get("context") or "(no memory context will be injected)",
         ])
         self.output.setPlainText("\n".join(lines))
