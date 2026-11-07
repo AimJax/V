@@ -412,7 +412,7 @@ class MemoryRetrievalTests(unittest.TestCase):
         self.assertIn("not scheduled reminders", open_context)
 
         history = select_relevant_commitments(
-            commitments, "What did I complete?"
+            commitments, "What did I finish?"
         )
         self.assertEqual([item["title"] for item in history], [
             "Submit the old tax form"
