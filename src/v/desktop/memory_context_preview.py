@@ -103,6 +103,21 @@ class MemoryContextPreviewDialog(QDialog):
             ])
         lines.extend([
             "",
+            "SELECTED PROSPECTIVE COMMITMENTS",
+        ])
+        commitments = result.get("commitments", [])
+        if not commitments:
+            lines.append("(none)")
+        for item in commitments:
+            lines.append(
+                f"- {item['title']} [state={item['state']}; "
+                f"due={item.get('due_at') or 'not specified'}; "
+                f"source={item.get('source_memory_id') or 'not linked'}]"
+            )
+            if item.get("description"):
+                lines.append(f"  {item['description']}")
+        lines.extend([
+            "",
             "EXACT MEMORY-CONTEXT BLOCK",
             result.get("context") or "(no memory context will be injected)",
         ])
