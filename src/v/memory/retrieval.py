@@ -334,7 +334,7 @@ def select_relevant_commitments(
             continue
         text = f"{item.get('title', '')} {item.get('description', '')}".casefold()
         overlap = sum(1 for term in terms if term in text)
-        if overview_query or overlap:
+        if overview_query or history_query or overlap:
             ranked.append((overlap, item))
     ranked.sort(
         key=lambda pair: (
