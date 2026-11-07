@@ -924,6 +924,16 @@ class DesktopService:
             "Existing memories were not overwritten or deleted."
         )
 
+    async def cancel_background_model_work(self) -> None:
+        """Yield the configured local model to an interactive memory operation."""
+        task = self._identity_evolution_task
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        self._identity_evolution_task = None
+        if self.memory_worker is not None:
+            await self.memory_worker.cancel()
+
     async def preview_memory_context(self, query: str) -> dict:
         if not isinstance(query, str) or not query.strip():
             raise ValueError("Enter a query to preview memory retrieval.")
