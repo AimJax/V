@@ -24,6 +24,7 @@ from v.desktop.service import DesktopSnapshot, DesktopTurnResult
 from v.desktop.settings_dialog import SettingsDialog
 from v.desktop.memory_manager import MemoryManagerDialog
 from v.desktop.memory_continuity_dialog import MemoryContinuityDialog
+from v.desktop.memory_context_preview import MemoryContextPreviewDialog
 from v.desktop.memory_backfill_dialog import MemoryBackfillDialog
 from v.desktop.identity_manager import IdentityManagerDialog
 from v.desktop.thread import DesktopRuntimeThread
@@ -206,6 +207,7 @@ class DesktopWindow(QMainWindow):
         self._last_snapshot: DesktopSnapshot | None = None
         self.memory_manager_dialog: MemoryManagerDialog | None = None
         self.memory_continuity_dialog: MemoryContinuityDialog | None = None
+        self.memory_context_preview_dialog: MemoryContextPreviewDialog | None = None
         self.memory_backfill_dialog: MemoryBackfillDialog | None = None
         self.identity_manager_dialog: IdentityManagerDialog | None = None
         self.settings_dialog: SettingsDialog | None = None
@@ -585,6 +587,9 @@ class DesktopWindow(QMainWindow):
             dialog.delete_requested.connect(self.runtime.delete_memory)
             dialog.confirm_requested.connect(self.runtime.confirm_memory)
             dialog.continuity_requested.connect(self._open_memory_continuity)
+            dialog.context_preview_requested.connect(
+                self._open_memory_context_preview
+            )
             dialog.export_requested.connect(self.runtime.export_memories)
             dialog.import_requested.connect(self.runtime.import_memories)
 
@@ -604,6 +609,29 @@ class DesktopWindow(QMainWindow):
         self.memory_manager_dialog.raise_()
         self.memory_manager_dialog.activateWindow()
         self.memory_manager_dialog.refresh()
+
+    def _open_memory_context_preview(self) -> None:
+        if not self._ready or self._busy:
+            return
+
+        if self.memory_context_preview_dialog is None:
+            dialog = MemoryContextPreviewDialog(self)
+            dialog.preview_requested.connect(self.runtime.preview_memory_context)
+            dialog.cancel_requested.connect(
+                self.runtime.cancel_memory_context_preview
+            )
+            self.runtime.memory_context_preview_ready.connect(dialog.set_preview)
+            self.runtime.memory_context_preview_failed.connect(
+                dialog.on_preview_failed
+            )
+            self.runtime.memory_context_preview_cancelled.connect(
+                dialog.on_preview_cancelled
+            )
+            self.memory_context_preview_dialog = dialog
+
+        self.memory_context_preview_dialog.show()
+        self.memory_context_preview_dialog.raise_()
+        self.memory_context_preview_dialog.activateWindow()
 
     def _open_memory_continuity(self, memory_id: str) -> None:
         if not self._ready or self._busy:
