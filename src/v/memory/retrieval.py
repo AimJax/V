@@ -188,9 +188,10 @@ def _exclude_noncurrent_memories(
     timeline, but present-focused retrieval requires a current temporal state,
     an active validity window, and accepted provenance for derived records.
     """
-    if is_historical_query(query) or not memories:
+    if not memories:
         return memories
 
+    historical = is_historical_query(query)
     now = datetime.now(timezone.utc)
     try:
         with closing(memory_store._connect()) as connection:
@@ -245,7 +246,7 @@ def _exclude_noncurrent_memories(
     selected = []
     for memory in memories:
         record = temporal.get(memory.id)
-        if record is not None:
+        if record is not None and not historical:
             if record["state"] != "current" or not active_window(record):
                 continue
         states = derivation_states.get(memory.id, [])
