@@ -214,6 +214,62 @@ class ContinuityStore:
                 "SELECT * FROM memory_temporal WHERE memory_id=?", (memory_id,)
             ).fetchone())
 
+    def update_temporal_record(
+        self,
+        memory_id: str,
+        state: str,
+        *,
+        valid_from: str | None = None,
+        valid_until: str | None = None,
+        superseded_by: str | None = None,
+        note: str = "",
+    ) -> dict[str, Any]:
+        """Atomically update lifecycle and validity, including clearing dates."""
+        if state not in MEMORY_STATES:
+            raise ValueError(f"Unsupported memory state: {state}")
+        if not isinstance(note, str) or len(note) > 2000:
+            raise ValueError("note must be a string of at most 2000 characters.")
+        if state == "superseded" and not superseded_by:
+            raise ValueError("A superseded memory must identify its replacement.")
+        if state != "superseded" and superseded_by is not None:
+            raise ValueError("Only a superseded memory may identify a replacement.")
+        if superseded_by == memory_id:
+            raise ValueError("A memory cannot supersede itself.")
+        start = _timestamp(valid_from, "valid_from")
+        end = _timestamp(valid_until, "valid_until")
+        if start and end and end < start:
+            raise ValueError("valid_until cannot precede valid_from.")
+        now = _now()
+        with closing(self._connect()) as db:
+            if db.execute(
+                "SELECT 1 FROM memories WHERE id=?", (memory_id,)
+            ).fetchone() is None:
+                raise KeyError(memory_id)
+            if superseded_by and db.execute(
+                "SELECT 1 FROM memories WHERE id=?", (superseded_by,)
+            ).fetchone() is None:
+                raise KeyError(superseded_by)
+            db.execute(
+                """
+                INSERT INTO memory_temporal(
+                    memory_id, state, valid_from, valid_until, recorded_at,
+                    superseded_by, note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(memory_id) DO UPDATE SET
+                    state=excluded.state,
+                    valid_from=excluded.valid_from,
+                    valid_until=excluded.valid_until,
+                    recorded_at=excluded.recorded_at,
+                    superseded_by=excluded.superseded_by,
+                    note=excluded.note
+                """,
+                (memory_id, state, start, end, now, superseded_by, note.strip()),
+            )
+            db.commit()
+            return dict(db.execute(
+                "SELECT * FROM memory_temporal WHERE memory_id=?", (memory_id,)
+            ).fetchone())
+
     def add_derivation(
         self, derived_memory_id: str, source_memory_ids: list[str],
     ) -> int:
