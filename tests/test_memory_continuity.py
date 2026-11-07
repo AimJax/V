@@ -59,6 +59,26 @@ def test_derivations_require_existing_sources_and_explicit_review(continuity):
         continuity.add_derivation("derived", ["missing"])
 
 
+
+def test_supersession_requires_a_distinct_replacement(continuity):
+    with pytest.raises(ValueError):
+        continuity.set_memory_state("m1", "superseded")
+    with pytest.raises(ValueError):
+        continuity.set_memory_state("m1", "current", superseded_by="m2")
+    with pytest.raises(ValueError):
+        continuity.set_memory_state("m1", "superseded", superseded_by="m1")
+    with pytest.raises(KeyError):
+        continuity.set_memory_state("m1", "superseded", superseded_by="missing")
+
+
+def test_derivation_source_list_is_bounded_and_well_formed(continuity):
+    with pytest.raises(ValueError):
+        continuity.add_derivation("derived", "m1")
+    with pytest.raises(ValueError):
+        continuity.add_derivation("derived", [""])
+    with pytest.raises(ValueError):
+        continuity.add_derivation("derived", ["m1"] * 101)
+
 def test_commitments_track_due_dates_and_lifecycle(continuity):
     item = continuity.create_commitment(
         "Review the memory export", due_at="2026-11-10T12:00:00+07:00",
