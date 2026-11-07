@@ -46,9 +46,13 @@ def meaningful_terms(query: str) -> list[str]:
 
 
 CONTEXTUAL_FOLLOWUP_PATTERN = re.compile(
-    r"\b(?:it|its|that|this|those|them|there|same|instead|more|"
-    r"also|why|how so|what about|how about|which one|the other|"
+    r"\b(?:it|its|that|this|those|them|there|same|instead|"
+    r"how so|what about|how about|which one|the other|"
     r"continue|go on|and then|what next)\b",
+    re.IGNORECASE,
+)
+SHORT_CONTEXTUAL_FOLLOWUP_PATTERN = re.compile(
+    r"^\s*(?:why|more|also|and|continue|go on)[?.!\s]*$",
     re.IGNORECASE,
 )
 
@@ -58,7 +62,10 @@ def is_contextual_followup_query(query: str) -> bool:
     return bool(
         isinstance(query, str)
         and query.strip()
-        and CONTEXTUAL_FOLLOWUP_PATTERN.search(query)
+        and (
+            CONTEXTUAL_FOLLOWUP_PATTERN.search(query)
+            or SHORT_CONTEXTUAL_FOLLOWUP_PATTERN.fullmatch(query)
+        )
     )
 
 
