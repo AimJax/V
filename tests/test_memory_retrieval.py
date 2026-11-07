@@ -94,6 +94,44 @@ class MemoryRetrievalTests(unittest.TestCase):
         self.assertIn(primary.id, result_ids)
         self.assertIn(related.id, result_ids)
 
+
+    def test_related_expansion_does_not_reintroduce_superseded_memory(self):
+        from v.memory.continuity import ContinuityStore
+
+        primary = self.store.create_memory(
+            content="Project V is a local AI companion.",
+            memory_type="project",
+            subject="Project V",
+            source_conversation_id="conversation-current",
+            source_message_id=500,
+        )
+        outdated = self.store.create_memory(
+            content="Project V previously relied on remote cloud processing.",
+            memory_type="fact",
+            subject="Project V",
+            source_conversation_id="conversation-current",
+            source_message_id=500,
+        )
+        replacement = self.store.create_memory(
+            content="Project V now uses local inference.",
+            memory_type="fact",
+            subject="Project V",
+            source_conversation_id="conversation-later",
+            source_message_id=501,
+        )
+        ContinuityStore(self.database_path).set_memory_state(
+            outdated.id,
+            "superseded",
+            superseded_by=replacement.id,
+        )
+
+        results = retrieve_relevant_memories(
+            self.store, "Tell me about Project V as a local AI companion."
+        )
+        result_ids = {item.id for item in results}
+        self.assertIn(primary.id, result_ids)
+        self.assertNotIn(outdated.id, result_ids)
+
     def test_retrieval_does_not_expand_into_a_different_source_message(self):
         primary = self.store.create_memory(
             content="I am building a local AI companion named V.",
