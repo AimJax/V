@@ -97,7 +97,6 @@ class MemoryConsolidationTests(unittest.IsolatedAsyncioTestCase):
                 content=content,
                 memory_type="preference",
                 subject="Communication",
-                memory_key="preference.answer_style",
                 provenance="explicit",
                 source_conversation_id=conversation,
                 source_message_id=message_id,
