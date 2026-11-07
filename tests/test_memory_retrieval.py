@@ -9,7 +9,9 @@ from support import temporary_directory
 from v.memory.embedding_store import EmbeddingStore
 from v.memory.hybrid_retrieval import HybridMemoryRetriever
 from v.memory.retrieval import (
+    build_commitment_context,
     build_memory_context,
+    select_relevant_commitments,
     meaningful_terms,
     retrieve_relevant_memories,
 )
@@ -368,6 +370,53 @@ class MemoryRetrievalTests(unittest.TestCase):
         self.assertIn("temporal_state=disputed", context)
         self.assertIn("derived_from=source-123", context)
         self.assertIn("I prefer practical solutions that can be tested.", context)
+
+
+    def test_commitment_context_selects_relevant_open_and_completed_records(self):
+        commitments = [
+            {
+                "title": "Finish Project V test pass",
+                "description": "Run the test suite before packaging.",
+                "due_at": "2026-11-10T10:00:00.000+00:00",
+                "state": "open",
+                "source_memory_id": "source-a",
+            },
+            {
+                "title": "Renew the library card",
+                "description": "Visit the library.",
+                "due_at": None,
+                "state": "open",
+                "source_memory_id": "source-b",
+            },
+            {
+                "title": "Submit the old tax form",
+                "description": "Already submitted.",
+                "due_at": "2026-10-01T00:00:00.000+00:00",
+                "state": "completed",
+                "source_memory_id": "source-c",
+            },
+        ]
+
+        project_matches = select_relevant_commitments(
+            commitments, "What about the Project V test pass?"
+        )
+        self.assertEqual([item["title"] for item in project_matches], [
+            "Finish Project V test pass"
+        ])
+        open_context = build_commitment_context(
+            commitments, "What are my current commitments?"
+        )
+        self.assertIn("Finish Project V test pass", open_context)
+        self.assertIn("Renew the library card", open_context)
+        self.assertNotIn("Submit the old tax form", open_context)
+        self.assertIn("not scheduled reminders", open_context)
+
+        history = select_relevant_commitments(
+            commitments, "What did I complete?"
+        )
+        self.assertEqual([item["title"] for item in history], [
+            "Submit the old tax form"
+        ])
 
     def test_empty_results_produce_no_context(self):
         self.assertIsNone(build_memory_context([]))
