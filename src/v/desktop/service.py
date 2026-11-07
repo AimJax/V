@@ -29,6 +29,7 @@ from v.memory.retrieval import (
     build_memory_context,
     retrieve_relevant_memories,
     select_relevant_commitments,
+    source_timestamp_key,
 )
 from v.memory.store import MemoryStore
 from v.memory.continuity import ContinuityStore
@@ -1086,11 +1087,43 @@ class DesktopService:
         ).run(limit=limit, cancel_event=cancel_event)
 
     def memory_continuity_snapshot(self, memory_id: str) -> dict:
-        if self.continuity_store is None:
+        if self.continuity_store is None or self.memory_store is None:
             raise RuntimeError("Long-term memory is disabled in configuration.")
+        selected = self.memory_store.get_memory(memory_id)
+        if selected is None:
+            raise KeyError(memory_id)
+        if selected.subject.strip():
+            related = [
+                item
+                for item in self.memory_store.list_memories(limit=10_000)
+                if item.subject.casefold() == selected.subject.casefold()
+            ]
+        else:
+            related = [selected]
+        related.sort(
+            key=lambda item: source_timestamp_key(
+                item.source_created_at or item.created_at
+            )
+        )
+        timeline = []
+        for item in related[-100:]:
+            temporal = self.continuity_store.temporal_record(item.id)
+            timeline.append({
+                "memory_id": item.id,
+                "memory_type": item.memory_type,
+                "provenance": item.provenance,
+                "source_date": item.source_created_at or item.created_at,
+                "temporal_state": (
+                    temporal["state"] if temporal.get("recorded_at") else "unspecified"
+                ),
+                "valid_from": temporal.get("valid_from"),
+                "valid_until": temporal.get("valid_until"),
+                "content": item.content[:220],
+            })
         return {
             "memory_id": memory_id,
             "temporal": self.continuity_store.temporal_record(memory_id),
+            "timeline": timeline,
             "derivation_sources": self.continuity_store.derivation_sources(memory_id),
             "commitments": self.continuity_store.list_commitments(state="all", limit=500),
         }
