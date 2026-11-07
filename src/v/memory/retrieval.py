@@ -46,7 +46,7 @@ def meaningful_terms(query: str) -> list[str]:
 
 
 CONTEXTUAL_FOLLOWUP_PATTERN = re.compile(
-    r"\\b(?:it|its|that|this|those|them|there|same|instead|more|"
+    r"\b(?:it|its|that|this|those|them|there|same|instead|more|"
     r"also|why|how so|what about|how about|which one|the other|"
     r"continue|go on|and then|what next)\\b",
     re.IGNORECASE,
