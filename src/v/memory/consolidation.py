@@ -215,22 +215,47 @@ class MemoryConsolidator:
                 )
             # Preserve source diversity and bound prompt size. At least one
             # record from two separate conversations must survive the cap.
-            sources: list[Memory] = []
-            seen_conversations: set[str] = set()
+            sources: list[Memory] = [records[0]]
+            seen_ids = {records[0].id}
+            # Keep a recent example from each conversation, then fill the
+            # remaining bounded set with the newest distinct source messages.
+            latest_by_conversation: dict[str, Memory] = {}
             for item in records:
-                if item.source_conversation_id not in seen_conversations:
-                    sources.append(item)
-                    seen_conversations.add(item.source_conversation_id)
-                if len(seen_conversations) >= 2:
-                    break
-            for item in records:
+                latest_by_conversation[item.source_conversation_id] = item
+            latest_records = sorted(
+                latest_by_conversation.values(),
+                key=lambda item: (
+                    item.source_created_at or item.created_at,
+                    item.id,
+                ),
+                reverse=True,
+            )
+            for item in latest_records:
                 if len(sources) >= 8:
                     break
-                if item.id not in {source.id for source in sources}:
+                if item.id not in seen_ids:
                     sources.append(item)
+                    seen_ids.add(item.id)
+            for item in reversed(records):
+                if len(sources) >= 8:
+                    break
+                if item.id not in seen_ids:
+                    sources.append(item)
+                    seen_ids.add(item.id)
+            sources.sort(
+                key=lambda item: (
+                    item.source_created_at or item.created_at,
+                    item.id,
+                )
+            )
             source_ids = sorted(item.id for item in sources)
-            digest = hashlib.sha256("|".join(source_ids).encode("utf-8")).hexdigest()[:32]
-            memory_key = f"consolidated.{digest}"
+            source_digest = hashlib.sha256(
+                "|".join(source_ids).encode("utf-8")
+            ).hexdigest()[:16]
+            group_digest = hashlib.sha256(
+                "|".join(_group_key).encode("utf-8")
+            ).hexdigest()[:16]
+            memory_key = f"consolidated.{group_digest}.{source_digest}"
             if self.memory_store.get_memory_by_key(memory_key) is not None:
                 skipped += 1
                 examined += 1
