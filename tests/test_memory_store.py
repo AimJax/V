@@ -42,7 +42,7 @@ class MemoryStoreTests(unittest.TestCase):
         continuity.update_temporal_record(
             original.id,
             "current",
-            valid_from="2026-01-01T00:00:00+00:00",
+            valid_from="2026-01-01T00:00:00.000+00:00",
         )
         continuity.add_derivation(derived.id, [original.id, second.id])
         continuity.review_derivation(derived.id, "accepted")
@@ -81,7 +81,7 @@ class MemoryStoreTests(unittest.TestCase):
         migrated_continuity = ContinuityStore(self.database_path)
         self.assertEqual(
             migrated_continuity.temporal_record(original.id)["valid_from"],
-            "2026-01-01T00:00:00+00:00",
+            "2026-01-01T00:00:00.000+00:00",
         )
         self.assertEqual(
             {item["state"] for item in migrated_continuity.derivation_sources(derived.id)},
@@ -477,7 +477,7 @@ class MemoryStoreTests(unittest.TestCase):
             }
             version = connection.execute("PRAGMA user_version").fetchone()[0]
         self.assertIn("source_created_at", columns)
-        self.assertEqual(version, 5)
+        self.assertEqual(version, 6)
         migrated.create_memory(
             content="A dated episodic snapshot sharing the old fact key.",
             memory_type="episodic",
@@ -534,7 +534,7 @@ class MemoryStoreTests(unittest.TestCase):
         second = self.store.create_memory(
             content="A later project state.", memory_type="episodic",
             memory_key="project.v.status",
-            source_created_at="2026-01-01T00:00:00+00:00",
+            source_created_at="2026-01-01T00:00:00.000+00:00",
         )
         related = self.store.list_related_memories(
             second.id, relation_types=("same_timeline",)
@@ -610,7 +610,7 @@ class MemoryStoreTests(unittest.TestCase):
         )
         with closing(migrated._connect()) as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-        self.assertEqual(version, 5)
+        self.assertEqual(version, 6)
 
     def test_inferred_memory_has_distinct_provenance(self):
         memory = self.store.create_memory(
