@@ -21,6 +21,7 @@ class MemoryStoreTests(unittest.TestCase):
 
     def test_v5_schema_migrates_procedural_type_without_losing_continuity(self):
         from v.memory.continuity import ContinuityStore
+from v.memory.embedding_store import EmbeddingStore
 
         original = self.store.create_memory(
             content="A memory from the previous schema.",
@@ -50,6 +51,8 @@ class MemoryStoreTests(unittest.TestCase):
             "Review the migration",
             source_memory_id=original.id,
         )
+        embeddings = EmbeddingStore(self.database_path)
+        embeddings.put(original, "embedding-v5", [0.1, 0.2])
 
         with closing(sqlite3.connect(self.database_path)) as connection:
             connection.execute("PRAGMA writable_schema=ON")
@@ -81,6 +84,8 @@ class MemoryStoreTests(unittest.TestCase):
             subject="Project",
         )
         self.assertEqual(procedural.memory_type, "procedural")
+        migrated_embeddings = EmbeddingStore(self.database_path)
+        self.assertEqual(migrated_embeddings.count("embedding-v5"), 1)
 
         migrated_continuity = ContinuityStore(self.database_path)
         self.assertEqual(
