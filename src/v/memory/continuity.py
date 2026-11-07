@@ -186,7 +186,7 @@ class ContinuityStore:
         self, memory_id: str, state: str, *, superseded_by: str | None = None,
         note: str = "",
     ) -> dict[str, Any]:
-        if state not in MEMORY_STATES:
+        if not isinstance(state, str) or state not in MEMORY_STATES:
             raise ValueError(f"Unsupported memory state: {state}")
         if not isinstance(memory_id, str) or not memory_id:
             raise ValueError("memory_id must be a non-empty string.")
@@ -231,7 +231,7 @@ class ContinuityStore:
         note: str = "",
     ) -> dict[str, Any]:
         """Atomically update lifecycle and validity, including clearing dates."""
-        if state not in MEMORY_STATES:
+        if not isinstance(state, str) or state not in MEMORY_STATES:
             raise ValueError(f"Unsupported memory state: {state}")
         if not isinstance(memory_id, str) or not memory_id:
             raise ValueError("memory_id must be a non-empty string.")
@@ -317,7 +317,7 @@ class ContinuityStore:
             return len(source_memory_ids)
 
     def review_derivation(self, derived_memory_id: str, decision: str) -> int:
-        if decision not in {"accepted", "rejected"}:
+        if not isinstance(decision, str) or decision not in {"accepted", "rejected"}:
             raise ValueError("decision must be accepted or rejected.")
         with closing(self._connect()) as db:
             cursor = db.execute("""
@@ -347,7 +347,7 @@ class ContinuityStore:
             """, (derived_memory_id,)).fetchall()]
 
     def list_commitments(self, *, state: str = "open", limit: int = 100) -> list[dict[str, Any]]:
-        if state not in {*COMMITMENT_STATES, "all"}:
+        if not isinstance(state, str) or state not in {*COMMITMENT_STATES, "all"}:
             raise ValueError("Unsupported commitment state.")
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
             raise ValueError("limit must be between 1 and 500.")
@@ -399,7 +399,7 @@ class ContinuityStore:
             ).fetchone())
 
     def update_commitment(self, commitment_id: str, state: str) -> dict[str, Any]:
-        if state not in COMMITMENT_STATES:
+        if not isinstance(state, str) or state not in COMMITMENT_STATES:
             raise ValueError(f"Unsupported commitment state: {state}")
         with closing(self._connect()) as db:
             cursor = db.execute("""
