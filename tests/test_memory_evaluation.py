@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from support import temporary_directory
 from v.memory.embedding_store import EmbeddingStore
+from v.memory.continuity import ContinuityStore
 from v.memory.evaluation import (
     BENCHMARK_QUERIES,
     BENCHMARK_RECORDS,
@@ -214,6 +215,69 @@ class MemoryEvaluationTests(unittest.IsolatedAsyncioTestCase):
                 0.0,
             )
 
+
+
+    async def test_personal_evaluation_uses_temporal_current_and_history_rules(self):
+        class SameVectorProvider:
+            async def embed_documents(self, texts):
+                return [[1.0, 0.0] for _ in texts]
+
+            async def embed_queries(self, texts):
+                return [[1.0, 0.0] for _ in texts]
+
+        with temporary_directory() as temporary:
+            database = Path(temporary) / "memory.sqlite3"
+            writable = MemoryStore(database)
+            older = writable.create_memory(
+                content="The user worked at Site A as a technician.",
+                memory_type="episodic",
+                subject="User",
+                memory_key="user.work_context",
+                source_conversation_id="conversation-old",
+                source_message_id=1,
+                source_created_at="2024-01-01T00:00:00+00:00",
+            )
+            current = writable.create_memory(
+                content="The user works at Site B as a researcher.",
+                memory_type="episodic",
+                subject="User",
+                memory_key="user.work_context",
+                source_conversation_id="conversation-current",
+                source_message_id=2,
+                source_created_at="2026-10-01T00:00:00+00:00",
+            )
+            ContinuityStore(database).set_memory_state(
+                older.id,
+                "superseded",
+                superseded_by=current.id,
+            )
+            vectors = EmbeddingStore(database)
+            before_vectors = vectors.count()
+            readonly = MemoryStore(database, read_only=True)
+
+            report = await evaluate_personal_memory_retrieval(
+                readonly,
+                SameVectorProvider(),
+                [
+                    BenchmarkQuery("Where does the user work now?", (current.id,)),
+                    BenchmarkQuery(
+                        "Where did the user work previously?",
+                        (older.id, current.id),
+                    ),
+                ],
+                model="test-local",
+                thresholds=(0.5,),
+                limit=5,
+            )
+
+            details = report["query_details"][0.5]
+            self.assertEqual(details[0]["returned_memory_ids"], [current.id])
+            self.assertEqual(
+                set(details[1]["returned_memory_ids"]),
+                {older.id, current.id},
+            )
+            self.assertEqual(vectors.count(), before_vectors)
+            self.assertFalse(report["database_modified"])
 
     async def test_auto_generation_anchors_labels_to_source_memory_ids(self):
         class QuestionChatProvider:
