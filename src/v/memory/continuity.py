@@ -40,7 +40,12 @@ class ContinuityStore:
 
     SCHEMA_VERSION = 1
 
-    def __init__(self, database_path: Path | str) -> None:
+    def __init__(
+        self,
+        database_path: Path | str,
+        *,
+        migrate_legacy_evidence: bool = True,
+    ) -> None:
         self.database_path = Path(database_path).expanduser().resolve()
         if not self.database_path.is_file():
             raise FileNotFoundError(self.database_path)
@@ -132,7 +137,7 @@ class ContinuityStore:
                     "SELECT name FROM sqlite_master WHERE type='table'"
                 )
             }
-            if "memory_evidence" in existing_tables:
+            if migrate_legacy_evidence and "memory_evidence" in existing_tables:
                 # Upgrade existing inferred patterns into the review-gated
                 # derivation model without changing their source evidence.
                 db.execute(
