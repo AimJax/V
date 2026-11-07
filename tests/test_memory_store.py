@@ -6,6 +6,7 @@ from pathlib import Path
 
 from support import temporary_directory
 
+from v.memory.embedding_store import EmbeddingStore
 from v.memory.store import MemoryStore
 
 
@@ -21,7 +22,6 @@ class MemoryStoreTests(unittest.TestCase):
 
     def test_v5_schema_migrates_procedural_type_without_losing_continuity(self):
         from v.memory.continuity import ContinuityStore
-from v.memory.embedding_store import EmbeddingStore
 
         original = self.store.create_memory(
             content="A memory from the previous schema.",
