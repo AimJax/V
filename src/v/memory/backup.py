@@ -157,10 +157,13 @@ def _validate_temporal_records(raw: Any, memories: list[dict[str, Any]]) -> list
         if memory_id in seen:
             raise ValueError("Backup contains duplicate temporal records.")
         seen.add(memory_id)
-        if item["state"] not in states:
+        state = item["state"]
+        if not isinstance(state, str) or state not in states:
             raise ValueError("Backup contains an unsupported temporal state.")
-        if item["state"] == "superseded" and not replacement:
+        if state == "superseded" and not replacement:
             raise ValueError("Superseded temporal records require a replacement.")
+        if state != "superseded" and replacement is not None:
+            raise ValueError("Only superseded temporal records may identify a replacement.")
         if replacement is not None and (
             not isinstance(replacement, str) or replacement not in memory_ids
             or replacement == memory_id
@@ -201,7 +204,8 @@ def _validate_derivations(raw: Any, memories: list[dict[str, Any]]) -> list[dict
         if pair in seen:
             raise ValueError("Backup contains duplicate derivations.")
         seen.add(pair)
-        if item["state"] not in {"pending", "accepted", "rejected"}:
+        state = item["state"]
+        if not isinstance(state, str) or state not in {"pending", "accepted", "rejected"}:
             raise ValueError("Backup contains an unsupported derivation state.")
         _valid_timestamp(item["created_at"], "derivation.created_at")
         output.append(dict(item))
@@ -236,7 +240,8 @@ def _validate_commitments(raw: Any, memories: list[dict[str, Any]]) -> list[dict
             not isinstance(recurrence, str) or len(recurrence) > 200
         ):
             raise ValueError("Commitment recurrence must be at most 200 characters.")
-        if item["state"] not in {"open", "completed", "cancelled"}:
+        state = item["state"]
+        if not isinstance(state, str) or state not in {"open", "completed", "cancelled"}:
             raise ValueError("Backup contains an unsupported commitment state.")
         source_id = item["source_memory_id"]
         if source_id is not None and (
@@ -383,7 +388,11 @@ def import_backup(
         raise ValueError("File is not a V memory backup.")
 
     version = payload.get("version")
-    if version not in {1, 2, 3, BACKUP_VERSION}:
+    if (
+        isinstance(version, bool)
+        or not isinstance(version, int)
+        or version not in {1, 2, 3, BACKUP_VERSION}
+    ):
         raise ValueError(
             f"Unsupported memory backup version: {version!r}"
         )
