@@ -315,6 +315,31 @@ class MemoryBackupTests(unittest.TestCase):
         # A second import is idempotent across the continuity tables too.
         self.assertEqual(import_backup(self.target, path), (0, 3))
 
+
+    def test_v4_backup_rejects_circular_supersession_without_importing(self):
+        from v.memory.continuity import ContinuityStore
+
+        first = self.source.create_memory(content="First historical record.")
+        second = self.source.create_memory(content="Second historical record.")
+        continuity = ContinuityStore(self.source.database_path)
+        continuity.set_memory_state(
+            first.id, "superseded", superseded_by=second.id
+        )
+        continuity.set_memory_state(second.id, "current")
+        export_backup(self.source, self.backup_path)
+        payload = json.loads(self.backup_path.read_text(encoding="utf-8"))
+        second_record = next(
+            item for item in payload["temporal_records"]
+            if item["memory_id"] == second.id
+        )
+        second_record["state"] = "superseded"
+        second_record["superseded_by"] = first.id
+        self.backup_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "circular supersession"):
+            import_backup(self.target, self.backup_path)
+        self.assertEqual(self.target.count_memories(), 0)
+
     def test_v4_backup_rejects_orphaned_continuity_references_atomically(self):
         from v.memory.continuity import ContinuityStore
 
