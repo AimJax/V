@@ -96,6 +96,8 @@ class MemoryConsolidator:
         memory_store: MemoryStore,
         continuity_store: ContinuityStore,
     ) -> None:
+        if memory_store.database_path != continuity_store.database_path:
+            raise ValueError("Memory and continuity stores must share one database.")
         self.provider = provider
         self.memory_store = memory_store
         self.continuity_store = continuity_store
