@@ -85,9 +85,18 @@ class ContinuityStore:
                     ON memory_derivations(source_memory_id);
                 DROP TRIGGER IF EXISTS continuity_source_changed;
                 CREATE TRIGGER continuity_source_changed
-                AFTER UPDATE OF content, subject, provenance, source_conversation_id,
-                                source_message_id ON memories
+                AFTER UPDATE OF content, subject, provenance, evidence, memory_key,
+                                source_conversation_id, source_message_id,
+                                source_created_at ON memories
                 BEGIN
+                    INSERT OR IGNORE INTO memory_temporal(
+                        memory_id, state, recorded_at, note
+                    )
+                    SELECT derived_memory_id, 'disputed',
+                           strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now'),
+                           'A supporting source changed; this derived record requires review.'
+                    FROM memory_derivations
+                    WHERE source_memory_id=OLD.id AND state='accepted';
                     UPDATE memory_temporal
                     SET state='disputed',
                         note='A supporting source changed; this derived record requires review.'
@@ -117,6 +126,14 @@ class ContinuityStore:
                 CREATE TRIGGER continuity_memory_delete
                 BEFORE DELETE ON memories
                 BEGIN
+                    INSERT OR IGNORE INTO memory_temporal(
+                        memory_id, state, recorded_at, note
+                    )
+                    SELECT derived_memory_id, 'disputed',
+                           strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now'),
+                           'A supporting source was deleted; this derived record requires review.'
+                    FROM memory_derivations
+                    WHERE source_memory_id=OLD.id AND state='accepted';
                     UPDATE memory_temporal
                     SET state='disputed',
                         note='A supporting source was deleted; this derived record requires review.'
