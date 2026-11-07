@@ -374,7 +374,10 @@ class MemoryRetrievalTests(unittest.TestCase):
 
         self.assertIn(memory.id, {item.id for item in second_results})
         self.assertEqual(reopened_embeddings.count("embedding-model-b"), expected_documents)
-        self.assertEqual(reopened_embeddings.count("embedding-model-a"), expected_documents)
+        # The cache intentionally stores one model per memory to bound local disk
+        # use; indexing with model B replaces model A's vectors.
+        self.assertEqual(reopened_embeddings.count("embedding-model-a"), 0)
+        self.assertEqual(reopened_embeddings.count(), expected_documents)
 
     def test_context_exposes_source_records_for_derived_summaries(self):
         derived = self.store.create_memory(
