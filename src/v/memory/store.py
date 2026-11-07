@@ -465,12 +465,13 @@ class MemoryStore:
             )
             connection.commit()
 
-        tables = {
-            row["name"]
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
-        }
+        with closing(self._connect()) as continuity_connection:
+            tables = {
+                row["name"]
+                for row in continuity_connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
         if "memory_temporal" in tables:
             from v.memory.continuity import ContinuityStore
 
@@ -536,34 +537,53 @@ class MemoryStore:
             )
             connection.execute("DROP TABLE memories_old")
 
-            connection.executescript(
+            connection.execute(
                 """
                 CREATE UNIQUE INDEX idx_memories_key
                     ON memories(memory_key)
-                    WHERE memory_key IS NOT NULL AND memory_type != 'episodic';
-                CREATE INDEX idx_memories_type ON memories(memory_type);
-                CREATE INDEX idx_memories_provenance ON memories(provenance);
-                CREATE INDEX idx_memories_importance ON memories(importance DESC);
-                CREATE INDEX idx_memories_subject_key ON memories(subject_key);
-                CREATE INDEX idx_memories_source_message
-                    ON memories(source_conversation_id, source_message_id);
-                CREATE INDEX idx_memories_episodic_key
-                    ON memories(memory_key) WHERE memory_type='episodic';
-
+                    WHERE memory_key IS NOT NULL AND memory_type != 'episodic'
+                """
+            )
+            connection.execute("CREATE INDEX idx_memories_type ON memories(memory_type)")
+            connection.execute(
+                "CREATE INDEX idx_memories_provenance ON memories(provenance)"
+            )
+            connection.execute(
+                "CREATE INDEX idx_memories_importance ON memories(importance DESC)"
+            )
+            connection.execute(
+                "CREATE INDEX idx_memories_subject_key ON memories(subject_key)"
+            )
+            connection.execute(
+                "CREATE INDEX idx_memories_source_message "
+                "ON memories(source_conversation_id, source_message_id)"
+            )
+            connection.execute(
+                "CREATE INDEX idx_memories_episodic_key "
+                "ON memories(memory_key) WHERE memory_type='episodic'"
+            )
+            connection.execute(
+                """
                 CREATE TRIGGER memories_ai
                 AFTER INSERT ON memories
                 BEGIN
                     INSERT INTO memories_fts(rowid, content, subject)
                     VALUES (new.rowid, new.content, new.subject);
-                END;
-
+                END
+                """
+            )
+            connection.execute(
+                """
                 CREATE TRIGGER memories_ad
                 AFTER DELETE ON memories
                 BEGIN
                     INSERT INTO memories_fts(memories_fts, rowid, content, subject)
                     VALUES ('delete', old.rowid, old.content, old.subject);
-                END;
-
+                END
+                """
+            )
+            connection.execute(
+                """
                 CREATE TRIGGER memories_au
                 AFTER UPDATE ON memories
                 BEGIN
@@ -571,8 +591,11 @@ class MemoryStore:
                     VALUES ('delete', old.rowid, old.content, old.subject);
                     INSERT INTO memories_fts(rowid, content, subject)
                     VALUES (new.rowid, new.content, new.subject);
-                END;
-
+                END
+                """
+            )
+            connection.execute(
+                """
                 CREATE TRIGGER memory_evidence_source_update
                 AFTER UPDATE OF memory_type, provenance, content, evidence, subject
                 ON memories
@@ -584,7 +607,7 @@ class MemoryStore:
                         FROM memory_evidence
                         WHERE source_memory_id = OLD.id
                     );
-                END;
+                END
                 """
             )
             connection.execute(
