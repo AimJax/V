@@ -262,15 +262,15 @@ class MemoryConsolidator:
                     max_tokens=400,
                 )
                 candidate = _parse_summary(response.content)
-                examined += 1
                 if not candidate["summary"]:
                     skipped += 1
+                    examined += 1
                     continue
                 # Re-check cancellation after the model call; do not create a
                 # record after the user has cancelled the consolidation job.
                 if cancel_event is not None and cancel_event.is_set():
                     return ConsolidationReport(
-                        examined, created, skipped, 0, failures, True
+                        examined + 1, created, skipped, 0, failures, True
                     )
                 self.memory_store.create_inferred_pattern(
                     content=candidate["summary"],
@@ -281,6 +281,7 @@ class MemoryConsolidator:
                     evidence_memory_ids=source_ids,
                 )
                 created += 1
+                examined += 1
             except ValueError:
                 # Existing keys or failed evidence validation are safe skips.
                 skipped += 1
