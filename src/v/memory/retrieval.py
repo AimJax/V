@@ -291,6 +291,7 @@ def build_memory_context(
     memories: list[Memory],
     *,
     max_characters: int = 2400,
+    derivation_sources: dict[str, list[dict]] | None = None,
 ) -> str | None:
     """Format bounded, untrusted memory data for a model prompt."""
     if max_characters < 1:
@@ -309,7 +310,9 @@ def build_memory_context(
         "last_confirmed is the time the user explicitly reaffirmed a memory; "
         "never treat an unconfirmed record as false, and never confuse its "
         "confirmation date with its original source date. Older timeline entries "
-        "are historical snapshots and must be described with their source dates.\n\n"
+        "are historical snapshots and must be described with their source dates. "
+        "Derived summaries are interpretations, not source evidence; inspect the "
+        "listed supporting records before relying on a derived conclusion.\n\n"
     )
 
     if max_characters <= len(header):
@@ -348,10 +351,25 @@ def build_memory_context(
             if memory.last_confirmed_at
             else "; last_confirmed=never"
         )
+        derivation_note = ""
+        if memory.memory_type == "inferred_pattern":
+            derivation_note = "; derived_summary"
+            sources = (derivation_sources or {}).get(memory.id, [])[:3]
+            if sources:
+                source_ids = ",".join(
+                    str(item["source_memory_id"]) for item in sources
+                )
+                source_text = " | ".join(
+                    f"[{item['source_memory_id']}] {item['content'][:120]}"
+                    for item in sources
+                )
+                derivation_note += (
+                    f"; derived_from={source_ids}; supporting_records={source_text}"
+                )
         prefix = (
             f"- [{memory.memory_type}; {memory.provenance}; "
             f"confidence={memory.confidence:.2f}{source_date}"
-            f"{confirmed_date}{temporal_note}; memory_id={memory.id}] "
+            f"{confirmed_date}{temporal_note}{derivation_note}; memory_id={memory.id}] "
         )
 
         separator_length = 1 if entries else 0
