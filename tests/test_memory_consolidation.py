@@ -95,8 +95,9 @@ class MemoryConsolidationTests(unittest.IsolatedAsyncioTestCase):
         for conversation, message_id, content in contradictory:
             sources.append(self.store.create_memory(
                 content=content,
-                memory_type="preference",
+                memory_type="episodic",
                 subject="Communication",
+                memory_key="preference.answer_style",
                 provenance="explicit",
                 source_conversation_id=conversation,
                 source_message_id=message_id,
