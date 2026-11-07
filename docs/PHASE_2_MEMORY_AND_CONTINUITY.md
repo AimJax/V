@@ -12,6 +12,7 @@
 - Temporal lifecycle and validity can be changed atomically. Invalid transitions, self-supersession, and malformed source references are rejected.
 - Evidence-linked derivations are review-gated. New inferred patterns created while continuity is enabled are pending by default. Existing inferred patterns are migrated from their explicit evidence links into pending review.
 - Editing or deleting source evidence invalidates accepted dependent derivations. Dependent summaries are marked disputed when they remain in storage.
+- Procedural memories are a first-class type for explicit, repeatable user workflows and conventions. Extraction guidance explicitly prevents treating stored procedures as permission to perform consequential actions.
 - Prospective commitments support due dates, recurrence descriptions, source-memory links, and open/completed/cancelled states. They are stored as commitments only; they are not scheduled reminders or automations.
 - Backup format v4 exports and restores temporal records, derivations, and commitments in addition to memories and inferred-pattern evidence. Import remains compatible with v1, v2, and v3 backups, validates references, and merges atomically.
 - Present-focused retrieval excludes non-current or out-of-validity records and excludes derived records with pending/rejected provenance. Historical queries can still retrieve past or disputed records. Retrieval remains lexical-first with the existing semantic/relationship infrastructure and bounded context assembly.
