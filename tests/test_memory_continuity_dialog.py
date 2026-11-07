@@ -28,6 +28,11 @@ class MemoryContinuityDialogTests(unittest.TestCase):
         self.assertLessEqual(self.dialog.width(), available.width())
         self.assertLessEqual(self.dialog.height(), available.height())
 
+    def test_empty_record_widgets_have_bounded_heights(self):
+        self.assertLessEqual(self.dialog.timeline_table.maximumHeight(), 190)
+        self.assertLessEqual(self.dialog.derivation_list.maximumHeight(), 150)
+        self.assertLessEqual(self.dialog.commitment_table.maximumHeight(), 160)
+
     def test_snapshot_displays_timeline_derivations_and_commitments(self):
         self.dialog.set_snapshot({
             "memory_id": "memory-selected",
