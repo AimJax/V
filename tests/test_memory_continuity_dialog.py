@@ -71,6 +71,19 @@ class MemoryContinuityDialogTests(unittest.TestCase):
         self.assertEqual(self.dialog.commitment_table.rowCount(), 1)
         self.assertIn("not scheduled reminders", self.dialog.status_label.text())
 
+
+    def test_consolidation_status_distinguishes_duplicates_from_rejected_groups(self):
+        from types import SimpleNamespace
+
+        self.dialog.on_consolidation_completed(SimpleNamespace(
+            summaries_created=1,
+            duplicates_skipped=2,
+            groups_skipped=3,
+            failures=0,
+        ))
+        self.assertIn("2 duplicate(s)", self.dialog.status_label.text())
+        self.assertIn("3 group(s) without a safe summary", self.dialog.status_label.text())
+
     def test_review_and_commitment_actions_emit_selected_ids(self):
         self.dialog.set_snapshot({
             "memory_id": "memory-selected",
