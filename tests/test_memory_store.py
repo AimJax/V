@@ -18,6 +18,93 @@ class MemoryStoreTests(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
+
+    def test_v5_schema_migrates_procedural_type_without_losing_continuity(self):
+        from v.memory.continuity import ContinuityStore
+
+        original = self.store.create_memory(
+            content="A memory from the previous schema.",
+            memory_type="fact",
+            subject="Migration",
+        )
+        second = self.store.create_memory(
+            content="A second explicit source memory.",
+            memory_type="fact",
+            subject="Migration",
+        )
+        derived = self.store.create_memory(
+            content="A derived record that depends on both sources.",
+            memory_type="fact",
+            subject="Migration",
+            provenance="inferred",
+        )
+        continuity = ContinuityStore(self.database_path)
+        continuity.update_temporal_record(
+            original.id,
+            "current",
+            valid_from="2026-01-01T00:00:00+00:00",
+        )
+        continuity.add_derivation(derived.id, [original.id, second.id])
+        continuity.review_derivation(derived.id, "accepted")
+        commitment = continuity.create_commitment(
+            "Review the migration",
+            source_memory_id=original.id,
+        )
+
+        with closing(sqlite3.connect(self.database_path)) as connection:
+            connection.execute("PRAGMA writable_schema=ON")
+            schema = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='memories'"
+            ).fetchone()[0]
+            self.assertIn("'procedural'", schema)
+            connection.execute(
+                "UPDATE sqlite_master SET sql=? WHERE type='table' AND name='memories'",
+                (schema.replace("'procedural',", ""),),
+            )
+            connection.execute("PRAGMA writable_schema=OFF")
+            connection.execute("PRAGMA schema_version=999")
+            connection.execute("PRAGMA user_version=5")
+            connection.commit()
+
+        migrated = MemoryStore(self.database_path)
+        self.assertEqual(
+            migrated.get_memory(original.id).content,
+            "A memory from the previous schema.",
+        )
+        procedural = migrated.create_memory(
+            content="Run tests before packaging.",
+            memory_type="procedural",
+            subject="Project",
+        )
+        self.assertEqual(procedural.memory_type, "procedural")
+
+        migrated_continuity = ContinuityStore(self.database_path)
+        self.assertEqual(
+            migrated_continuity.temporal_record(original.id)["valid_from"],
+            "2026-01-01T00:00:00+00:00",
+        )
+        self.assertEqual(
+            {item["state"] for item in migrated_continuity.derivation_sources(derived.id)},
+            {"accepted"},
+        )
+        self.assertEqual(
+            migrated_continuity.list_commitments(state="all")[0]["id"],
+            commitment["id"],
+        )
+
+        with closing(migrated._connect()) as connection:
+            connection.execute(
+                "UPDATE memories SET content='Corrected after migration' WHERE id=?",
+                (original.id,),
+            )
+            connection.commit()
+            violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+        self.assertEqual(violations, [])
+        self.assertEqual(
+            migrated_continuity.temporal_record(derived.id)["state"],
+            "disputed",
+        )
+
     def test_read_only_store_does_not_initialize_or_modify_database(self):
         original = self.store.create_memory(
             content="A memory that must remain unchanged.",
