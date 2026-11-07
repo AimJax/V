@@ -332,7 +332,7 @@ class MemoryBackupTests(unittest.TestCase):
         ContinuityStore(self.source.database_path).set_memory_state(
             first.id, "superseded", superseded_by=second.id
         )
-        export_backup(self.source, self.backup_path)
+        export_backup(self.source, self.backup_path, overwrite=True)
 
         with self.assertRaisesRegex(ValueError, "cycle"):
             import_backup(self.target, self.backup_path)
