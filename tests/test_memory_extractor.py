@@ -191,6 +191,40 @@ class MemoryExtractorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(saved.source_message_id, self.message_id)
 
 
+
+    async def test_prospective_candidate_validation_and_storage(self):
+        message_text = "I'll finish the Project V test pass by November 10, 2026 at 5 PM."
+        message_id = self.conversations.add_message(
+            self.conversation.id, "user", message_text
+        )
+        message = self.conversations.get_message_record(message_id)
+        provider = FakeProvider(json.dumps({
+            "commitments": [{
+                "source_message_id": message_id,
+                "title": "Finish the Project V test pass",
+                "description": "Complete the test pass before packaging.",
+                "subject": "Project V",
+                "due_at": "2026-11-10T17:00:00+07:00",
+                "recurrence": None,
+                "evidence": message_text,
+            }]
+        }))
+        continuity = ContinuityStore(self.memory.database_path)
+        extractor = MemoryExtractor(
+            provider,
+            self.conversations,
+            self.memory,
+            self.queue,
+            continuity_store=continuity,
+        )
+
+        candidates, skipped = await extractor.extract_commitment_candidates([message])
+        self.assertEqual(skipped, 0)
+        self.assertEqual(len(candidates), 1)
+        created, storage_skipped = extractor._store_commitment_candidates(candidates)
+        self.assertEqual(storage_skipped, 0)
+        self.assertEqual(created, 1)
+
     async def test_explicit_future_commitment_is_saved_with_source_evidence(self):
         message_text = (
             "I'll finish the Project V test pass by November 10, 2026 at 5 PM."
