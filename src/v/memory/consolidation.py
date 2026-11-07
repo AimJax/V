@@ -223,7 +223,7 @@ class MemoryConsolidator:
             raise ValueError("Consolidation limit must be between 1 and 20.")
 
         groups = self._source_groups()[:limit]
-        created = skipped = failures = examined = 0
+        created = duplicates_skipped = groups_skipped = failures = examined = 0
         for _group_key, records in groups:
             if cancel_event is not None and cancel_event.is_set():
                 return ConsolidationReport(
@@ -273,7 +273,7 @@ class MemoryConsolidator:
             ).hexdigest()[:16]
             memory_key = f"consolidated.{group_digest}.{source_digest}"
             if self.memory_store.get_memory_by_key(memory_key) is not None:
-                skipped += 1
+                duplicates_skipped += 1
                 examined += 1
                 continue
 
@@ -306,7 +306,7 @@ class MemoryConsolidator:
                 )
                 candidate = _parse_summary(response.content)
                 if not candidate["summary"]:
-                    skipped += 1
+                    groups_skipped += 1
                     examined += 1
                     continue
                 # Re-check cancellation after the model call; do not create a
@@ -326,8 +326,9 @@ class MemoryConsolidator:
                 created += 1
                 examined += 1
             except ValueError:
-                # Existing keys or failed evidence validation are safe skips.
-                skipped += 1
+                # Invalid model output or failed evidence validation must not
+                # create a record, but is not necessarily a duplicate.
+                groups_skipped += 1
                 examined += 1
             except asyncio.CancelledError:
                 raise
@@ -338,8 +339,8 @@ class MemoryConsolidator:
         return ConsolidationReport(
             groups_examined=examined,
             summaries_created=created,
-            duplicates_skipped=skipped,
-            groups_skipped=0,
+            duplicates_skipped=duplicates_skipped,
+            groups_skipped=groups_skipped,
             failures=failures,
             cancelled=False,
         )
