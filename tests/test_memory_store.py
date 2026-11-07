@@ -71,6 +71,10 @@ class MemoryStoreTests(unittest.TestCase):
             migrated.get_memory(original.id).content,
             "A memory from the previous schema.",
         )
+        self.assertIn(
+            original.id,
+            {item.id for item in migrated.search_memories_any("previous schema memory")},
+        )
         procedural = migrated.create_memory(
             content="Run tests before packaging.",
             memory_type="procedural",
