@@ -289,7 +289,8 @@ def retrieve_relevant_memories(
 
 COMMITMENT_OVERVIEW_PATTERN = re.compile(
     r"\b(commitments?|to[- ]do|tasks?|deadlines?|reminders?|follow[- ]ups?|"
-    r"what (?:do|did) i (?:need|have|promise|agree)|what'?s due|"
+    r"what (?:do|did) i (?:need|have|promise|agree)|what am i committed to|"
+    r"what did i say i would|what'?s due|what'?s next|next steps?|"
     r"what should i do|what am i supposed to do|tomorrow|next week|this week)\b",
     re.IGNORECASE,
 )
