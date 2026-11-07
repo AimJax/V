@@ -82,6 +82,48 @@ class MemoryConsolidationTests(unittest.IsolatedAsyncioTestCase):
             {item.id for item in self.sources},
         )
 
+
+    async def test_contradictory_sources_can_be_rejected_without_summary(self):
+        for source in self.sources:
+            self.store.delete_memory(source.id)
+        contradictory = [
+            ("conversation-a", 301, "The user prefers short answers."),
+            ("conversation-a", 302, "The user prefers detailed, exhaustive answers."),
+            ("conversation-b", 303, "The user prefers short answers for technical topics."),
+        ]
+        sources = []
+        for conversation, message_id, content in contradictory:
+            sources.append(self.store.create_memory(
+                content=content,
+                memory_type="preference",
+                subject="Communication",
+                memory_key="preference.answer_style",
+                provenance="explicit",
+                source_conversation_id=conversation,
+                source_message_id=message_id,
+                source_created_at="2026-10-01T10:00:00+00:00",
+                evidence=content,
+            ))
+
+        provider = FakeProvider(json.dumps({
+            "summary": "",
+            "confidence": 0.0,
+            "importance": 1,
+        }))
+        report = await MemoryConsolidator(
+            provider, self.store, self.continuity
+        ).run()
+
+        self.assertEqual(report.groups_examined, 1)
+        self.assertEqual(report.summaries_created, 0)
+        self.assertEqual(report.duplicates_skipped, 1)
+        self.assertEqual(self.store.count_inferred_patterns(), 0)
+        self.assertIn("Preserve meaningful disagreement", provider.last_messages[0].content)
+        self.assertEqual(
+            [self.store.get_memory(item.id).content for item in sources],
+            [item.content for item in sources],
+        )
+
     async def test_pending_summary_is_not_retrieved_until_accepted(self):
         from v.memory.retrieval import retrieve_relevant_memories
 
