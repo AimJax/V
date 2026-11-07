@@ -37,6 +37,9 @@ class DesktopRuntimeThread(QThread):
     memory_consolidation_completed = Signal(object)
     memory_consolidation_failed = Signal(str)
     memory_consolidation_cancelled = Signal()
+    memory_context_preview_ready = Signal(object)
+    memory_context_preview_failed = Signal(str)
+    memory_context_preview_cancelled = Signal()
     memory_backfill_progress = Signal(object)
     memory_backfill_completed = Signal(object)
     memory_backfill_paused = Signal()
@@ -59,6 +62,7 @@ class DesktopRuntimeThread(QThread):
         self._backfill_task: asyncio.Task | None = None
         self._consolidation_task: asyncio.Task | None = None
         self._consolidation_cancel_event: asyncio.Event | None = None
+        self._context_preview_task: asyncio.Task | None = None
         self._shutdown_requested = False
         self._memory_filters = ("", "", "")
 
@@ -114,6 +118,19 @@ class DesktopRuntimeThread(QThread):
         self._consolidation_cancel_event = None
         self.memory_consolidation_cancelled.emit()
 
+    async def _cancel_context_preview(self) -> None:
+        task = self._context_preview_task
+        if task is None or task.done():
+            self._context_preview_task = None
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        self._context_preview_task = None
+        self.memory_context_preview_cancelled.emit()
+
     async def _serve(self) -> None:
         service = DesktopService()
 
@@ -138,11 +155,13 @@ class DesktopRuntimeThread(QThread):
             if command == "shutdown":
                 await self._cancel_backfill()
                 await self._cancel_consolidation()
+                await self._cancel_context_preview()
                 break
 
             if command == "send":
                 await self._cancel_backfill()
                 await self._cancel_consolidation()
+                await self._cancel_context_preview()
                 self._active_task = asyncio.create_task(
                     service.send_message(
                         payload,
@@ -166,6 +185,7 @@ class DesktopRuntimeThread(QThread):
             if command == "voice_turn":
                 await self._cancel_backfill()
                 await self._cancel_consolidation()
+                await self._cancel_context_preview()
                 self._active_task = asyncio.create_task(
                     service.send_voice_message(
                         payload,
@@ -386,6 +406,51 @@ class DesktopRuntimeThread(QThread):
                     self.memory_backfill_failed.emit(str(error))
                 continue
 
+            if command == "memory_context_preview":
+                if (
+                    self._context_preview_task is not None
+                    and not self._context_preview_task.done()
+                ):
+                    await self._cancel_context_preview()
+                if (
+                    self._consolidation_task is not None
+                    and not self._consolidation_task.done()
+                ) or (
+                    self._backfill_task is not None
+                    and not self._backfill_task.done()
+                ):
+                    self.memory_context_preview_failed.emit(
+                        "Wait for other memory jobs to finish before previewing recall."
+                    )
+                    continue
+                if service.memory_worker is not None:
+                    await service.memory_worker.cancel()
+
+                async def run_context_preview() -> None:
+                    try:
+                        result = await service.preview_memory_context(str(payload))
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as error:
+                        self.memory_context_preview_failed.emit(str(error))
+                    else:
+                        self.memory_context_preview_ready.emit(result)
+                    finally:
+                        self._context_preview_task = None
+                        if (
+                            service.memory_worker is not None
+                            and service.extraction_queue is not None
+                            and service.extraction_queue.count("pending")
+                        ):
+                            await service.memory_worker.schedule()
+
+                self._context_preview_task = asyncio.create_task(run_context_preview())
+                continue
+
+            if command == "memory_context_preview_cancel":
+                await self._cancel_context_preview()
+                continue
+
             if command == "memory_consolidate_start":
                 if (
                     self._consolidation_task is not None
@@ -398,6 +463,14 @@ class DesktopRuntimeThread(QThread):
                 if self._backfill_task is not None and not self._backfill_task.done():
                     self.memory_consolidation_failed.emit(
                         "Wait for the historical memory scan to finish before consolidating."
+                    )
+                    continue
+                if (
+                    self._context_preview_task is not None
+                    and not self._context_preview_task.done()
+                ):
+                    self.memory_consolidation_failed.emit(
+                        "Wait for the memory-context preview to finish before consolidating."
                     )
                     continue
                 if service.memory_worker is not None:
@@ -632,6 +705,12 @@ class DesktopRuntimeThread(QThread):
 
     def save_settings(self, changes: dict, personality: str) -> None:
         self._post("settings_save", (changes, personality))
+
+    def preview_memory_context(self, query: str) -> None:
+        self._post("memory_context_preview", query)
+
+    def cancel_memory_context_preview(self) -> None:
+        self._post("memory_context_preview_cancel")
 
     def start_memory_consolidation(self) -> None:
         self._post("memory_consolidate_start")
