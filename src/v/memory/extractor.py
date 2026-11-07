@@ -248,6 +248,7 @@ class ExtractionReport:
     conflicts_queued: int = 0
     commitments_created: int = 0
     commitment_candidates_skipped: int = 0
+    commitment_error: str | None = None
 
 
 def _normalize_text(value: str) -> str:
@@ -869,6 +870,7 @@ class MemoryExtractor:
 
         commitments_created = 0
         commitment_candidates_skipped = 0
+        commitment_error = None
         if self.continuity_store is not None:
             try:
                 commitment_candidates, invalid_commitments = (
@@ -882,10 +884,11 @@ class MemoryExtractor:
                 commitment_candidates_skipped = (
                     invalid_commitments + storage_skipped
                 )
-            except Exception:
+            except Exception as error:
                 # Prospective extraction is additive. Its failure must not
                 # discard valid explicit memories or block the chat loop.
                 commitment_candidates_skipped += 1
+                commitment_error = str(error)
 
         for message_id in source_messages:
             self.queue.complete(message_id)
@@ -897,4 +900,5 @@ class MemoryExtractor:
             conflicts_queued=conflicts_queued,
             commitments_created=commitments_created,
             commitment_candidates_skipped=commitment_candidates_skipped,
+            commitment_error=commitment_error,
         )
