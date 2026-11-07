@@ -112,6 +112,48 @@ class MemoryConsolidationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(provider.calls, 1)
         self.assertEqual(self.store.count_inferred_patterns(), 1)
 
+
+    async def test_new_accepted_summary_supersedes_older_summary_for_same_topic(self):
+        from v.memory.retrieval import retrieve_relevant_memories
+
+        provider = FakeProvider(json.dumps({
+            "summary": "The user prefers restrained, practical interface aesthetics.",
+            "confidence": 0.94,
+            "importance": 4,
+        }))
+        consolidator = MemoryConsolidator(provider, self.store, self.continuity)
+        await consolidator.run()
+        old_pattern = self.store.list_memories(memory_type="inferred_pattern")[0]
+        self.continuity.review_derivation(old_pattern.id, "accepted")
+
+        self.store.create_memory(
+            content="The user again requested a restrained, practical interface.",
+            memory_type="preference",
+            subject="User",
+            provenance="explicit",
+            source_conversation_id="conversation-b",
+            source_message_id=104,
+            source_created_at="2026-10-04T10:00:00+00:00",
+            evidence="Please keep the interface restrained and practical.",
+        )
+        second = await consolidator.run()
+        self.assertEqual(second.summaries_created, 1)
+        patterns = self.store.list_memories(memory_type="inferred_pattern")
+        new_pattern = next(item for item in patterns if item.id != old_pattern.id)
+
+        self.assertEqual(self.continuity.temporal_record(old_pattern.id)["state"], "current")
+        self.continuity.review_derivation(new_pattern.id, "accepted")
+        old_state = self.continuity.temporal_record(old_pattern.id)
+        self.assertEqual(old_state["state"], "superseded")
+        self.assertEqual(old_state["superseded_by"], new_pattern.id)
+
+        results = retrieve_relevant_memories(
+            self.store, "restrained practical interface aesthetics"
+        )
+        result_ids = {item.id for item in results}
+        self.assertNotIn(old_pattern.id, result_ids)
+        self.assertIn(new_pattern.id, result_ids)
+
     async def test_cancellation_prevents_model_work(self):
         provider = FakeProvider("{}")
         consolidator = MemoryConsolidator(provider, self.store, self.continuity)
