@@ -24,7 +24,12 @@ from v.memory.embedding_store import EmbeddingStore
 from v.memory.extractor import MemoryExtractor
 from v.memory.hybrid_retrieval import HybridMemoryRetriever
 from v.memory.queue import ExtractionQueue
-from v.memory.retrieval import build_memory_context, retrieve_relevant_memories
+from v.memory.retrieval import (
+    build_commitment_context,
+    build_memory_context,
+    retrieve_relevant_memories,
+    select_relevant_commitments,
+)
 from v.memory.store import MemoryStore
 from v.memory.continuity import ContinuityStore
 from v.memory.worker import MemoryWorker
@@ -415,6 +420,17 @@ class DesktopService:
                     derivation_sources=derivation_sources,
                     temporal_records=temporal_records,
                 )
+                if self.continuity_store is not None:
+                    commitments = self.continuity_store.list_commitments(
+                        state="all", limit=500
+                    )
+                    commitment_context = build_commitment_context(
+                        commitments, user_message
+                    )
+                    if commitment_context:
+                        memory_context = (
+                            (memory_context + "\n\n") if memory_context else ""
+                        ) + commitment_context
             except Exception:
                 # Memory failures must never prevent the user from chatting.
                 memory_context = None
@@ -987,6 +1003,15 @@ class DesktopService:
             derivation_sources=derivation_sources,
             temporal_records=temporal_records,
         )
+        commitments = (
+            self.continuity_store.list_commitments(state="all", limit=500)
+            if self.continuity_store is not None
+            else []
+        )
+        selected_commitments = select_relevant_commitments(commitments, query)
+        commitment_context = build_commitment_context(commitments, query)
+        if commitment_context:
+            context = ((context + "\n\n") if context else "") + commitment_context
         return {
             "query": query,
             "memories": [
@@ -1009,6 +1034,16 @@ class DesktopService:
                 for memory in memories
             ],
             "context": context,
+            "commitments": [
+                {
+                    "title": item["title"],
+                    "description": item["description"],
+                    "due_at": item["due_at"],
+                    "state": item["state"],
+                    "source_memory_id": item["source_memory_id"],
+                }
+                for item in selected_commitments
+            ],
             "semantic": semantic,
             "fallback_reason": fallback_reason,
         }
