@@ -983,15 +983,27 @@ class DesktopService:
         if not self.settings.get("memory", {}).get("retrieval_enabled", True):
             return {
                 "query": query,
+                "retrieval_query": query,
                 "memories": [],
+                "commitments": [],
                 "context": None,
                 "semantic": False,
                 "fallback_reason": "Memory retrieval is disabled.",
             }
 
+        recent_messages = (
+            self.conversation_store.get_recent_messages(
+                self.conversation.id,
+                self.history_limit,
+            )
+            if self.conversation is not None
+            else []
+        )
+        retrieval_query = build_contextual_memory_query(query, recent_messages)
+
         if self.retriever is not None:
             memories = await self.retriever.retrieve(
-                query,
+                retrieval_query,
                 limit=self.retrieval_limit,
             )
             semantic = True
@@ -999,7 +1011,7 @@ class DesktopService:
         else:
             memories = retrieve_relevant_memories(
                 self.memory_store,
-                query,
+                retrieval_query,
                 limit=self.retrieval_limit,
             )
             semantic = False
@@ -1027,7 +1039,7 @@ class DesktopService:
             if self.continuity_store is not None
             else []
         )
-        selected_commitments = select_relevant_commitments(commitments, query)
+        selected_commitments = select_relevant_commitments(commitments, retrieval_query)
         for item in selected_commitments:
             source_id = item.get("source_memory_id")
             if source_id and self.memory_store is not None:
@@ -1037,12 +1049,13 @@ class DesktopService:
                         source_memory.evidence or source_memory.content
                     )
         commitment_context = build_commitment_context(
-            selected_commitments, query
+            selected_commitments, retrieval_query
         )
         if commitment_context:
             context = ((context + "\n\n") if context else "") + commitment_context
         return {
             "query": query,
+            "retrieval_query": retrieval_query,
             "memories": [
                 {
                     "memory_id": memory.id,
