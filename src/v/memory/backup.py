@@ -180,6 +180,21 @@ def _validate_temporal_records(raw: Any, memories: list[dict[str, Any]]) -> list
         if not isinstance(item["note"], str) or len(item["note"]) > 2000:
             raise ValueError("Temporal note must be a string of at most 2000 characters.")
         output.append(dict(item))
+
+    by_memory_id = {item["memory_id"]: item for item in output}
+    for record in output:
+        if record["state"] != "superseded":
+            continue
+        visited = {record["memory_id"]}
+        replacement = record["superseded_by"]
+        while replacement in by_memory_id:
+            if replacement in visited:
+                raise ValueError("Backup contains a circular supersession chain.")
+            visited.add(replacement)
+            next_record = by_memory_id[replacement]
+            if next_record["state"] != "superseded":
+                break
+            replacement = next_record["superseded_by"]
     return output
 
 
