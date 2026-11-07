@@ -69,6 +69,21 @@ def _parse_summary(raw: str) -> dict:
     importance = payload["importance"]
     if not isinstance(summary, str) or len(summary.strip()) > 1200:
         raise ValueError("Consolidated summary must be a string of at most 1200 characters.")
+    if not summary.strip():
+        if (
+            isinstance(confidence, (int, float))
+            and not isinstance(confidence, bool)
+            and float(confidence) == 0.0
+            and isinstance(importance, int)
+            and not isinstance(importance, bool)
+            and importance == 1
+        ):
+            return {
+                "summary": "",
+                "confidence": 0.0,
+                "importance": 1,
+            }
+        raise ValueError("An empty summary must use the explicit no-summary sentinel.")
     if (
         isinstance(confidence, bool)
         or not isinstance(confidence, (int, float))
