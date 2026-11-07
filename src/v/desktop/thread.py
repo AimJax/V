@@ -36,6 +36,7 @@ class DesktopRuntimeThread(QThread):
     memory_continuity_failed = Signal(str)
     memory_consolidation_completed = Signal(object)
     memory_consolidation_failed = Signal(str)
+    memory_consolidation_cancelled = Signal()
     memory_backfill_progress = Signal(object)
     memory_backfill_completed = Signal(object)
     memory_backfill_paused = Signal()
@@ -111,6 +112,7 @@ class DesktopRuntimeThread(QThread):
             pass
         self._consolidation_task = None
         self._consolidation_cancel_event = None
+        self.memory_consolidation_cancelled.emit()
 
     async def _serve(self) -> None:
         service = DesktopService()
