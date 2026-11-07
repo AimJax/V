@@ -111,8 +111,10 @@ class MemoryContinuityDialog(QDialog):
         commitments_title = QLabel("Prospective commitments")
         commitments_title.setStyleSheet("font-weight: 650; margin-top: 8px;")
         root.addWidget(commitments_title)
-        self.commitment_table = QTableWidget(0, 3)
-        self.commitment_table.setHorizontalHeaderLabels(["Title", "Due", "State"])
+        self.commitment_table = QTableWidget(0, 4)
+        self.commitment_table.setHorizontalHeaderLabels(
+            ["Title", "Due", "State", "Source memory"]
+        )
         self.commitment_table.setSelectionBehavior(
             QTableWidget.SelectionBehavior.SelectRows
         )
@@ -186,10 +188,18 @@ class MemoryContinuityDialog(QDialog):
         commitments = snapshot.get("commitments", [])
         self.commitment_table.setRowCount(len(commitments))
         for row, item in enumerate(commitments):
-            values = (item["title"], item.get("due_at") or "No due time", item["state"])
+            source_id = item.get("source_memory_id")
+            values = (
+                item["title"],
+                item.get("due_at") or "No due time",
+                item["state"],
+                source_id[:12] if source_id else "—",
+            )
             for column, value in enumerate(values):
                 cell = QTableWidgetItem(str(value))
                 cell.setData(Qt.ItemDataRole.UserRole, item["id"])
+                if column == 3 and source_id:
+                    cell.setToolTip(source_id)
                 self.commitment_table.setItem(row, column, cell)
         self.status_label.setText(
             f"{len(sources)} derivation source(s) · "
