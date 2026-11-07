@@ -46,6 +46,40 @@ def test_rejects_invalid_temporal_ranges_and_unknown_ids(continuity):
         continuity.ensure_temporal_record("missing")
 
 
+
+def test_atomic_temporal_update_can_clear_validity_dates(continuity):
+    continuity.ensure_temporal_record(
+        "m1",
+        valid_from="2026-01-01T00:00:00+00:00",
+        valid_until="2026-02-01T00:00:00+00:00",
+    )
+    updated = continuity.update_temporal_record(
+        "m1",
+        "current",
+        valid_from=None,
+        valid_until=None,
+        note="Validity is no longer bounded.",
+    )
+    assert updated["valid_from"] is None
+    assert updated["valid_until"] is None
+    assert updated["note"] == "Validity is no longer bounded."
+
+
+def test_atomic_temporal_update_rejects_invalid_transition_without_partial_write(continuity):
+    original = continuity.ensure_temporal_record(
+        "m1", valid_from="2026-01-01T00:00:00+00:00"
+    )
+    with pytest.raises(ValueError):
+        continuity.update_temporal_record(
+            "m1",
+            "superseded",
+            valid_from="2026-02-01T00:00:00+00:00",
+            valid_until="2026-01-01T00:00:00+00:00",
+            superseded_by="m2",
+        )
+    unchanged = continuity.temporal_record("m1")
+    assert unchanged == original
+
 def test_derivations_require_existing_sources_and_explicit_review(continuity):
     assert continuity.add_derivation("derived", ["m1", "m2"]) == 2
     sources = continuity.derivation_sources("derived")
