@@ -24,6 +24,7 @@ Only extract information that is likely to be useful in future conversations:
 - Stable personal profile facts the user explicitly stated.
 - Preferences and dislikes.
 - Ongoing projects, goals, and learning activities.
+- Reusable workflows and conventions the user explicitly described as their procedure.
 - Important relationships the user explicitly described.
 - Significant personal events worth remembering.
 - Ongoing or materially relevant current circumstances, even when they may change:
@@ -65,7 +66,7 @@ For every proposed memory:
   Prefer the actual project/entity name (for example, "Project V") over a vague
   label such as "User" when the statement is specifically about that project.
 - memory_type must be one of:
-  profile, preference, episodic, relationship, project, fact.
+  profile, preference, episodic, procedural, relationship, project, fact.
 - importance must be an integer from 1 to 5.
 - Use importance 3 or higher only for information genuinely worth retaining.
 - Each source user message may include a small surrounding conversation context.
@@ -77,7 +78,10 @@ For every proposed memory:
   The source message itself must contain enough of the user's assertion to support
   the proposed memory. If it only says "yes", "exactly", "that one", or otherwise
   depends entirely on another message for the underlying claim, return no memory
-  for that source message. Do not convert an assistant suggestion into a user fact
+  for that source message. Do not convert an assistant suggestion into a user fact.
+- A procedural memory records a user-stated repeatable workflow or convention. It is
+  not permission to perform consequential actions, and must not be inferred from an
+  assistant recommendation or a one-time action.
   merely because the user is responding to it.
 - Interpret each message using its supplied original timestamp, not the date of reprocessing.
 - A statement such as "currently", "now", or "this year" describes the user's circumstances
