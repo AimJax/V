@@ -226,6 +226,26 @@ class ContinuityStore:
                 "note": "",
             }
 
+    @staticmethod
+    def _ensure_no_supersession_cycle(
+        db: sqlite3.Connection,
+        memory_id: str,
+        replacement_id: str,
+    ) -> None:
+        visited = {memory_id}
+        current_id: str | None = replacement_id
+        while current_id is not None:
+            if current_id in visited:
+                raise ValueError("Supersession references cannot form a cycle.")
+            visited.add(current_id)
+            row = db.execute(
+                "SELECT state, superseded_by FROM memory_temporal WHERE memory_id=?",
+                (current_id,),
+            ).fetchone()
+            if row is None or row["state"] != "superseded":
+                return
+            current_id = row["superseded_by"]
+
     def set_memory_state(
         self, memory_id: str, state: str, *, superseded_by: str | None = None,
         note: str = "",
@@ -253,6 +273,8 @@ class ContinuityStore:
                 "SELECT 1 FROM memories WHERE id=?", (superseded_by,)
             ).fetchone() is None:
                 raise KeyError(superseded_by)
+            if superseded_by:
+                self._ensure_no_supersession_cycle(db, memory_id, superseded_by)
             db.execute("""
                 INSERT INTO memory_temporal(memory_id, state, recorded_at, superseded_by, note)
                 VALUES (?, ?, ?, ?, ?)
@@ -305,6 +327,8 @@ class ContinuityStore:
                 "SELECT 1 FROM memories WHERE id=?", (superseded_by,)
             ).fetchone() is None:
                 raise KeyError(superseded_by)
+            if superseded_by:
+                self._ensure_no_supersession_cycle(db, memory_id, superseded_by)
             db.execute(
                 """
                 INSERT INTO memory_temporal(
