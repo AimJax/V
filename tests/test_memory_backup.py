@@ -159,6 +159,20 @@ class MemoryBackupTests(unittest.TestCase):
         self.assertEqual(import_backup(self.target, self.backup_path), (1, 0))
         self.assertEqual(self.target.get_memory(original.id), original)
 
+
+    def test_v3_backup_remains_importable_without_continuity_records(self):
+        original = self.source.create_memory(content="A v3-compatible record.")
+        export_backup(self.source, self.backup_path)
+        payload = json.loads(self.backup_path.read_text(encoding="utf-8"))
+        payload["version"] = 3
+        payload.pop("temporal_records")
+        payload.pop("derivations")
+        payload.pop("commitments")
+        self.backup_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        self.assertEqual(import_backup(self.target, self.backup_path), (1, 0))
+        self.assertEqual(self.target.get_memory(original.id), original)
+
     def test_export_refuses_to_overwrite_without_explicit_flag(self):
         self.source.create_memory(content="Backup test.")
         export_backup(self.source, self.backup_path)
