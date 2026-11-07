@@ -8,6 +8,7 @@ import json
 import re
 
 from collections import defaultdict
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -100,19 +101,49 @@ class MemoryConsolidator:
 
     def _source_groups(self) -> list[tuple[tuple[str, str], list[Memory]]]:
         memories = self.memory_store.list_memories(limit=10_000)
-        current_ids: set[str] = set()
-        with self.memory_store._connect() as connection:
+        temporal_records: dict[str, dict] = {}
+        with closing(self.memory_store._connect()) as connection:
             temporal_tables = {
                 row[0] for row in connection.execute(
                     "SELECT name FROM sqlite_master WHERE type='table'"
                 )
             }
             if "memory_temporal" in temporal_tables:
-                current_ids = {
-                    row[0] for row in connection.execute(
-                        "SELECT memory_id FROM memory_temporal WHERE state='current'"
+                temporal_records = {
+                    row["memory_id"]: dict(row)
+                    for row in connection.execute(
+                        "SELECT memory_id, state, valid_from, valid_until "
+                        "FROM memory_temporal"
                     )
                 }
+        now = datetime.now(timezone.utc)
+
+        def is_current(memory: Memory) -> bool:
+            record = temporal_records.get(memory.id)
+            if record is None:
+                return True
+            if record["state"] != "current":
+                return False
+            for field, lower_bound in (
+                ("valid_from", True),
+                ("valid_until", False),
+            ):
+                value = record.get(field)
+                if value is None:
+                    continue
+                try:
+                    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                    if parsed.tzinfo is None:
+                        return False
+                    parsed = parsed.astimezone(timezone.utc)
+                except (TypeError, ValueError):
+                    return False
+                if lower_bound and parsed > now:
+                    return False
+                if not lower_bound and parsed < now:
+                    return False
+            return True
+
         groups: dict[tuple[str, str], list[Memory]] = defaultdict(list)
         for memory in memories:
             if (
@@ -121,8 +152,7 @@ class MemoryConsolidator:
                 or memory.source_message_id is None
                 or not memory.source_conversation_id
                 or not memory.content.strip()
-                or (current_ids and memory.id not in current_ids
-                    and self.continuity_store.temporal_record(memory.id)["state"] != "current")
+                or not is_current(memory)
             ):
                 continue
             key = (memory.memory_type, _subject_key(memory.subject))
@@ -174,8 +204,21 @@ class MemoryConsolidator:
                 return ConsolidationReport(
                     examined, created, skipped, 0, failures, True
                 )
-            # Preserve source diversity and bound prompt size.
-            sources = records[:8]
+            # Preserve source diversity and bound prompt size. At least one
+            # record from two separate conversations must survive the cap.
+            sources: list[Memory] = []
+            seen_conversations: set[str] = set()
+            for item in records:
+                if item.source_conversation_id not in seen_conversations:
+                    sources.append(item)
+                    seen_conversations.add(item.source_conversation_id)
+                if len(seen_conversations) >= 2:
+                    break
+            for item in records:
+                if len(sources) >= 8:
+                    break
+                if item.id not in {source.id for source in sources}:
+                    sources.append(item)
             source_ids = sorted(item.id for item in sources)
             digest = hashlib.sha256("|".join(source_ids).encode("utf-8")).hexdigest()[:32]
             memory_key = f"consolidated.{digest}"
