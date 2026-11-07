@@ -378,6 +378,9 @@ def build_commitment_context(
         source_id = item.get("source_memory_id")
         if source_id:
             line += f" [source_memory_id={source_id}]"
+        evidence = item.get("source_evidence")
+        if evidence:
+            line += f" Source evidence: {evidence[:180]}"
         remaining = max_characters - sum(len(part) + 1 for part in lines)
         if remaining <= 0:
             break
