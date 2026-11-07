@@ -36,6 +36,7 @@ class MemoryContinuityDialog(QDialog):
         super().__init__(parent)
         self.memory_id = memory_id
         self._snapshot: dict = {}
+        self._next_status_message: str | None = None
         self.setWindowTitle("V — Memory Continuity")
         self.resize(900, 860)
         self.setMinimumSize(720, 680)
@@ -241,9 +242,15 @@ class MemoryContinuityDialog(QDialog):
                 if column == 3 and source_id:
                     cell.setToolTip(source_id)
                 self.commitment_table.setItem(row, column, cell)
+        status_message = self._next_status_message
+        self._next_status_message = None
         self.status_label.setText(
-            f"{len(sources)} derivation source(s) · "
-            f"{len(commitments)} commitment(s). Due dates are records, not scheduled reminders."
+            status_message
+            or (
+                f"{len(sources)} derivation source(s) · "
+                f"{len(commitments)} commitment(s). "
+                "Due dates are records, not scheduled reminders."
+            )
         )
 
     def _start_consolidation(self) -> None:
@@ -253,7 +260,7 @@ class MemoryContinuityDialog(QDialog):
         self.consolidation_requested.emit()
 
     def on_consolidation_completed(self, report) -> None:
-        self.status_label.setText(
+        self._next_status_message = (
             f"Consolidation finished: {report.summaries_created} proposal(s), "
             f"{report.duplicates_skipped} duplicate(s), "
             f"{report.groups_skipped} group(s) without a safe summary, "
@@ -263,7 +270,9 @@ class MemoryContinuityDialog(QDialog):
         self.refresh()
 
     def on_consolidation_cancelled(self) -> None:
-        self.status_label.setText("Memory consolidation was cancelled. No unreviewed summary was applied.")
+        self._next_status_message = (
+            "Memory consolidation was cancelled. No unreviewed summary was applied."
+        )
         self.refresh()
 
     def _save_temporal(self) -> None:
@@ -323,7 +332,7 @@ class MemoryContinuityDialog(QDialog):
             )
 
     def on_operation_completed(self, message: str) -> None:
-        self.status_label.setText(message)
+        self._next_status_message = message
         self.refresh()
 
     def on_operation_failed(self, message: str) -> None:
