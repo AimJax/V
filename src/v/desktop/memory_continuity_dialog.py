@@ -78,7 +78,7 @@ class MemoryContinuityDialog(QDialog):
         self.save_temporal_button.clicked.connect(self._save_temporal)
         self.consolidate_button.clicked.connect(self._start_consolidation)
         self.cancel_consolidation_button.clicked.connect(
-            self.consolidation_cancel_requested.emit
+            lambda: self.consolidation_cancel_requested.emit()
         )
         self.refresh_button.clicked.connect(self.refresh)
         temporal_actions.addWidget(self.save_temporal_button)
