@@ -346,6 +346,24 @@ class MemoryBackupTests(unittest.TestCase):
             "current",
         )
 
+
+    def test_v4_backup_round_trips_procedural_memory_type(self):
+        procedure = self.source.create_memory(
+            content="Before packaging, run the tests.",
+            memory_type="procedural",
+            subject="Project V",
+            provenance="explicit",
+            source_conversation_id="procedure-conversation",
+            source_message_id=808,
+            evidence="Before packaging, run the tests.",
+        )
+        export_backup(self.source, self.backup_path)
+        import_backup(self.target, self.backup_path)
+
+        restored = self.target.get_memory(procedure.id)
+        self.assertEqual(restored.memory_type, "procedural")
+        self.assertEqual(restored.evidence, procedure.evidence)
+
     def test_v4_backup_rejects_circular_supersession_without_importing(self):
         from v.memory.continuity import ContinuityStore
 
