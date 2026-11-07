@@ -1121,6 +1121,9 @@ class DesktopService:
                 "memory_type": item.memory_type,
                 "provenance": item.provenance,
                 "source_date": item.source_created_at or item.created_at,
+                "date_basis": (
+                    "source timestamp" if item.source_created_at else "record creation time"
+                ),
                 "temporal_state": (
                     temporal["state"] if temporal.get("recorded_at") else "unspecified"
                 ),
