@@ -73,7 +73,7 @@ class DesktopServiceMemoryTests(unittest.TestCase):
         self.service.continuity_store = ContinuityStore(self.store.database_path)
         related = self.store.create_memory(
             content="The user is working on a local companion project.",
-            memory_type="preference",
+            memory_type="episodic",
             subject="User",
             memory_key="workflow",
             provenance="explicit",
