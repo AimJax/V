@@ -116,7 +116,8 @@ class MemoryConsolidationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(report.groups_examined, 1)
         self.assertEqual(report.summaries_created, 0)
-        self.assertEqual(report.duplicates_skipped, 1)
+        self.assertEqual(report.duplicates_skipped, 0)
+        self.assertEqual(report.groups_skipped, 1)
         self.assertEqual(self.store.count_inferred_patterns(), 0)
         self.assertIn("Preserve meaningful disagreement", provider.last_messages[0].content)
         self.assertEqual(
