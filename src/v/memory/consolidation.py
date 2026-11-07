@@ -227,7 +227,7 @@ class MemoryConsolidator:
         for _group_key, records in groups:
             if cancel_event is not None and cancel_event.is_set():
                 return ConsolidationReport(
-                    examined, created, skipped, 0, failures, True
+                    examined, created, duplicates_skipped, groups_skipped, failures, True
                 )
             # Preserve source diversity and bound prompt size. At least one
             # record from two separate conversations must survive the cap.
@@ -313,7 +313,7 @@ class MemoryConsolidator:
                 # record after the user has cancelled the consolidation job.
                 if cancel_event is not None and cancel_event.is_set():
                     return ConsolidationReport(
-                        examined + 1, created, skipped, 0, failures, True
+                        examined + 1, created, duplicates_skipped, groups_skipped, failures, True
                     )
                 self.memory_store.create_inferred_pattern(
                     content=candidate["summary"],
