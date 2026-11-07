@@ -130,6 +130,15 @@ def test_source_edit_invalidates_accepted_derivation_and_marks_summary_disputed(
     assert state == "disputed"
 
 
+
+def test_source_edit_invalidates_pending_derivation_before_user_review(continuity):
+    continuity.add_derivation("derived", ["m1", "m2"])
+    with sqlite3.connect(continuity.database_path) as db:
+        db.execute("UPDATE memories SET content='corrected source' WHERE id='m1'")
+
+    assert {item["state"] for item in continuity.derivation_sources("derived")} == {"rejected"}
+    assert continuity.temporal_record("derived")["state"] == "disputed"
+
 def test_source_deletion_marks_dependent_summary_disputed(continuity):
     continuity.add_derivation("derived", ["m1", "m2"])
     continuity.review_derivation("derived", "accepted")
