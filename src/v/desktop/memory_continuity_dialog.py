@@ -234,9 +234,7 @@ class MemoryContinuityDialog(QDialog):
         self.commitment_table.setFixedHeight(
             self._table_content_height(self.commitment_table, 160)
         )
-        item_height = self.derivation_list.sizeHintForRow(0)
-        if item_height < 0:
-            item_height = self.derivation_list.fontMetrics().height() + 8
+        item_height = self.derivation_list.fontMetrics().height() + 12
         list_height = (
             item_height * self.derivation_list.count()
             + 2 * self.derivation_list.frameWidth()
