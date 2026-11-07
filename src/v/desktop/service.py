@@ -916,6 +916,21 @@ class DesktopService:
             "Existing memories were not overwritten or deleted."
         )
 
+    async def run_memory_consolidation(self, *, limit: int = 3, cancel_event=None):
+        if (
+            self.memory_store is None
+            or self.continuity_store is None
+            or self.provider is None
+        ):
+            raise RuntimeError("Local memory consolidation is not available.")
+        from v.memory.consolidation import MemoryConsolidator
+
+        return await MemoryConsolidator(
+            self.provider,
+            self.memory_store,
+            self.continuity_store,
+        ).run(limit=limit, cancel_event=cancel_event)
+
     def memory_continuity_snapshot(self, memory_id: str) -> dict:
         if self.continuity_store is None:
             raise RuntimeError("Long-term memory is disabled in configuration.")
