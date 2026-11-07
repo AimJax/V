@@ -557,6 +557,12 @@ def import_backup(
                     )
 
                 for record in temporal_records:
+                    if record["state"] == "superseded":
+                        ContinuityStore._ensure_no_supersession_cycle(
+                            connection,
+                            record["memory_id"],
+                            record["superseded_by"],
+                        )
                     existing = connection.execute(
                         "SELECT memory_id, state, valid_from, valid_until, recorded_at, superseded_by, note "
                         "FROM memory_temporal WHERE memory_id=?",
