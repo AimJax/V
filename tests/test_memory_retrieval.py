@@ -335,6 +335,28 @@ class MemoryRetrievalTests(unittest.TestCase):
         self.assertIn(primary.id, result_ids)
         self.assertNotIn(outdated.id, result_ids)
 
+
+    def test_context_exposes_source_records_for_derived_summaries(self):
+        derived = self.store.create_memory(
+            content="The user has a recurring preference for practical solutions.",
+            memory_type="inferred_pattern",
+            provenance="inferred",
+            confidence=0.94,
+        )
+        context = build_memory_context(
+            [derived],
+            derivation_sources={
+                derived.id: [{
+                    "source_memory_id": "source-123",
+                    "content": "I prefer practical solutions that can be tested.",
+                }]
+            },
+        )
+
+        self.assertIn("derived_summary", context)
+        self.assertIn("derived_from=source-123", context)
+        self.assertIn("I prefer practical solutions that can be tested.", context)
+
     def test_empty_results_produce_no_context(self):
         self.assertIsNone(build_memory_context([]))
 
