@@ -262,7 +262,9 @@ class MemoryContinuityDialog(QDialog):
     def _update_commitment(self, state: str) -> None:
         commitment_id = self._selected_commitment_id()
         if commitment_id is not None:
-            self.commitment_update_requested.emit(commitment_id, state)
+            self.commitment_update_requested.emit(
+                commitment_id, state, self.memory_id
+            )
 
     def on_operation_completed(self, message: str) -> None:
         self.status_label.setText(message)
