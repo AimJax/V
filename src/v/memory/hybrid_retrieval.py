@@ -11,6 +11,7 @@ from v.memory.retrieval import (
     meaningful_terms,
     resolve_temporal_memories,
     source_timestamp_key,
+    _exclude_noncurrent_memories,
 )
 from v.memory.store import MemoryStore
 from v.providers.errors import ProviderError
@@ -198,6 +199,9 @@ class HybridMemoryRetriever:
             query,
             limit=selected_limit,
         )
+        lexical_results = _exclude_noncurrent_memories(
+            self.memory_store, lexical_results, query
+        )
 
         self.last_fallback_reason = None
 
@@ -226,8 +230,14 @@ class HybridMemoryRetriever:
                 query,
                 limit=selected_limit,
             )
-            return expand_related_memories(
+            resolved = _exclude_noncurrent_memories(
+                self.memory_store, resolved, query
+            )
+            expanded = expand_related_memories(
                 self.memory_store, resolved, limit=selected_limit
+            )
+            return _exclude_noncurrent_memories(
+                self.memory_store, expanded, query
             )
 
         except ProviderError as error:
@@ -235,8 +245,11 @@ class HybridMemoryRetriever:
 
             # Preserve exact keyword recall if the embedding service
             # becomes unavailable. Do not pretend this is semantic search.
-            return expand_related_memories(
+            expanded = expand_related_memories(
                 self.memory_store, lexical_results, limit=selected_limit
+            )
+            return _exclude_noncurrent_memories(
+                self.memory_store, expanded, query
             )
 
     async def rebuild_index(self) -> int:
