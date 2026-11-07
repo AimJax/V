@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 from v.memory.continuity import ContinuityStore
 from v.memory.models import Memory
+from v.memory.retrieval import source_timestamp_key
 from v.memory.store import MemoryStore
 from v.providers.base import ChatMessage, ChatProvider
 
@@ -172,7 +173,7 @@ class MemoryConsolidator:
             for item in sorted(
                 items,
                 key=lambda entry: (
-                    entry.source_created_at or entry.created_at,
+                    source_timestamp_key(entry.source_created_at),
                     entry.importance,
                     entry.id,
                 ),
@@ -225,7 +226,7 @@ class MemoryConsolidator:
             latest_records = sorted(
                 latest_by_conversation.values(),
                 key=lambda item: (
-                    item.source_created_at or item.created_at,
+                    source_timestamp_key(item.source_created_at),
                     item.id,
                 ),
                 reverse=True,
@@ -244,7 +245,7 @@ class MemoryConsolidator:
                     seen_ids.add(item.id)
             sources.sort(
                 key=lambda item: (
-                    item.source_created_at or item.created_at,
+                    source_timestamp_key(item.source_created_at),
                     item.id,
                 )
             )
