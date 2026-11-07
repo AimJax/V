@@ -662,8 +662,13 @@ class MemoryExtractor:
                     parsed_due = datetime.fromisoformat(
                         due_at.replace("Z", "+00:00")
                     )
-                    if parsed_due.tzinfo is None:
-                        raise ValueError("Due dates must include a timezone.")
+                    source_time = datetime.fromisoformat(
+                        message.created_at.replace("Z", "+00:00")
+                    )
+                    if parsed_due.tzinfo is None or source_time.tzinfo is None:
+                        raise ValueError("Due dates and source timestamps must include timezones.")
+                    if parsed_due < source_time:
+                        raise ValueError("A future commitment cannot be due before it was stated.")
                     due_at = parsed_due.astimezone(timezone.utc).isoformat(
                         timespec="milliseconds"
                     )
