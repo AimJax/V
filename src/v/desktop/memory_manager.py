@@ -51,6 +51,7 @@ class MemoryManagerDialog(QDialog):
     import_requested = Signal(str)
     backfill_requested = Signal()
     confirm_requested = Signal(str)
+    continuity_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -263,6 +264,8 @@ class MemoryManagerDialog(QDialog):
         root.addWidget(splitter, 1)
 
         actions = QHBoxLayout()
+        self.continuity_button = QPushButton("Continuity…")
+        self.continuity_button.clicked.connect(self._open_continuity)
         self.backfill_button = QPushButton("Reprocess history…")
         self.export_button = QPushButton("Export…")
         self.import_button = QPushButton("Import…")
@@ -279,6 +282,7 @@ class MemoryManagerDialog(QDialog):
         self.confirm_button.clicked.connect(self._confirm)
         self.save_button.clicked.connect(self._save)
 
+        actions.addWidget(self.continuity_button)
         actions.addWidget(self.backfill_button)
         actions.addWidget(self.export_button)
         actions.addWidget(self.import_button)
@@ -522,6 +526,15 @@ class MemoryManagerDialog(QDialog):
         self.status_label.setText("Memory correction saved.")
         self.refresh()
 
+    def _open_continuity(self) -> None:
+        if (
+            self._selected_memory_id is None
+            or self._operation_pending
+            or self._dirty
+        ):
+            return
+        self.continuity_requested.emit(self._selected_memory_id)
+
     def _confirm(self) -> None:
         if self._selected_memory_id is None or self._operation_pending or self._dirty:
             return
@@ -685,6 +698,9 @@ class MemoryManagerDialog(QDialog):
         self.type_filter.setEnabled(enabled)
         self.provenance_filter.setEnabled(enabled)
         self.backfill_button.setEnabled(enabled)
+        self.continuity_button.setEnabled(
+            enabled and self._selected_memory_id is not None and not self._dirty
+        )
         self.export_button.setEnabled(enabled)
         self.import_button.setEnabled(enabled)
         self._set_editor_enabled(self._selected_memory_id is not None)
