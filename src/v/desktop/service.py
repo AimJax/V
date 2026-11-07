@@ -397,9 +397,17 @@ class DesktopService:
                         user_text,
                         limit=self.retrieval_limit,
                     )
+                derivation_sources = {}
+                if self.continuity_store is not None:
+                    for memory in memories:
+                        if memory.memory_type == "inferred_pattern":
+                            derivation_sources[memory.id] = (
+                                self.continuity_store.derivation_sources(memory.id)
+                            )
                 memory_context = build_memory_context(
                     memories,
                     max_characters=self.retrieval_max_characters,
+                    derivation_sources=derivation_sources,
                 )
             except Exception:
                 # Memory failures must never prevent the user from chatting.
