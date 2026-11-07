@@ -210,6 +210,7 @@ class DesktopService:
                     memory_settings.get("minimum_confidence", 0.90)
                 ),
                 conflict_store=self.memory_backfill_store,
+                continuity_store=self.continuity_store,
             )
             self.memory_backfill_runner = MemoryBackfillRunner(
                 self.conversation_store,
