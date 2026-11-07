@@ -33,6 +33,53 @@ class MemoryContinuityDialogTests(unittest.TestCase):
         self.assertLessEqual(self.dialog.derivation_list.maximumHeight(), 150)
         self.assertLessEqual(self.dialog.commitment_table.maximumHeight(), 160)
 
+    def test_record_panels_grow_with_content_and_shrink_when_empty(self):
+        empty_timeline_height = self.dialog.timeline_table.height()
+        empty_derivation_height = self.dialog.derivation_list.height()
+        empty_commitment_height = self.dialog.commitment_table.height()
+        self.assertLess(empty_timeline_height, 80)
+        self.assertLess(empty_derivation_height, 80)
+        self.assertLess(empty_commitment_height, 80)
+
+        self.dialog.set_snapshot({
+            "memory_id": "memory-selected",
+            "temporal": {"state": "current"},
+            "timeline": [{
+                "memory_id": "memory-one",
+                "memory_type": "profile",
+                "source_date": "2026-01-01T00:00:00+00:00",
+                "temporal_state": "current",
+                "content": "One timeline record.",
+            }],
+            "derivation_sources": [{
+                "state": "pending",
+                "memory_type": "fact",
+                "subject": "Project",
+                "content": "One derivation source.",
+            }],
+            "commitments": [{
+                "id": "commitment-one",
+                "title": "One commitment",
+                "due_at": None,
+                "state": "open",
+                "source_memory_id": "memory-one",
+            }],
+        })
+        self.assertGreater(self.dialog.timeline_table.height(), empty_timeline_height)
+        self.assertGreater(self.dialog.derivation_list.height(), empty_derivation_height)
+        self.assertGreater(self.dialog.commitment_table.height(), empty_commitment_height)
+
+        self.dialog.set_snapshot({
+            "memory_id": "memory-selected",
+            "temporal": {"state": "current"},
+            "timeline": [],
+            "derivation_sources": [],
+            "commitments": [],
+        })
+        self.assertEqual(self.dialog.timeline_table.height(), empty_timeline_height)
+        self.assertEqual(self.dialog.derivation_list.height(), empty_derivation_height)
+        self.assertEqual(self.dialog.commitment_table.height(), empty_commitment_height)
+
     def test_snapshot_displays_timeline_derivations_and_commitments(self):
         self.dialog.set_snapshot({
             "memory_id": "memory-selected",
