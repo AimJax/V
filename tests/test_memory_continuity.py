@@ -164,10 +164,12 @@ def test_source_deletion_marks_dependent_summary_disputed(continuity):
             "SELECT state FROM memory_temporal WHERE memory_id='derived'"
         ).fetchone()[0]
         remaining_links = db.execute(
-            "SELECT COUNT(*) FROM memory_derivations WHERE derived_memory_id='derived'"
+            "SELECT COUNT(*) FROM memory_derivations "
+            "WHERE derived_memory_id='derived' AND state='rejected'"
         ).fetchone()[0]
     assert state == "disputed"
-    assert remaining_links == 0
+    # The deleted source link cascades away; surviving links remain rejected.
+    assert remaining_links == 1
 
 def test_commitments_track_due_dates_and_lifecycle(continuity):
     item = continuity.create_commitment(
