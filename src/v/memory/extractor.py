@@ -156,8 +156,9 @@ If no explicit commitment exists, return {"commitments": []}.
 
 
 PROSPECTIVE_HINT_PATTERN = re.compile(
-    r"\b(?:i(?:'ll| will| need to| have to| plan to| intend to)|"
-    r"we(?:'ll| will| need to)|remind me|don't let me forget|"
+    r"\b(?:i(?:'ll|’ll| will| need to| have to| plan to| intend to|"
+    r" am going to|’m going to)|we(?:'ll|’ll| will| need to)|"
+    r"remind me|don't let me forget|"
     r"follow up|i should|i must)\b",
     re.IGNORECASE,
 )
