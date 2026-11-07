@@ -423,8 +423,7 @@ class DesktopRuntimeThread(QThread):
                         "Wait for other memory jobs to finish before previewing recall."
                     )
                     continue
-                if service.memory_worker is not None:
-                    await service.memory_worker.cancel()
+                await service.cancel_background_model_work()
 
                 async def run_context_preview() -> None:
                     try:
@@ -473,8 +472,7 @@ class DesktopRuntimeThread(QThread):
                         "Wait for the memory-context preview to finish before consolidating."
                     )
                     continue
-                if service.memory_worker is not None:
-                    await service.memory_worker.cancel()
+                await service.cancel_background_model_work()
                 cancel_event = asyncio.Event()
                 self._consolidation_cancel_event = cancel_event
 
