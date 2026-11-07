@@ -24,7 +24,9 @@ from v.memory.hybrid_retrieval import (
 from v.memory.retrieval import (
     meaningful_terms,
     build_memory_context,
+    expand_related_memories,
     resolve_temporal_memories,
+    _exclude_noncurrent_memories,
 )
 from v.memory.store import MemoryStore
 from v.providers.base import ChatMessage, ChatProvider
@@ -1104,6 +1106,15 @@ async def evaluate_personal_memory_retrieval(
                 case.query,
                 limit=limit,
             )
+            resolved = _exclude_noncurrent_memories(
+                memory_store, resolved, case.query
+            )
+            resolved = expand_related_memories(
+                memory_store, resolved, limit=limit
+            )
+            resolved = _exclude_noncurrent_memories(
+                memory_store, resolved, case.query
+            )
             returned_ids = [memory.id for memory in resolved]
             metrics = query_metrics(returned_ids, case.relevant_record_ids)
             context = build_memory_context(
@@ -1164,6 +1175,15 @@ async def evaluate_personal_memory_retrieval(
             memories,
             case.query,
             limit=limit,
+        )
+        resolved = _exclude_noncurrent_memories(
+            memory_store, resolved, case.query
+        )
+        resolved = expand_related_memories(
+            memory_store, resolved, limit=limit
+        )
+        resolved = _exclude_noncurrent_memories(
+            memory_store, resolved, case.query
         )
         returned_ids = [memory.id for memory in resolved]
         metrics = query_metrics(returned_ids, case.relevant_record_ids)
