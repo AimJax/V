@@ -46,8 +46,9 @@ class DesktopServiceMemoryTests(unittest.TestCase):
         self.service.continuity_store = ContinuityStore(self.store.database_path)
         related = self.store.create_memory(
             content="The user is working on a local companion project.",
-            memory_type="episodic",
+            memory_type="preference",
             subject="User",
+            memory_key="workflow",
             provenance="explicit",
             source_conversation_id="conversation-2",
             source_message_id=10,
@@ -58,11 +59,23 @@ class DesktopServiceMemoryTests(unittest.TestCase):
             related.id, "disputed", note="Needs confirmation."
         )
 
+        unrelated = self.store.create_memory(
+            content="The user prefers ambient electronic music.",
+            memory_type="preference",
+            subject="User",
+            memory_key="music.genres",
+            provenance="explicit",
+            source_conversation_id="conversation-3",
+            source_message_id=11,
+            source_created_at="2026-11-06T11:00:00+00:00",
+        )
+
         snapshot = self.service.memory_continuity_snapshot(self.preference.id)
 
         timeline_ids = {item["memory_id"] for item in snapshot["timeline"]}
         self.assertIn(self.preference.id, timeline_ids)
         self.assertIn(related.id, timeline_ids)
+        self.assertNotIn(unrelated.id, timeline_ids)
         related_timeline = next(
             item for item in snapshot["timeline"]
             if item["memory_id"] == related.id
