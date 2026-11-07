@@ -7,6 +7,7 @@ from support import temporary_directory
 
 from v.conversations.store import ConversationStore
 from v.memory.backfill import MemoryBackfillStore
+from v.memory.continuity import ContinuityStore
 from v.memory.extractor import MemoryExtractor, _split_text_windows
 from v.memory.queue import ExtractionQueue
 from v.memory.store import MemoryStore
@@ -188,6 +189,85 @@ class MemoryExtractorTests(unittest.IsolatedAsyncioTestCase):
         saved = self.memory.list_memories()[0]
         self.assertEqual(saved.evidence, "I'm TestUser")
         self.assertEqual(saved.source_message_id, self.message_id)
+
+
+    async def test_explicit_future_commitment_is_saved_with_source_evidence(self):
+        message_text = (
+            "I'll finish the Project V test pass by November 10, 2026 at 5 PM."
+        )
+        message_id = self.conversations.add_message(
+            self.conversation.id,
+            "user",
+            message_text,
+        )
+        self.queue.enqueue(self.conversation.id, message_id)
+        continuity = ContinuityStore(self.memory.database_path)
+
+        class SequenceProvider:
+            def __init__(self):
+                self.calls = 0
+
+            async def chat(self, messages, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    content = json.dumps({"memories": []})
+                else:
+                    content = json.dumps({
+                        "commitments": [{
+                            "source_message_id": message_id,
+                            "title": "Finish the Project V test pass",
+                            "description": "Complete the test pass before packaging.",
+                            "subject": "Project V",
+                            "due_at": "2026-11-10T17:00:00+07:00",
+                            "recurrence": None,
+                            "evidence": "I'll finish the Project V test pass by November 10, 2026 at 5 PM.",
+                        }]
+                    })
+                return ChatResult(content=content, model="test-model")
+
+        provider = SequenceProvider()
+        extractor = MemoryExtractor(
+            provider,
+            self.conversations,
+            self.memory,
+            self.queue,
+            continuity_store=continuity,
+        )
+
+        report = await extractor.process_pending()
+
+        self.assertEqual(report.commitments_created, 1)
+        self.assertEqual(report.commitment_candidates_skipped, 0)
+        self.assertEqual(provider.calls, 2)
+        commitment = continuity.list_commitments(state="all")[0]
+        self.assertEqual(commitment["title"], "Finish the Project V test pass")
+        self.assertIsNotNone(commitment["source_memory_id"])
+        source = self.memory.get_memory(commitment["source_memory_id"])
+        self.assertEqual(source.evidence, message_text)
+        self.assertEqual(source.source_message_id, message_id)
+
+    async def test_prospective_extraction_skips_messages_without_commitment_intent(self):
+        provider = FakeProvider(json.dumps({"memories": []}))
+        continuity = ContinuityStore(self.memory.database_path)
+        message_id = self.conversations.add_message(
+            self.conversation.id,
+            "user",
+            "Project V has a persistent memory system.",
+        )
+        self.queue.enqueue(self.conversation.id, message_id)
+        extractor = MemoryExtractor(
+            provider,
+            self.conversations,
+            self.memory,
+            self.queue,
+            continuity_store=continuity,
+        )
+
+        report = await extractor.process_pending()
+
+        self.assertEqual(report.commitments_created, 0)
+        self.assertEqual(provider.calls, 1)
+        self.assertEqual(continuity.list_commitments(state="all"), [])
 
     async def test_valid_explicit_memory_is_saved(self):
         provider = FakeProvider(
