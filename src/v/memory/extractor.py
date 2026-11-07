@@ -8,6 +8,7 @@ import math
 import re
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from v.conversations.store import ConversationStore
 from v.memory.queue import ExtractionQueue
@@ -692,7 +693,9 @@ class MemoryExtractor:
                 "description": description.strip(),
                 "subject": subject.strip(),
                 "due_at": due_at,
-                "recurrence": recurrence.strip() if isinstance(recurrence, str) else None,
+                "recurrence": (
+                    recurrence.strip() or None if isinstance(recurrence, str) else None
+                ),
                 "evidence": evidence.strip(),
             })
         return validated, skipped
@@ -853,6 +856,26 @@ class MemoryExtractor:
                 else:
                     skipped += 1
 
+        commitments_created = 0
+        commitment_candidates_skipped = 0
+        if self.continuity_store is not None:
+            try:
+                commitment_candidates, invalid_commitments = (
+                    await self.extract_commitment_candidates(
+                        list(source_messages.values())
+                    )
+                )
+                commitments_created, storage_skipped = (
+                    self._store_commitment_candidates(commitment_candidates)
+                )
+                commitment_candidates_skipped = (
+                    invalid_commitments + storage_skipped
+                )
+            except Exception:
+                # Prospective extraction is additive. Its failure must not
+                # discard valid explicit memories or block the chat loop.
+                commitment_candidates_skipped += 1
+
         for message_id in source_messages:
             self.queue.complete(message_id)
 
@@ -861,4 +884,6 @@ class MemoryExtractor:
             memories_created=created,
             candidates_skipped=skipped,
             conflicts_queued=conflicts_queued,
+            commitments_created=commitments_created,
+            commitment_candidates_skipped=commitment_candidates_skipped,
         )
