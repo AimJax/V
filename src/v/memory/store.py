@@ -19,6 +19,7 @@ MEMORY_TYPES = {
     "profile",
     "preference",
     "episodic",
+    "procedural",
     "relationship",
     "project",
     "fact",
