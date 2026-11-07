@@ -23,6 +23,64 @@ def continuity(tmp_path):
     return ContinuityStore(path)
 
 
+
+def test_current_and_historical_recall_survive_store_restart(tmp_path):
+    from v.memory.retrieval import retrieve_relevant_memories
+    from v.memory.store import MemoryStore
+
+    database = tmp_path / "memory.sqlite3"
+    store = MemoryStore(database)
+    continuity = ContinuityStore(database)
+
+    older = store.create_memory(
+        content="The user worked at Site A as a field technician.",
+        memory_type="episodic",
+        subject="User",
+        memory_key="user.work_context",
+        source_conversation_id="conversation-old",
+        source_message_id=11,
+        source_created_at="2024-03-01T09:00:00+00:00",
+        evidence="I worked at Site A.",
+    )
+    current = store.create_memory(
+        content="The user works at Site B as a research coordinator.",
+        memory_type="episodic",
+        subject="User",
+        memory_key="user.work_context",
+        source_conversation_id="conversation-current",
+        source_message_id=22,
+        source_created_at="2026-10-01T09:00:00+00:00",
+        evidence="I work at Site B.",
+    )
+    continuity.set_memory_state(
+        older.id,
+        "superseded",
+        superseded_by=current.id,
+        note="A later work-context statement replaced this snapshot.",
+    )
+
+    # Reopen both stores to simulate a new application session.
+    reopened = MemoryStore(database)
+    reopened_continuity = ContinuityStore(database)
+    assert reopened_continuity.temporal_record(older.id)["state"] == "superseded"
+
+    present = retrieve_relevant_memories(
+        reopened,
+        "Where does the user work now?",
+        limit=5,
+    )
+    history = retrieve_relevant_memories(
+        reopened,
+        "Where did the user work previously?",
+        limit=5,
+    )
+
+    present_ids = {item.id for item in present}
+    history_ids = {item.id for item in history}
+    assert current.id in present_ids
+    assert older.id not in present_ids
+    assert {older.id, current.id}.issubset(history_ids)
+
 def test_temporal_validity_and_state_are_timezone_aware(continuity):
     record = continuity.ensure_temporal_record(
         "m1", valid_from="2026-01-01T00:00:00+07:00",
