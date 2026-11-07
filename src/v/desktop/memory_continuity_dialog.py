@@ -234,13 +234,13 @@ class MemoryContinuityDialog(QDialog):
         self.commitment_table.setFixedHeight(
             self._table_content_height(self.commitment_table, 160)
         )
-        item_height = self.derivation_list.fontMetrics().height() + 12
+        item_height = self.derivation_list.fontMetrics().height() + 16
         list_height = (
             item_height * self.derivation_list.count()
             + 2 * self.derivation_list.frameWidth()
             + 4
         )
-        self.derivation_list.setFixedHeight(min(150, max(44, list_height)))
+        self.derivation_list.setFixedHeight(min(150, max(32, list_height)))
 
     def refresh(self) -> None:
         self.status_label.setText("Loading continuity records…")
