@@ -305,15 +305,14 @@ COMMITMENT_STOP_WORDS = {
 }
 
 
-def build_commitment_context(
+def select_relevant_commitments(
     commitments: list[dict],
     query: str,
     *,
-    max_characters: int = 700,
-) -> str | None:
-    """Select relevant prospective records without injecting the whole task list."""
+    limit: int = 3,
+) -> list[dict]:
     if not commitments or not isinstance(query, str) or not query.strip():
-        return None
+        return []
     history_query = bool(COMMITMENT_HISTORY_PATTERN.search(query))
     overview_query = bool(COMMITMENT_OVERVIEW_PATTERN.search(query))
     terms = {
@@ -332,8 +331,6 @@ def build_commitment_context(
         overlap = sum(1 for term in terms if term in text)
         if overview_query or overlap:
             ranked.append((overlap, item))
-    if not ranked:
-        return None
     ranked.sort(
         key=lambda pair: (
             -pair[0],
@@ -342,6 +339,20 @@ def build_commitment_context(
             pair[1].get("created_at") or "",
         )
     )
+    return [item for _score, item in ranked[:max(1, limit)]]
+
+
+def build_commitment_context(
+    commitments: list[dict],
+    query: str,
+    *,
+    max_characters: int = 700,
+) -> str | None:
+    """Select relevant prospective records without injecting the whole task list."""
+    selected = select_relevant_commitments(commitments, query)
+    if not selected:
+        return None
+    history_query = bool(COMMITMENT_HISTORY_PATTERN.search(query))
     heading = (
         "RELEVANT COMPLETED COMMITMENTS"
         if history_query
@@ -350,7 +361,7 @@ def build_commitment_context(
     lines = [
         heading + " (local records; due dates are not scheduled reminders):"
     ]
-    for _score, item in ranked[:3]:
+    for item in selected:
         line = (
             f"- {item.get('title', '').strip()} "
             f"[state={item.get('state', 'open')}; "
