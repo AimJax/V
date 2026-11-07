@@ -52,6 +52,7 @@ class MemoryManagerDialog(QDialog):
     backfill_requested = Signal()
     confirm_requested = Signal(str)
     continuity_requested = Signal(str)
+    context_preview_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -266,6 +267,10 @@ class MemoryManagerDialog(QDialog):
         actions = QHBoxLayout()
         self.continuity_button = QPushButton("Continuity…")
         self.continuity_button.clicked.connect(self._open_continuity)
+        self.context_preview_button = QPushButton("Preview recall…")
+        self.context_preview_button.clicked.connect(
+            self.context_preview_requested.emit
+        )
         self.backfill_button = QPushButton("Reprocess history…")
         self.export_button = QPushButton("Export…")
         self.import_button = QPushButton("Import…")
@@ -283,6 +288,7 @@ class MemoryManagerDialog(QDialog):
         self.save_button.clicked.connect(self._save)
 
         actions.addWidget(self.continuity_button)
+        actions.addWidget(self.context_preview_button)
         actions.addWidget(self.backfill_button)
         actions.addWidget(self.export_button)
         actions.addWidget(self.import_button)
@@ -701,6 +707,7 @@ class MemoryManagerDialog(QDialog):
         self.continuity_button.setEnabled(
             enabled and self._selected_memory_id is not None and not self._dirty
         )
+        self.context_preview_button.setEnabled(enabled)
         self.export_button.setEnabled(enabled)
         self.import_button.setEnabled(enabled)
         self._set_editor_enabled(self._selected_memory_id is not None)
