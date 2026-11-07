@@ -124,6 +124,26 @@ class MemoryStoreTests(unittest.TestCase):
             3,
         )
 
+
+    def test_existing_inferred_patterns_migrate_into_pending_derivation_review(self):
+        from v.memory.continuity import ContinuityStore
+
+        sources = self._create_pattern_sources()
+        pattern = self.store.create_inferred_pattern(
+            content="An existing derived pattern from explicit source memories.",
+            subject="User",
+            memory_key="pattern.preexisting",
+            confidence=0.95,
+            importance=3,
+            evidence_memory_ids=[item.id for item in sources],
+        )
+
+        continuity = ContinuityStore(self.database_path)
+
+        derivations = continuity.derivation_sources(pattern.id)
+        self.assertEqual(len(derivations), 3)
+        self.assertEqual({item["state"] for item in derivations}, {"pending"})
+
     def test_inferred_pattern_rejects_insufficient_or_non_explicit_sources(self):
         first = self.store.create_memory(
             content="First statement.",
