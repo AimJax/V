@@ -292,6 +292,7 @@ def build_memory_context(
     *,
     max_characters: int = 2400,
     derivation_sources: dict[str, list[dict]] | None = None,
+    temporal_records: dict[str, dict] | None = None,
 ) -> str | None:
     """Format bounded, untrusted memory data for a model prompt."""
     if max_characters < 1:
@@ -351,6 +352,27 @@ def build_memory_context(
             if memory.last_confirmed_at
             else "; last_confirmed=never"
         )
+        temporal_record = (temporal_records or {}).get(memory.id)
+        temporal_state_note = ""
+        if temporal_record is not None:
+            state = (
+                temporal_record.get("state", "unspecified")
+                if temporal_record.get("recorded_at")
+                else "unspecified"
+            )
+            temporal_state_note = f"; temporal_state={state}"
+            if temporal_record.get("valid_from"):
+                temporal_state_note += (
+                    f"; valid_from={temporal_record['valid_from']}"
+                )
+            if temporal_record.get("valid_until"):
+                temporal_state_note += (
+                    f"; valid_until={temporal_record['valid_until']}"
+                )
+            if temporal_record.get("superseded_by"):
+                temporal_state_note += (
+                    f"; superseded_by={temporal_record['superseded_by']}"
+                )
         derivation_note = ""
         if memory.memory_type == "inferred_pattern":
             derivation_note = "; derived_summary"
@@ -369,7 +391,8 @@ def build_memory_context(
         prefix = (
             f"- [{memory.memory_type}; {memory.provenance}; "
             f"confidence={memory.confidence:.2f}{source_date}"
-            f"{confirmed_date}{temporal_note}{derivation_note}; memory_id={memory.id}] "
+            f"{confirmed_date}{temporal_note}{temporal_state_note}"
+            f"{derivation_note}; memory_id={memory.id}] "
         )
 
         separator_length = 1 if entries else 0
