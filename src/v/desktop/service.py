@@ -26,6 +26,7 @@ from v.memory.hybrid_retrieval import HybridMemoryRetriever
 from v.memory.queue import ExtractionQueue
 from v.memory.retrieval import (
     build_commitment_context,
+    build_contextual_memory_query,
     build_memory_context,
     retrieve_relevant_memories,
     select_relevant_commitments,
@@ -388,6 +389,15 @@ class DesktopService:
         if self.memory_worker is not None:
             await self.memory_worker.cancel()
 
+        recent_messages = self.conversation_store.get_recent_messages(
+            self.conversation.id,
+            self.history_limit,
+        )
+        retrieval_query = build_contextual_memory_query(
+            user_text,
+            recent_messages,
+        )
+
         memory_context = None
         if self.memory_store is not None and self.settings.get(
             "memory", {}
@@ -395,13 +405,13 @@ class DesktopService:
             try:
                 if self.retriever is not None:
                     memories = await self.retriever.retrieve(
-                        user_text,
+                        retrieval_query,
                         limit=self.retrieval_limit,
                     )
                 else:
                     memories = retrieve_relevant_memories(
                         self.memory_store,
-                        user_text,
+                        retrieval_query,
                         limit=self.retrieval_limit,
                     )
                 derivation_sources = {}
@@ -426,7 +436,7 @@ class DesktopService:
                         state="all", limit=500
                     )
                     selected_commitments = select_relevant_commitments(
-                        commitments, user_message
+                        commitments, retrieval_query
                     )
                     for item in selected_commitments:
                         source_id = item.get("source_memory_id")
@@ -437,7 +447,7 @@ class DesktopService:
                                     source_memory.evidence or source_memory.content
                                 )
                     commitment_context = build_commitment_context(
-                        selected_commitments, user_message
+                        selected_commitments, retrieval_query
                     )
                     if commitment_context:
                         memory_context = (
@@ -455,10 +465,7 @@ class DesktopService:
 
         messages = [
             ChatMessage(role="system", content=system_content),
-            *self.conversation_store.get_recent_messages(
-                self.conversation.id,
-                self.history_limit,
-            ),
+            *recent_messages,
             ChatMessage(role="user", content=user_text),
         ]
 
