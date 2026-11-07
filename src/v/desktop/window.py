@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from v.desktop.service import DesktopSnapshot, DesktopTurnResult
 from v.desktop.settings_dialog import SettingsDialog
 from v.desktop.memory_manager import MemoryManagerDialog
+from v.desktop.memory_continuity_dialog import MemoryContinuityDialog
 from v.desktop.memory_backfill_dialog import MemoryBackfillDialog
 from v.desktop.identity_manager import IdentityManagerDialog
 from v.desktop.thread import DesktopRuntimeThread
@@ -204,6 +205,7 @@ class DesktopWindow(QMainWindow):
         self._assistant_text = ""
         self._last_snapshot: DesktopSnapshot | None = None
         self.memory_manager_dialog: MemoryManagerDialog | None = None
+        self.memory_continuity_dialog: MemoryContinuityDialog | None = None
         self.memory_backfill_dialog: MemoryBackfillDialog | None = None
         self.identity_manager_dialog: IdentityManagerDialog | None = None
         self.settings_dialog: SettingsDialog | None = None
@@ -582,6 +584,7 @@ class DesktopWindow(QMainWindow):
             dialog.update_requested.connect(self.runtime.update_memory)
             dialog.delete_requested.connect(self.runtime.delete_memory)
             dialog.confirm_requested.connect(self.runtime.confirm_memory)
+            dialog.continuity_requested.connect(self._open_memory_continuity)
             dialog.export_requested.connect(self.runtime.export_memories)
             dialog.import_requested.connect(self.runtime.import_memories)
 
@@ -601,6 +604,41 @@ class DesktopWindow(QMainWindow):
         self.memory_manager_dialog.raise_()
         self.memory_manager_dialog.activateWindow()
         self.memory_manager_dialog.refresh()
+
+    def _open_memory_continuity(self, memory_id: str) -> None:
+        if not self._ready or self._busy:
+            return
+
+        dialog = self.memory_continuity_dialog
+        if dialog is not None and dialog.memory_id != memory_id:
+            dialog.close()
+            dialog.deleteLater()
+            dialog = None
+            self.memory_continuity_dialog = None
+
+        if dialog is None:
+            dialog = MemoryContinuityDialog(memory_id, self)
+            dialog.refresh_requested.connect(self.runtime.get_memory_continuity)
+            dialog.temporal_update_requested.connect(
+                self.runtime.update_memory_temporal_state
+            )
+            dialog.derivation_review_requested.connect(
+                self.runtime.review_memory_derivation
+            )
+            dialog.commitment_create_requested.connect(
+                self.runtime.create_memory_commitment
+            )
+            dialog.commitment_update_requested.connect(
+                self.runtime.update_memory_commitment
+            )
+            self.runtime.memory_continuity_ready.connect(dialog.set_snapshot)
+            self.runtime.memory_continuity_failed.connect(dialog.on_operation_failed)
+            self.memory_continuity_dialog = dialog
+
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+        dialog.refresh()
 
     def _open_memory_backfill(self) -> None:
         if not self._ready:
