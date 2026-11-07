@@ -93,7 +93,7 @@ class MemoryContinuityDialog(QDialog):
         root.addWidget(timeline_title)
         self.timeline_table = QTableWidget(0, 4)
         self.timeline_table.setHorizontalHeaderLabels(
-            ["Source date", "Type", "Lifecycle", "Record"]
+            ["Source / recorded date", "Type", "Lifecycle", "Record"]
         )
         self.timeline_table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers
@@ -208,7 +208,9 @@ class MemoryContinuityDialog(QDialog):
             for column, value in enumerate(values):
                 cell = QTableWidgetItem(str(value))
                 cell.setData(Qt.ItemDataRole.UserRole, item["memory_id"])
-                if column == 3:
+                if column == 0:
+                    cell.setToolTip(item.get("date_basis", "date basis unspecified"))
+                elif column == 3:
                     cell.setToolTip(item["memory_id"])
                 self.timeline_table.setItem(row, column, cell)
 
