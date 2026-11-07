@@ -5,6 +5,7 @@ from pathlib import Path
 from support import temporary_directory
 
 from v.desktop.service import DesktopService
+from v.memory.continuity import ContinuityStore
 from v.memory.store import MemoryStore
 
 
@@ -39,6 +40,34 @@ class DesktopServiceMemoryTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp_dir.cleanup()
+
+
+    def test_continuity_snapshot_includes_subject_timeline(self):
+        self.service.continuity_store = ContinuityStore(self.store.database_path)
+        related = self.store.create_memory(
+            content="The user is working on a local companion project.",
+            memory_type="episodic",
+            subject="User",
+            provenance="explicit",
+            source_conversation_id="conversation-2",
+            source_message_id=10,
+            source_created_at="2026-11-06T10:00:00+00:00",
+            evidence="working on a local companion project",
+        )
+        self.service.continuity_store.set_memory_state(
+            related.id, "disputed", note="Needs confirmation."
+        )
+
+        snapshot = self.service.memory_continuity_snapshot(self.preference.id)
+
+        timeline_ids = {item["memory_id"] for item in snapshot["timeline"]}
+        self.assertIn(self.preference.id, timeline_ids)
+        self.assertIn(related.id, timeline_ids)
+        related_timeline = next(
+            item for item in snapshot["timeline"]
+            if item["memory_id"] == related.id
+        )
+        self.assertEqual(related_timeline["temporal_state"], "disputed")
 
     def test_memory_search_and_filters(self):
         results = self.service.list_memories(
