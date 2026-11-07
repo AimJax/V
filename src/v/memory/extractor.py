@@ -67,6 +67,9 @@ For every proposed memory:
   label such as "User" when the statement is specifically about that project.
 - memory_type must be one of:
   profile, preference, episodic, procedural, relationship, project, fact.
+- A procedural memory records a user-stated repeatable workflow or convention. It is
+  not permission to perform consequential actions, and must not be inferred from an
+  assistant recommendation or a one-time action.
 - importance must be an integer from 1 to 5.
 - Use importance 3 or higher only for information genuinely worth retaining.
 - Each source user message may include a small surrounding conversation context.
