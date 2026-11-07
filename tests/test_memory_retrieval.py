@@ -2,17 +2,19 @@ import asyncio
 import unittest
 
 from contextlib import closing
+from types import SimpleNamespace
 from pathlib import Path
 
 from support import temporary_directory
 
 from v.memory.embedding_store import EmbeddingStore
-from v.memory.embedding_store import EmbeddingStore
 from v.memory.hybrid_retrieval import HybridMemoryRetriever
 from v.memory.retrieval import (
     build_commitment_context,
+    build_contextual_memory_query,
     build_memory_context,
     select_relevant_commitments,
+    is_contextual_followup_query,
     meaningful_terms,
     retrieve_relevant_memories,
 )
@@ -410,6 +412,42 @@ class MemoryRetrievalTests(unittest.TestCase):
         self.assertIn("derived_from=source-123", context)
         self.assertIn("I prefer practical solutions that can be tested.", context)
 
+
+
+    def test_contextual_followups_use_recent_user_turns_only(self):
+        history = [
+            SimpleNamespace(
+                role="user",
+                content="Let's discuss Project V memory backup and restore.",
+            ),
+            SimpleNamespace(
+                role="assistant",
+                content="We can inspect the local backup format.",
+            ),
+            SimpleNamespace(role="user", content="The backup is version four."),
+        ]
+
+        query = build_contextual_memory_query(
+            "What about its restore?",
+            history,
+        )
+
+        self.assertTrue(is_contextual_followup_query("What about its restore?"))
+        self.assertIn("Project V memory backup and restore", query)
+        self.assertIn("The backup is version four.", query)
+        self.assertIn("What about its restore?", query)
+        self.assertNotIn("We can inspect the local backup format", query)
+
+    def test_standalone_queries_are_not_contaminated_by_recent_history(self):
+        history = [
+            SimpleNamespace(
+                role="user",
+                content="Let's discuss Project V memory backup and restore.",
+            )
+        ]
+        query = "How do I bake sourdough bread?"
+        self.assertFalse(is_contextual_followup_query(query))
+        self.assertEqual(build_contextual_memory_query(query, history), query)
 
     def test_commitment_context_selects_relevant_open_and_completed_records(self):
         commitments = [
