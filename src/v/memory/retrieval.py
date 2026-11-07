@@ -283,7 +283,8 @@ def retrieve_relevant_memories(
         limit=limit,
     )
     resolved = _exclude_noncurrent_memories(memory_store, resolved, query)
-    return expand_related_memories(memory_store, resolved, limit=limit)
+    expanded = expand_related_memories(memory_store, resolved, limit=limit)
+    return _exclude_noncurrent_memories(memory_store, expanded, query)
 
 
 def build_memory_context(
