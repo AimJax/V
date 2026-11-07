@@ -28,7 +28,9 @@ class MemoryContinuityDialog(QDialog):
     temporal_update_requested = Signal(str, str, str, str, str, str)
     derivation_review_requested = Signal(str, str)
     commitment_create_requested = Signal(str, str, str, str)
-    commitment_update_requested = Signal(str, str)
+    commitment_update_requested = Signal(str, str, str)
+    consolidation_requested = Signal()
+    consolidation_cancel_requested = Signal()
 
     def __init__(self, memory_id: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -70,10 +72,18 @@ class MemoryContinuityDialog(QDialog):
 
         temporal_actions = QHBoxLayout()
         self.save_temporal_button = QPushButton("Save temporal state")
+        self.consolidate_button = QPushButton("Generate local summary proposals")
+        self.cancel_consolidation_button = QPushButton("Cancel")
         self.refresh_button = QPushButton("Refresh")
         self.save_temporal_button.clicked.connect(self._save_temporal)
+        self.consolidate_button.clicked.connect(self._start_consolidation)
+        self.cancel_consolidation_button.clicked.connect(
+            self.consolidation_cancel_requested.emit
+        )
         self.refresh_button.clicked.connect(self.refresh)
         temporal_actions.addWidget(self.save_temporal_button)
+        temporal_actions.addWidget(self.consolidate_button)
+        temporal_actions.addWidget(self.cancel_consolidation_button)
         temporal_actions.addStretch(1)
         temporal_actions.addWidget(self.refresh_button)
         root.addLayout(temporal_actions)
@@ -185,6 +195,20 @@ class MemoryContinuityDialog(QDialog):
             f"{len(sources)} derivation source(s) · "
             f"{len(commitments)} commitment(s). Due dates are records, not scheduled reminders."
         )
+
+    def _start_consolidation(self) -> None:
+        self.status_label.setText(
+            "Preparing local summary proposals. New summaries remain pending review."
+        )
+        self.consolidation_requested.emit()
+
+    def on_consolidation_completed(self, report) -> None:
+        self.status_label.setText(
+            f"Consolidation finished: {report.summaries_created} proposal(s), "
+            f"{report.duplicates_skipped} skipped, {report.failures} failure(s). "
+            "New proposals require explicit review."
+        )
+        self.refresh()
 
     def _save_temporal(self) -> None:
         state = str(self.state_combo.currentData())
