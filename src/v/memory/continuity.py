@@ -106,7 +106,12 @@ class ContinuityStore:
                         WHERE source_memory_id=OLD.id AND state IN ('pending','accepted')
                     );
                     UPDATE memory_derivations SET state='rejected'
-                    WHERE source_memory_id=OLD.id AND state IN ('pending','accepted');
+                    WHERE derived_memory_id IN (
+                        SELECT derived_memory_id FROM memory_derivations
+                        WHERE source_memory_id=OLD.id
+                          AND state IN ('pending','accepted')
+                    )
+                      AND state IN ('pending','accepted');
                 END;
 
                 CREATE TABLE IF NOT EXISTS memory_commitments (
@@ -145,7 +150,12 @@ class ContinuityStore:
                     );
                     UPDATE memory_derivations
                     SET state='rejected'
-                    WHERE source_memory_id=OLD.id AND state IN ('pending','accepted');
+                    WHERE derived_memory_id IN (
+                        SELECT derived_memory_id FROM memory_derivations
+                        WHERE source_memory_id=OLD.id
+                          AND state IN ('pending','accepted')
+                    )
+                      AND state IN ('pending','accepted');
                     UPDATE memory_commitments
                     SET source_memory_id=NULL
                     WHERE source_memory_id=OLD.id;
