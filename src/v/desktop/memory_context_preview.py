@@ -85,6 +85,7 @@ class MemoryContextPreviewDialog(QDialog):
 
         lines = [
             f"QUERY\n{result.get('query', '')}",
+            f"RETRIEVAL QUERY\n{result.get('retrieval_query', result.get('query', ''))}",
             "",
             "SELECTED MEMORY RECORDS",
         ]
