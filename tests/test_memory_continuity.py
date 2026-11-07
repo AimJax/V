@@ -117,7 +117,6 @@ def test_derivation_source_list_is_bounded_and_well_formed(continuity):
 def test_source_edit_invalidates_accepted_derivation_and_marks_summary_disputed(continuity):
     continuity.add_derivation("derived", ["m1", "m2"])
     continuity.review_derivation("derived", "accepted")
-    continuity.ensure_temporal_record("derived")
 
     with sqlite3.connect(continuity.database_path) as db:
         db.execute("UPDATE memories SET content='corrected source' WHERE id='m1'")
@@ -134,7 +133,6 @@ def test_source_edit_invalidates_accepted_derivation_and_marks_summary_disputed(
 def test_source_deletion_marks_dependent_summary_disputed(continuity):
     continuity.add_derivation("derived", ["m1", "m2"])
     continuity.review_derivation("derived", "accepted")
-    continuity.ensure_temporal_record("derived")
 
     with sqlite3.connect(continuity.database_path) as db:
         db.execute("PRAGMA foreign_keys = ON")
