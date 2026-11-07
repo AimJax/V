@@ -6,6 +6,7 @@ from pathlib import Path
 from support import temporary_directory
 
 from v.desktop.service import DesktopService
+from v.conversations.store import ConversationStore
 from v.memory.continuity import ContinuityStore
 from v.memory.store import MemoryStore
 
@@ -68,6 +69,27 @@ class DesktopServiceMemoryTests(unittest.TestCase):
         self.assertIn("one step at a time", preview["commitments"][0]["source_evidence"])
         self.assertIn("RELEVANT OPEN COMMITMENTS", preview["context"])
         self.assertIn("one step at a time", preview["context"])
+
+
+    def test_memory_preview_resolves_elliptical_followup_like_chat(self):
+        conversations = ConversationStore(self.root / "conversations.sqlite3")
+        conversation = conversations.create_conversation("Recall preview test")
+        conversations.add_message(
+            conversation.id,
+            "user",
+            "I plan to finish the Project V test pass before packaging.",
+        )
+        self.service.conversation_store = conversations
+        self.service.conversation = conversation
+        self.service.history_limit = 10
+        self.service.retriever = None
+        self.service.retrieval_limit = 5
+        self.service.retrieval_max_characters = 2400
+
+        preview = asyncio.run(self.service.preview_memory_context("what about that?"))
+
+        self.assertIn("Project V test pass", preview["retrieval_query"])
+        self.assertIn("what about that?", preview["retrieval_query"])
 
     def test_continuity_snapshot_includes_subject_timeline(self):
         self.service.continuity_store = ContinuityStore(self.store.database_path)
