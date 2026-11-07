@@ -493,10 +493,10 @@ def import_backup(
         derivations = _validate_derivations(payload.get("derivations"), validated)
         commitments = _validate_commitments(payload.get("commitments"), validated)
 
-        # Older databases gain the additive continuity schema before importing
-        # v4 records. This migration does not rewrite existing memory rows.
-        from v.memory.continuity import ContinuityStore
-        ContinuityStore(store.database_path)
+    # Ensure the additive continuity schema exists for every import version.
+    # Legacy v3 evidence links are migrated into pending derivation reviews below.
+    from v.memory.continuity import ContinuityStore
+    ContinuityStore(store.database_path)
 
     restored = 0
     skipped = 0
@@ -539,6 +539,20 @@ def import_backup(
                         ) VALUES (?, ?, ?)
                         """,
                         (pattern_id, source_id, datetime.now().astimezone().isoformat(timespec="milliseconds")),
+                    )
+
+                if version < 4:
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO memory_derivations(
+                            derived_memory_id, source_memory_id, state, created_at
+                        )
+                        SELECT e.pattern_memory_id, e.source_memory_id, 'pending', e.created_at
+                        FROM memory_evidence AS e
+                        JOIN memories AS derived ON derived.id=e.pattern_memory_id
+                        WHERE derived.memory_type='inferred_pattern'
+                          AND derived.provenance='inferred'
+                        """
                     )
 
                 for record in temporal_records:
