@@ -454,7 +454,11 @@ class MemoryStore:
             schema_row = connection.execute(
                 "SELECT sql FROM sqlite_master WHERE type='table' AND name='memories'"
             ).fetchone()
-            if schema_row is not None and "'procedural'" not in schema_row["sql"]:
+            if (
+                version < self.SCHEMA_VERSION
+                and schema_row is not None
+                and "'procedural'" not in schema_row["sql"]
+            ):
                 self._migrate_procedural_memory_type(connection)
 
             if version < self.SCHEMA_VERSION:
