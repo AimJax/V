@@ -76,9 +76,13 @@ class MemoryContextPreviewDialog(QDialog):
     def set_preview(self, result: dict) -> None:
         self.preview_button.setEnabled(True)
         memories = result.get("memories", [])
+        commitments = result.get("commitments", [])
         mode = "hybrid semantic + keyword" if result.get("semantic") else "keyword"
         fallback = result.get("fallback_reason")
-        status = f"{len(memories)} memory record(s) selected · {mode} retrieval"
+        status = (
+            f"{len(memories)} memory record(s) + {len(commitments)} commitment(s) "
+            f"selected · {mode} retrieval"
+        )
         if fallback:
             status += f" · fallback: {fallback}"
         self.status_label.setText(status)
