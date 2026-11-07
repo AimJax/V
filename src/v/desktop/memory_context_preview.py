@@ -44,7 +44,9 @@ class MemoryContextPreviewDialog(QDialog):
         self.preview_button = QPushButton("Preview")
         self.cancel_button = QPushButton("Cancel")
         self.preview_button.clicked.connect(self._preview)
-        self.cancel_button.clicked.connect(self.cancel_requested.emit)
+        self.cancel_button.clicked.connect(
+            lambda: self.cancel_requested.emit()
+        )
         query_row.addWidget(self.query_input, 1)
         query_row.addWidget(self.preview_button)
         query_row.addWidget(self.cancel_button)
