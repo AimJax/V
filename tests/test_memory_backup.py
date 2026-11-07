@@ -55,7 +55,7 @@ class MemoryBackupTests(unittest.TestCase):
         )
         export_backup(self.source, self.backup_path)
         payload = json.loads(self.backup_path.read_text(encoding="utf-8"))
-        self.assertEqual(payload["version"], 3)
+        self.assertEqual(payload["version"], 4)
         payload["version"] = 1
         payload.pop("evidence_links")
         for record in payload["memories"]:
@@ -135,7 +135,7 @@ class MemoryBackupTests(unittest.TestCase):
 
         path, exported = export_backup(self.source, self.backup_path)
         payload = json.loads(path.read_text(encoding="utf-8"))
-        self.assertEqual(payload["version"], 3)
+        self.assertEqual(payload["version"], 4)
         self.assertEqual(len(payload["evidence_links"]), 3)
 
         restored, skipped = import_backup(self.target, path)
