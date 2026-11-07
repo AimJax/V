@@ -269,7 +269,7 @@ class MemoryManagerDialog(QDialog):
         self.continuity_button.clicked.connect(self._open_continuity)
         self.context_preview_button = QPushButton("Preview recall…")
         self.context_preview_button.clicked.connect(
-            self.context_preview_requested.emit
+            lambda: self.context_preview_requested.emit()
         )
         self.backfill_button = QPushButton("Reprocess history…")
         self.export_button = QPushButton("Export…")
