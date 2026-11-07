@@ -316,6 +316,36 @@ class MemoryBackupTests(unittest.TestCase):
         self.assertEqual(import_backup(self.target, path), (0, 3))
 
 
+
+    def test_v4_restore_rejects_supersession_cycle_with_existing_target_state(self):
+        from v.memory.continuity import ContinuityStore
+
+        first = self.source.create_memory(content="First record.")
+        second = self.source.create_memory(content="Second record.")
+        export_backup(self.source, self.backup_path)
+        import_backup(self.target, self.backup_path)
+
+        target_continuity = ContinuityStore(self.target.database_path)
+        target_continuity.set_memory_state(
+            second.id, "superseded", superseded_by=first.id
+        )
+        ContinuityStore(self.source.database_path).set_memory_state(
+            first.id, "superseded", superseded_by=second.id
+        )
+        export_backup(self.source, self.backup_path)
+
+        with self.assertRaisesRegex(ValueError, "cycle"):
+            import_backup(self.target, self.backup_path)
+
+        self.assertEqual(
+            target_continuity.temporal_record(second.id)["superseded_by"],
+            first.id,
+        )
+        self.assertEqual(
+            target_continuity.temporal_record(first.id)["state"],
+            "current",
+        )
+
     def test_v4_backup_rejects_circular_supersession_without_importing(self):
         from v.memory.continuity import ContinuityStore
 
