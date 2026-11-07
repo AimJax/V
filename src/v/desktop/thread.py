@@ -34,6 +34,8 @@ class DesktopRuntimeThread(QThread):
     memory_operation_failed = Signal(str)
     memory_continuity_ready = Signal(object)
     memory_continuity_failed = Signal(str)
+    memory_consolidation_completed = Signal(object)
+    memory_consolidation_failed = Signal(str)
     memory_backfill_progress = Signal(object)
     memory_backfill_completed = Signal(object)
     memory_backfill_paused = Signal()
@@ -54,6 +56,8 @@ class DesktopRuntimeThread(QThread):
         self._commands: asyncio.Queue | None = None
         self._active_task: asyncio.Task | None = None
         self._backfill_task: asyncio.Task | None = None
+        self._consolidation_task: asyncio.Task | None = None
+        self._consolidation_cancel_event: asyncio.Event | None = None
         self._shutdown_requested = False
         self._memory_filters = ("", "", "")
 
@@ -92,6 +96,22 @@ class DesktopRuntimeThread(QThread):
         except asyncio.CancelledError:
             pass
 
+    async def _cancel_consolidation(self) -> None:
+        task = self._consolidation_task
+        if task is None or task.done():
+            self._consolidation_task = None
+            self._consolidation_cancel_event = None
+            return
+        if self._consolidation_cancel_event is not None:
+            self._consolidation_cancel_event.set()
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        self._consolidation_task = None
+        self._consolidation_cancel_event = None
+
     async def _serve(self) -> None:
         service = DesktopService()
 
@@ -115,10 +135,12 @@ class DesktopRuntimeThread(QThread):
 
             if command == "shutdown":
                 await self._cancel_backfill()
+                await self._cancel_consolidation()
                 break
 
             if command == "send":
                 await self._cancel_backfill()
+                await self._cancel_consolidation()
                 self._active_task = asyncio.create_task(
                     service.send_message(
                         payload,
@@ -141,6 +163,7 @@ class DesktopRuntimeThread(QThread):
 
             if command == "voice_turn":
                 await self._cancel_backfill()
+                await self._cancel_consolidation()
                 self._active_task = asyncio.create_task(
                     service.send_voice_message(
                         payload,
@@ -361,6 +384,49 @@ class DesktopRuntimeThread(QThread):
                     self.memory_backfill_failed.emit(str(error))
                 continue
 
+            if command == "memory_consolidate_start":
+                if (
+                    self._consolidation_task is not None
+                    and not self._consolidation_task.done()
+                ):
+                    self.memory_consolidation_failed.emit(
+                        "A memory consolidation job is already running."
+                    )
+                    continue
+                cancel_event = asyncio.Event()
+                self._consolidation_cancel_event = cancel_event
+
+                async def run_consolidation() -> None:
+                    try:
+                        report = await service.run_memory_consolidation(
+                            limit=3,
+                            cancel_event=cancel_event,
+                        )
+                    except asyncio.CancelledError:
+                        return
+                    except Exception as error:
+                        self.memory_consolidation_failed.emit(str(error))
+                    else:
+                        self.memory_consolidation_completed.emit(report)
+                        query, memory_type, provenance = self._memory_filters
+                        self.memory_list_ready.emit(
+                            service.list_memories(
+                                query=query,
+                                memory_type=memory_type,
+                                provenance=provenance,
+                            )
+                        )
+                    finally:
+                        self._consolidation_task = None
+                        self._consolidation_cancel_event = None
+
+                self._consolidation_task = asyncio.create_task(run_consolidation())
+                continue
+
+            if command == "memory_consolidate_cancel":
+                await self._cancel_consolidation()
+                continue
+
             if command == "memory_continuity_get":
                 try:
                     self.memory_continuity_ready.emit(
@@ -545,6 +611,12 @@ class DesktopRuntimeThread(QThread):
 
     def save_settings(self, changes: dict, personality: str) -> None:
         self._post("settings_save", (changes, personality))
+
+    def start_memory_consolidation(self) -> None:
+        self._post("memory_consolidate_start")
+
+    def cancel_memory_consolidation(self) -> None:
+        self._post("memory_consolidate_cancel")
 
     def get_memory_continuity(self, memory_id: str) -> None:
         self._post("memory_continuity_get", memory_id)
