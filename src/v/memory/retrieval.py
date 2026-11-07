@@ -287,6 +287,89 @@ def retrieve_relevant_memories(
     return _exclude_noncurrent_memories(memory_store, expanded, query)
 
 
+COMMITMENT_OVERVIEW_PATTERN = re.compile(
+    r"\b(commitments?|to[- ]do|tasks?|deadlines?|reminders?|follow[- ]ups?|"
+    r"what (?:do|did) i (?:need|have|promise|agree)|what'?s due|"
+    r"what should i do|what am i supposed to do|tomorrow|next week|this week)\b",
+    re.IGNORECASE,
+)
+COMMITMENT_HISTORY_PATTERN = re.compile(
+    r"\b(completed|finished|cancelled|canceled|what did i do|what have i done)\b",
+    re.IGNORECASE,
+)
+COMMITMENT_STOP_WORDS = {
+    "about", "after", "before", "could", "does", "from", "have", "help",
+    "into", "just", "make", "need", "please", "that", "them", "then",
+    "there", "these", "they", "this", "those", "what", "when", "where",
+    "which", "will", "with", "would", "your", "you",
+}
+
+
+def build_commitment_context(
+    commitments: list[dict],
+    query: str,
+    *,
+    max_characters: int = 700,
+) -> str | None:
+    """Select relevant prospective records without injecting the whole task list."""
+    if not commitments or not isinstance(query, str) or not query.strip():
+        return None
+    history_query = bool(COMMITMENT_HISTORY_PATTERN.search(query))
+    overview_query = bool(COMMITMENT_OVERVIEW_PATTERN.search(query))
+    terms = {
+        token for token in re.findall(r"[\w]+", query.casefold())
+        if len(token) >= 3 and token not in COMMITMENT_STOP_WORDS
+    }
+    ranked = []
+    for item in commitments:
+        state = item.get("state", "open")
+        if history_query:
+            if state not in {"completed", "cancelled"}:
+                continue
+        elif state != "open":
+            continue
+        text = f"{item.get('title', '')} {item.get('description', '')}".casefold()
+        overlap = sum(1 for term in terms if term in text)
+        if overview_query or overlap:
+            ranked.append((overlap, item))
+    if not ranked:
+        return None
+    ranked.sort(
+        key=lambda pair: (
+            -pair[0],
+            pair[1].get("due_at") is None,
+            pair[1].get("due_at") or "",
+            pair[1].get("created_at") or "",
+        )
+    )
+    heading = (
+        "RELEVANT COMPLETED COMMITMENTS"
+        if history_query
+        else "RELEVANT OPEN COMMITMENTS"
+    )
+    lines = [
+        heading + " (local records; due dates are not scheduled reminders):"
+    ]
+    for _score, item in ranked[:3]:
+        line = (
+            f"- {item.get('title', '').strip()} "
+            f"[state={item.get('state', 'open')}; "
+            f"due={item.get('due_at') or 'not specified'}]"
+        )
+        description = item.get("description", "").strip()
+        if description:
+            line += f" — {description}"
+        source_id = item.get("source_memory_id")
+        if source_id:
+            line += f" [source_memory_id={source_id}]"
+        remaining = max_characters - sum(len(part) + 1 for part in lines)
+        if remaining <= 0:
+            break
+        lines.append(line[:remaining])
+    result = "\n".join(lines)
+    return result if len(result) <= max_characters else result[:max_characters]
+
+
 def build_memory_context(
     memories: list[Memory],
     *,
