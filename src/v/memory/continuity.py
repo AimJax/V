@@ -366,6 +366,56 @@ class ContinuityStore:
                 UPDATE memory_derivations SET state=?
                 WHERE derived_memory_id=? AND state='pending'
             """, (decision, derived_memory_id))
+            if decision == "accepted" and cursor.rowcount:
+                current = db.execute(
+                    "SELECT memory_key FROM memories WHERE id=?",
+                    (derived_memory_id,),
+                ).fetchone()
+                memory_key = current["memory_key"] if current is not None else None
+                if (
+                    isinstance(memory_key, str)
+                    and memory_key.startswith("consolidated.")
+                    and memory_key.count(".") == 2
+                ):
+                    group_prefix = memory_key.rsplit(".", 1)[0] + "."
+                    previous = db.execute(
+                        """
+                        SELECT m.id
+                        FROM memories AS m
+                        WHERE m.id != ?
+                          AND m.memory_type='inferred_pattern'
+                          AND m.memory_key LIKE ?
+                          AND EXISTS (
+                              SELECT 1 FROM memory_derivations AS d
+                              WHERE d.derived_memory_id=m.id AND d.state='accepted'
+                          )
+                          AND NOT EXISTS (
+                              SELECT 1 FROM memory_derivations AS d
+                              WHERE d.derived_memory_id=m.id AND d.state!='accepted'
+                          )
+                        """,
+                        (derived_memory_id, group_prefix + "%"),
+                    ).fetchall()
+                    now = _now()
+                    for previous_row in previous:
+                        db.execute(
+                            """
+                            INSERT INTO memory_temporal(
+                                memory_id, state, recorded_at, superseded_by, note
+                            ) VALUES (?, 'superseded', ?, ?, ?)
+                            ON CONFLICT(memory_id) DO UPDATE SET
+                                state='superseded',
+                                recorded_at=excluded.recorded_at,
+                                superseded_by=excluded.superseded_by,
+                                note=excluded.note
+                            """,
+                            (
+                                previous_row["id"],
+                                now,
+                                derived_memory_id,
+                                "A newer reviewed consolidation replaced this summary.",
+                            ),
+                        )
             db.commit()
             if cursor.rowcount == 0:
                 exists = db.execute(
