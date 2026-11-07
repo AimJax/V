@@ -174,6 +174,70 @@ class MemoryRetrievalTests(unittest.TestCase):
         self.assertIn(f"last_confirmed={confirmed.last_confirmed_at}", context)
         self.assertIn("source_date=2024-03-12T09:15:00+00:00", context)
 
+
+    def test_present_retrieval_respects_temporal_validity_window(self):
+        from v.memory.continuity import ContinuityStore
+
+        expired = self.store.create_memory(
+            content="The user currently works at a shipyard construction site."
+        )
+        future = self.store.create_memory(
+            content="The user will work at a shipyard construction site."
+        )
+        continuity = ContinuityStore(self.database_path)
+        continuity.ensure_temporal_record(
+            expired.id,
+            valid_from="2020-01-01T00:00:00+00:00",
+            valid_until="2021-01-01T00:00:00+00:00",
+        )
+        continuity.ensure_temporal_record(
+            future.id,
+            valid_from="2099-01-01T00:00:00+00:00",
+        )
+
+        results = retrieve_relevant_memories(
+            self.store, "What is the shipyard construction context?"
+        )
+        result_ids = {item.id for item in results}
+        self.assertNotIn(expired.id, result_ids)
+        self.assertNotIn(future.id, result_ids)
+
+    def test_present_retrieval_requires_accepted_derivation_sources(self):
+        from v.memory.continuity import ContinuityStore
+
+        source = self.store.create_memory(
+            content="The user made an unrelated explicit statement.",
+            provenance="explicit",
+        )
+        derived = self.store.create_memory(
+            content="The user consistently prefers monochrome pixel art palettes.",
+            provenance="inferred",
+        )
+        continuity = ContinuityStore(self.database_path)
+        continuity.add_derivation(derived.id, [source.id])
+
+        pending = retrieve_relevant_memories(
+            self.store, "monochrome pixel art palette"
+        )
+        self.assertNotIn(derived.id, {item.id for item in pending})
+
+        continuity.review_derivation(derived.id, "accepted")
+        accepted = retrieve_relevant_memories(
+            self.store, "monochrome pixel art palette"
+        )
+        self.assertIn(derived.id, {item.id for item in accepted})
+
+        with self.store._connect() as db:
+            db.execute(
+                "UPDATE memories SET content='Corrected source statement.' WHERE id=?",
+                (source.id,),
+            )
+        invalidated = retrieve_relevant_memories(
+            self.store, "monochrome pixel art palette"
+        )
+        self.assertNotIn(derived.id, {item.id for item in invalidated})
+
+
     def test_empty_results_produce_no_context(self):
         self.assertIsNone(build_memory_context([]))
 
