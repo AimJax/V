@@ -127,6 +127,26 @@ class ContinuityStore:
                     WHERE source_memory_id=OLD.id;
                 END;
             """)
+            existing_tables = {
+                row[0] for row in db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+            if "memory_evidence" in existing_tables:
+                # Upgrade existing inferred patterns into the review-gated
+                # derivation model without changing their source evidence.
+                db.execute(
+                    """
+                    INSERT OR IGNORE INTO memory_derivations(
+                        derived_memory_id, source_memory_id, state, created_at
+                    )
+                    SELECT e.pattern_memory_id, e.source_memory_id, 'pending', e.created_at
+                    FROM memory_evidence AS e
+                    JOIN memories AS derived ON derived.id=e.pattern_memory_id
+                    WHERE derived.memory_type='inferred_pattern'
+                      AND derived.provenance='inferred'
+                    """
+                )
             db.commit()
 
     def _connect(self) -> sqlite3.Connection:
