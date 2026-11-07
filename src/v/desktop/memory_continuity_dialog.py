@@ -111,6 +111,11 @@ class MemoryContinuityDialog(QDialog):
         commitments_title = QLabel("Prospective commitments")
         commitments_title.setStyleSheet("font-weight: 650; margin-top: 8px;")
         root.addWidget(commitments_title)
+        commitments_note = QLabel(
+            "These records preserve future intent locally; they do not schedule notifications or authorize actions."
+        )
+        commitments_note.setWordWrap(True)
+        root.addWidget(commitments_note)
         self.commitment_table = QTableWidget(0, 4)
         self.commitment_table.setHorizontalHeaderLabels(
             ["Title", "Due", "State", "Source memory"]
