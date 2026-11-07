@@ -255,7 +255,9 @@ class MemoryContinuityDialog(QDialog):
     def on_consolidation_completed(self, report) -> None:
         self.status_label.setText(
             f"Consolidation finished: {report.summaries_created} proposal(s), "
-            f"{report.duplicates_skipped} skipped, {report.failures} failure(s). "
+            f"{report.duplicates_skipped} duplicate(s), "
+            f"{report.groups_skipped} group(s) without a safe summary, "
+            f"{report.failures} failure(s). "
             "New proposals require explicit review."
         )
         self.refresh()
