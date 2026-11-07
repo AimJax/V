@@ -96,16 +96,16 @@ class ContinuityStore:
                            strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now'),
                            'A supporting source changed; this derived record requires review.'
                     FROM memory_derivations
-                    WHERE source_memory_id=OLD.id AND state='accepted';
+                    WHERE source_memory_id=OLD.id AND state IN ('pending','accepted');
                     UPDATE memory_temporal
                     SET state='disputed',
                         note='A supporting source changed; this derived record requires review.'
                     WHERE memory_id IN (
                         SELECT derived_memory_id FROM memory_derivations
-                        WHERE source_memory_id=OLD.id AND state='accepted'
+                        WHERE source_memory_id=OLD.id AND state IN ('pending','accepted')
                     );
                     UPDATE memory_derivations SET state='rejected'
-                    WHERE source_memory_id=OLD.id AND state='accepted';
+                    WHERE source_memory_id=OLD.id AND state IN ('pending','accepted');
                 END;
 
                 CREATE TABLE IF NOT EXISTS memory_commitments (
@@ -133,17 +133,17 @@ class ContinuityStore:
                            strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now'),
                            'A supporting source was deleted; this derived record requires review.'
                     FROM memory_derivations
-                    WHERE source_memory_id=OLD.id AND state='accepted';
+                    WHERE source_memory_id=OLD.id AND state IN ('pending','accepted');
                     UPDATE memory_temporal
                     SET state='disputed',
                         note='A supporting source was deleted; this derived record requires review.'
                     WHERE memory_id IN (
                         SELECT derived_memory_id FROM memory_derivations
-                        WHERE source_memory_id=OLD.id AND state='accepted'
+                        WHERE source_memory_id=OLD.id AND state IN ('pending','accepted')
                     );
                     UPDATE memory_derivations
                     SET state='rejected'
-                    WHERE source_memory_id=OLD.id AND state='accepted';
+                    WHERE source_memory_id=OLD.id AND state IN ('pending','accepted');
                     UPDATE memory_commitments
                     SET source_memory_id=NULL
                     WHERE source_memory_id=OLD.id;
