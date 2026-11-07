@@ -444,6 +444,11 @@ class ContinuityStore:
                                   SELECT 1 FROM memory_derivations AS d
                                   WHERE d.derived_memory_id=m.id AND d.state!='accepted'
                               )
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM memory_temporal AS t
+                                  WHERE t.memory_id=m.id
+                                    AND t.state IN ('disputed','corrected','expired')
+                              )
                             """,
                             (derived_memory_id, group_prefix + "%"),
                         ).fetchall()
