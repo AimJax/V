@@ -1,6 +1,7 @@
 import json
 import unittest
 
+from contextlib import closing
 from pathlib import Path
 
 from support import temporary_directory
@@ -260,7 +261,7 @@ class MemoryBackupTests(unittest.TestCase):
         restored, skipped = import_backup(self.target, path)
         self.assertEqual((exported, restored, skipped), (3, 3, 0))
         target_continuity = ContinuityStore(self.target.database_path)
-        with self.target._connect() as connection:
+        with closing(self.target._connect()) as connection:
             temporal = connection.execute(
                 "SELECT * FROM memory_temporal WHERE memory_id=?", (old.id,)
             ).fetchone()
