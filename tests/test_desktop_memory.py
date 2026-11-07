@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 
 from pathlib import Path
@@ -41,6 +42,32 @@ class DesktopServiceMemoryTests(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
+
+
+    def test_memory_preview_includes_relevant_commitments_and_source_evidence(self):
+        continuity = ContinuityStore(self.store.database_path)
+        self.service.continuity_store = continuity
+        self.service.retriever = None
+        self.service.retrieval_limit = 5
+        self.service.retrieval_max_characters = 2400
+        continuity.create_commitment(
+            "Finish the Project V test pass",
+            description="Run tests before packaging.",
+            source_memory_id=self.preference.id,
+        )
+
+        preview = asyncio.run(
+            self.service.preview_memory_context("What are my current commitments?")
+        )
+
+        self.assertEqual(len(preview["commitments"]), 1)
+        self.assertEqual(
+            preview["commitments"][0]["title"],
+            "Finish the Project V test pass",
+        )
+        self.assertIn("one step at a time", preview["commitments"][0]["source_evidence"])
+        self.assertIn("RELEVANT OPEN COMMITMENTS", preview["context"])
+        self.assertIn("one step at a time", preview["context"])
 
     def test_continuity_snapshot_includes_subject_timeline(self):
         self.service.continuity_store = ContinuityStore(self.store.database_path)
