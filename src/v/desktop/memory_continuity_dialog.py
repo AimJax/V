@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFormLayout,
+    QHeaderView,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -124,14 +125,20 @@ class MemoryContinuityDialog(QDialog):
             QTableWidget.SelectionBehavior.SelectRows
         )
         self.timeline_table.setMinimumHeight(110)
-        self.timeline_table.horizontalHeader().setStretchLastSection(True)
+        self.timeline_table.setMaximumHeight(190)
+        timeline_header = self.timeline_table.horizontalHeader()
+        timeline_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        timeline_header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        timeline_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        timeline_header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         root.addWidget(self.timeline_table)
 
         divider = QLabel("Derived memory evidence")
         divider.setStyleSheet("font-weight: 650; margin-top: 8px;")
         root.addWidget(divider)
         self.derivation_list = QListWidget()
-        self.derivation_list.setMinimumHeight(90)
+        self.derivation_list.setMinimumHeight(70)
+        self.derivation_list.setMaximumHeight(150)
         root.addWidget(self.derivation_list)
         derivation_actions = QHBoxLayout()
         self.accept_derivation_button = QPushButton("Accept derivation")
@@ -168,8 +175,14 @@ class MemoryContinuityDialog(QDialog):
         self.commitment_table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers
         )
-        self.commitment_table.horizontalHeader().setStretchLastSection(True)
-        root.addWidget(self.commitment_table, 1)
+        self.commitment_table.setMinimumHeight(90)
+        self.commitment_table.setMaximumHeight(160)
+        commitment_header = self.commitment_table.horizontalHeader()
+        commitment_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        commitment_header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        commitment_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        commitment_header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        root.addWidget(self.commitment_table)
 
         create_form = QFormLayout()
         self.commitment_title_input = QLineEdit()
