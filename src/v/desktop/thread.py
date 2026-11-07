@@ -393,6 +393,13 @@ class DesktopRuntimeThread(QThread):
                         "A memory consolidation job is already running."
                     )
                     continue
+                if self._backfill_task is not None and not self._backfill_task.done():
+                    self.memory_consolidation_failed.emit(
+                        "Wait for the historical memory scan to finish before consolidating."
+                    )
+                    continue
+                if service.memory_worker is not None:
+                    await service.memory_worker.cancel()
                 cancel_event = asyncio.Event()
                 self._consolidation_cancel_event = cancel_event
 
@@ -419,12 +426,24 @@ class DesktopRuntimeThread(QThread):
                     finally:
                         self._consolidation_task = None
                         self._consolidation_cancel_event = None
+                        if (
+                            service.memory_worker is not None
+                            and service.extraction_queue is not None
+                            and service.extraction_queue.count("pending")
+                        ):
+                            await service.memory_worker.schedule()
 
                 self._consolidation_task = asyncio.create_task(run_consolidation())
                 continue
 
             if command == "memory_consolidate_cancel":
                 await self._cancel_consolidation()
+                if (
+                    service.memory_worker is not None
+                    and service.extraction_queue is not None
+                    and service.extraction_queue.count("pending")
+                ):
+                    await service.memory_worker.schedule()
                 continue
 
             if command == "memory_continuity_get":
