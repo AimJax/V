@@ -81,6 +81,13 @@ class MemoryContinuityDialogTests(unittest.TestCase):
             groups_skipped=3,
             failures=0,
         ))
+        self.dialog.set_snapshot({
+            "memory_id": "memory-selected",
+            "temporal": {"state": "current"},
+            "timeline": [],
+            "derivation_sources": [],
+            "commitments": [],
+        })
         self.assertIn("2 duplicate(s)", self.dialog.status_label.text())
         self.assertIn("3 group(s) without a safe summary", self.dialog.status_label.text())
 
