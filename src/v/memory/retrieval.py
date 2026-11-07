@@ -182,9 +182,16 @@ def _exclude_noncurrent_memories(
     memories: list[Memory],
     query: str,
 ) -> list[Memory]:
-    """Avoid presenting superseded records as current; retain them for history queries."""
+    """Exclude invalid present-day claims and unreviewed derived summaries.
+
+    Historical queries retain older and disputed records so V can explain the
+    timeline, but present-focused retrieval requires a current temporal state,
+    an active validity window, and accepted provenance for derived records.
+    """
     if is_historical_query(query) or not memories:
         return memories
+
+    now = datetime.now(timezone.utc)
     try:
         with closing(memory_store._connect()) as connection:
             tables = {
@@ -192,26 +199,60 @@ def _exclude_noncurrent_memories(
                     "SELECT name FROM sqlite_master WHERE type='table'"
                 )
             }
-            if "memory_temporal" not in tables:
-                return memories
             ids = [memory.id for memory in memories]
             placeholders = ",".join("?" for _ in ids)
-            states = {
-                row["memory_id"]: row["state"]
+            temporal = {}
+            if "memory_temporal" in tables:
+                temporal = {
+                    row["memory_id"]: dict(row)
+                    for row in connection.execute(
+                        "SELECT memory_id, state, valid_from, valid_until "
+                        f"FROM memory_temporal WHERE memory_id IN ({placeholders})",
+                        ids,
+                    )
+                }
+            derivation_states: dict[str, list[str]] = {}
+            if "memory_derivations" in tables:
                 for row in connection.execute(
-                    f"SELECT memory_id, state FROM memory_temporal "
-                    f"WHERE memory_id IN ({placeholders})",
+                    "SELECT derived_memory_id, state FROM memory_derivations "
+                    f"WHERE derived_memory_id IN ({placeholders})",
                     ids,
-                )
-            }
+                ):
+                    derivation_states.setdefault(row["derived_memory_id"], []).append(
+                        row["state"]
+                    )
     except (sqlite3.Error, AttributeError):
-        # Temporal metadata is an optional additive layer; retrieval must survive
-        # an unavailable metadata table or read-only database.
+        # Continuity metadata is additive; retrieval must remain available for
+        # older databases and recover from a transient metadata read failure.
         return memories
-    return [
-        memory for memory in memories
-        if states.get(memory.id, "current") == "current"
-    ]
+
+    def active_window(record: dict) -> bool:
+        for field, comparison in (
+            ("valid_from", lambda value: value <= now),
+            ("valid_until", lambda value: value >= now),
+        ):
+            value = record.get(field)
+            if value is None:
+                continue
+            try:
+                parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                if parsed.tzinfo is None or not comparison(parsed.astimezone(timezone.utc)):
+                    return False
+            except (TypeError, ValueError):
+                return False
+        return True
+
+    selected = []
+    for memory in memories:
+        record = temporal.get(memory.id)
+        if record is not None:
+            if record["state"] != "current" or not active_window(record):
+                continue
+        states = derivation_states.get(memory.id, [])
+        if states and any(state != "accepted" for state in states):
+            continue
+        selected.append(memory)
+    return selected
 
 
 def retrieve_relevant_memories(
