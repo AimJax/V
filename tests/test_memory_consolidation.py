@@ -18,9 +18,11 @@ class FakeProvider:
     def __init__(self, content: str) -> None:
         self.content = content
         self.calls = 0
+        self.last_messages = None
 
     async def chat(self, messages, *, temperature: float, max_tokens: int):
         self.calls += 1
+        self.last_messages = messages
         return SimpleNamespace(content=self.content)
 
 
@@ -112,6 +114,44 @@ class MemoryConsolidationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(provider.calls, 1)
         self.assertEqual(self.store.count_inferred_patterns(), 1)
 
+
+
+    async def test_episodic_timeline_consolidation_preserves_chronological_sources(self):
+        for source in self.sources:
+            self.store.delete_memory(source.id)
+        episodes = [
+            ("conversation-a", 201, "2026-09-01T10:00:00+00:00", "Project V began as a prototype."),
+            ("conversation-a", 202, "2026-10-01T10:00:00+00:00", "Project V gained persistent local memory."),
+            ("conversation-b", 203, "2026-11-01T10:00:00+00:00", "Project V gained review-gated continuity."),
+        ]
+        for conversation, message_id, timestamp, content in episodes:
+            self.store.create_memory(
+                content=content,
+                memory_type="episodic",
+                subject="Project V",
+                memory_key="project.v.timeline",
+                provenance="explicit",
+                source_conversation_id=conversation,
+                source_message_id=message_id,
+                source_created_at=timestamp,
+                evidence=content,
+            )
+        provider = FakeProvider(json.dumps({
+            "summary": "Project V evolved from a prototype into a system with local memory and review-gated continuity.",
+            "confidence": 0.93,
+            "importance": 4,
+        }))
+        report = await MemoryConsolidator(
+            provider, self.store, self.continuity
+        ).run()
+
+        self.assertEqual(report.summaries_created, 1)
+        supplied = json.loads(provider.last_messages[1].content)
+        self.assertEqual(
+            [item["source_date"] for item in supplied],
+            [item[2] for item in episodes],
+        )
+        self.assertTrue(all(item["memory_key"] == "project.v.timeline" for item in supplied))
 
     async def test_new_accepted_summary_supersedes_older_summary_for_same_topic(self):
         from v.memory.retrieval import retrieve_relevant_memories
