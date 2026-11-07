@@ -160,6 +160,28 @@ class ContinuityStore:
                 "SELECT * FROM memory_temporal WHERE memory_id=?", (memory_id,)
             ).fetchone())
 
+    def temporal_record(self, memory_id: str) -> dict[str, Any]:
+        """Return temporal metadata, using an explicit current default if absent."""
+        with closing(self._connect()) as db:
+            if db.execute(
+                "SELECT 1 FROM memories WHERE id=?", (memory_id,)
+            ).fetchone() is None:
+                raise KeyError(memory_id)
+            row = db.execute(
+                "SELECT * FROM memory_temporal WHERE memory_id=?", (memory_id,)
+            ).fetchone()
+            if row is not None:
+                return dict(row)
+            return {
+                "memory_id": memory_id,
+                "state": "current",
+                "valid_from": None,
+                "valid_until": None,
+                "recorded_at": None,
+                "superseded_by": None,
+                "note": "",
+            }
+
     def set_memory_state(
         self, memory_id: str, state: str, *, superseded_by: str | None = None,
         note: str = "",
