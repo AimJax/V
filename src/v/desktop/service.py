@@ -924,6 +924,67 @@ class DesktopService:
             "Existing memories were not overwritten or deleted."
         )
 
+    async def preview_memory_context(self, query: str) -> dict:
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("Enter a query to preview memory retrieval.")
+        if self.memory_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        if not self.settings.get("memory", {}).get("retrieval_enabled", True):
+            return {
+                "query": query,
+                "memories": [],
+                "context": None,
+                "semantic": False,
+                "fallback_reason": "Memory retrieval is disabled.",
+            }
+
+        if self.retriever is not None:
+            memories = await self.retriever.retrieve(
+                query,
+                limit=self.retrieval_limit,
+            )
+            semantic = True
+            fallback_reason = self.retriever.last_fallback_reason
+        else:
+            memories = retrieve_relevant_memories(
+                self.memory_store,
+                query,
+                limit=self.retrieval_limit,
+            )
+            semantic = False
+            fallback_reason = None
+
+        derivation_sources = {}
+        if self.continuity_store is not None:
+            for memory in memories:
+                if memory.memory_type == "inferred_pattern":
+                    derivation_sources[memory.id] = (
+                        self.continuity_store.derivation_sources(memory.id)
+                    )
+        context = build_memory_context(
+            memories,
+            max_characters=self.retrieval_max_characters,
+            derivation_sources=derivation_sources,
+        )
+        return {
+            "query": query,
+            "memories": [
+                {
+                    "memory_id": memory.id,
+                    "memory_type": memory.memory_type,
+                    "subject": memory.subject,
+                    "content": memory.content,
+                    "provenance": memory.provenance,
+                    "confidence": memory.confidence,
+                    "source_created_at": memory.source_created_at,
+                }
+                for memory in memories
+            ],
+            "context": context,
+            "semantic": semantic,
+            "fallback_reason": fallback_reason,
+        }
+
     async def run_memory_consolidation(self, *, limit: int = 3, cancel_event=None):
         if (
             self.memory_store is None
