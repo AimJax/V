@@ -373,15 +373,11 @@ class DesktopRuntimeThread(QThread):
             if command == "memory_continuity_state":
                 try:
                     memory_id, state, replacement, note, valid_from, valid_until = payload
-                    if valid_from or valid_until:
-                        service.ensure_memory_temporal_record(
-                            memory_id,
-                            valid_from=valid_from or None,
-                            valid_until=valid_until or None,
-                        )
-                    service.set_memory_temporal_state(
+                    service.update_memory_temporal_record(
                         memory_id,
                         state,
+                        valid_from=valid_from or None,
+                        valid_until=valid_until or None,
                         superseded_by=replacement or None,
                         note=note,
                     )
