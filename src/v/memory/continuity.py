@@ -188,6 +188,12 @@ class ContinuityStore:
     ) -> dict[str, Any]:
         if state not in MEMORY_STATES:
             raise ValueError(f"Unsupported memory state: {state}")
+        if not isinstance(memory_id, str) or not memory_id:
+            raise ValueError("memory_id must be a non-empty string.")
+        if superseded_by is not None and (
+            not isinstance(superseded_by, str) or not superseded_by
+        ):
+            raise ValueError("superseded_by must be a non-empty string or None.")
         if not isinstance(note, str) or len(note) > 2000:
             raise ValueError("note must be a string of at most 2000 characters.")
         if state == "superseded" and not superseded_by:
@@ -227,6 +233,12 @@ class ContinuityStore:
         """Atomically update lifecycle and validity, including clearing dates."""
         if state not in MEMORY_STATES:
             raise ValueError(f"Unsupported memory state: {state}")
+        if not isinstance(memory_id, str) or not memory_id:
+            raise ValueError("memory_id must be a non-empty string.")
+        if superseded_by is not None and (
+            not isinstance(superseded_by, str) or not superseded_by
+        ):
+            raise ValueError("superseded_by must be a non-empty string or None.")
         if not isinstance(note, str) or len(note) > 2000:
             raise ValueError("note must be a string of at most 2000 characters.")
         if state == "superseded" and not superseded_by:
@@ -282,6 +294,8 @@ class ContinuityStore:
             or len(source_memory_ids) != len(set(source_memory_ids))
         ):
             raise ValueError("Provide 1 to 100 unique, non-empty source memory IDs.")
+        if not isinstance(derived_memory_id, str) or not derived_memory_id:
+            raise ValueError("derived_memory_id must be a non-empty string.")
         if derived_memory_id in source_memory_ids:
             raise ValueError("A derived memory cannot cite itself.")
         with closing(self._connect()) as db:
@@ -362,6 +376,10 @@ class ContinuityStore:
             raise ValueError("description must be at most 4000 characters.")
         if recurrence is not None and (not isinstance(recurrence, str) or len(recurrence) > 200):
             raise ValueError("recurrence must be at most 200 characters.")
+        if source_memory_id is not None and (
+            not isinstance(source_memory_id, str) or not source_memory_id
+        ):
+            raise ValueError("source_memory_id must be a non-empty string or None.")
         due = _timestamp(due_at, "due_at")
         now, item_id = _now(), str(uuid.uuid4())
         with closing(self._connect()) as db:
