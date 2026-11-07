@@ -602,7 +602,7 @@ def main() -> int:
     review_approve.add_argument("--subject")
     review_approve.add_argument(
         "--memory-type",
-        choices=("profile", "preference", "episodic", "relationship", "project", "fact"),
+        choices=("profile", "preference", "episodic", "procedural", "relationship", "project", "fact"),
     )
     review_approve.add_argument("--memory-key")
     review_approve.add_argument("--confidence", type=float)
