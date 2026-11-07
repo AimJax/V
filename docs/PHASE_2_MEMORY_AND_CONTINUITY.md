@@ -105,14 +105,14 @@ Run extraction, backfill, consolidation, and embedding work as cancellable backg
 
 ## 9. Implementation milestones
 
-1. **Implemented, verification pending:** Inventory existing memory schemas, extraction, retrieval, graph, backup, UI, and tests; preserve the existing SQLite infrastructure.
-2. **Implemented, verification pending:** Define and persist temporal lifecycle, prospective commitments, and evidence-linked derivation states.
-3. **Implemented, verification pending:** Add versioned continuity schema and v4 backup/restore with v1-v3 compatibility.
-4. **Implemented, verification pending:** Enforce temporal validity, supersession, and dependent-record invalidation.
-5. **In progress:** Evidence-linked consolidation proposals, duplicate avoidance, contradiction-aware summarization, and invalidation are implemented; broader evaluation remains.
-6. **In progress:** Present-focused validity filtering and review-gated derived retrieval are implemented; contextual ranking and end-to-end recall evaluation remain.
-7. **Implemented, verification pending:** Desktop continuity inspection, temporal editing, derivation review, and prospective commitment controls are connected to the runtime.
-8. **In progress:** Add realistic multi-conversation, multi-session, restart, migration, backup/restore, and target-Windows continuity evaluations.
+1. **Implemented, CI verified:** Inventory existing memory schemas, extraction, retrieval, graph, backup, UI, and tests; preserve the existing SQLite infrastructure.
+2. **Implemented, CI verified:** Define and persist temporal lifecycle, prospective commitments, and evidence-linked derivation states.
+3. **Implemented, CI verified:** Add versioned continuity schema and v4 backup/restore with v1-v3 compatibility.
+4. **Implemented, CI verified:** Enforce temporal validity, supersession, and dependent-record invalidation.
+5. **Implemented, CI verified:** Evidence-linked consolidation proposals, duplicate avoidance, contradiction-aware summarization, and invalidation; local-model evaluation remains.
+6. **Implemented, CI verified:** Present-focused validity filtering, review-gated derived retrieval, contextual follow-up resolution, and selective commitment recall; target-machine recall evaluation remains.
+7. **Implemented, CI verified:** Desktop continuity inspection, subject timelines, temporal editing, derivation review, prospective commitment controls, and exact recall preview are connected to the runtime.
+8. **Implemented, CI verified:** Multi-conversation, multi-session, restart, migration, backup/restore, and model-change evaluations; local model/GPU smoke testing remains.
 
 ## 10. Required tests
 
