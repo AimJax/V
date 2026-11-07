@@ -55,7 +55,7 @@ Future-oriented commitments, reminders, pending decisions, deadlines, and agreed
 
 ### 3.5 Autobiographical continuity
 
-A time-ordered account of significant experiences and developments relevant to V's identity and relationship context. This is a derived navigation layer over evidence-backed memories, not a fictional biography.
+A time-ordered account of significant experiences and developments relevant to V's identity and relationship context. This is a derived navigation layer over evidence-backed memories, not a fictional biography. The first implementation uses accepted, evidence-linked `inferred_pattern` records keyed by topic or episodic timeline rather than storing an independent narrative biography. Timeline consolidation preserves source chronology and remains pending review.
 
 ### 3.6 Affective associations
 
