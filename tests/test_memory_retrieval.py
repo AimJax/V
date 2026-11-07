@@ -7,6 +7,7 @@ from pathlib import Path
 from support import temporary_directory
 
 from v.memory.embedding_store import EmbeddingStore
+from v.memory.embedding_store import EmbeddingStore
 from v.memory.hybrid_retrieval import HybridMemoryRetriever
 from v.memory.retrieval import (
     build_commitment_context,
@@ -339,6 +340,40 @@ class MemoryRetrievalTests(unittest.TestCase):
         self.assertIn(primary.id, result_ids)
         self.assertNotIn(outdated.id, result_ids)
 
+
+
+    def test_semantic_index_rebuilds_for_a_new_embedding_model_after_restart(self):
+        memory = self.store.create_memory(
+            content="The project uses persistent local memory.",
+            memory_type="project",
+            subject="Project V",
+        )
+        embeddings = EmbeddingStore(self.database_path)
+        first = HybridMemoryRetriever(
+            self.store,
+            embeddings,
+            FakeEmbeddingProvider(),
+            model="embedding-model-a",
+            semantic_threshold=0.5,
+        )
+        first_results = asyncio.run(first.retrieve("persistent local memory"))
+        self.assertIn(memory.id, {item.id for item in first_results})
+        self.assertEqual(embeddings.count("embedding-model-a"), 1)
+
+        reopened_store = MemoryStore(self.database_path)
+        reopened_embeddings = EmbeddingStore(self.database_path)
+        second = HybridMemoryRetriever(
+            reopened_store,
+            reopened_embeddings,
+            FakeEmbeddingProvider(),
+            model="embedding-model-b",
+            semantic_threshold=0.5,
+        )
+        second_results = asyncio.run(second.retrieve("persistent local memory"))
+
+        self.assertIn(memory.id, {item.id for item in second_results})
+        self.assertEqual(reopened_embeddings.count("embedding-model-b"), 1)
+        self.assertEqual(reopened_embeddings.count("embedding-model-a"), 1)
 
     def test_context_exposes_source_records_for_derived_summaries(self):
         derived = self.store.create_memory(
