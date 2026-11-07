@@ -916,6 +916,21 @@ class DesktopService:
             "Existing memories were not overwritten or deleted."
         )
 
+    def memory_continuity_snapshot(self, memory_id: str) -> dict:
+        if self.continuity_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        return {
+            "memory_id": memory_id,
+            "temporal": self.continuity_store.temporal_record(memory_id),
+            "derivation_sources": self.continuity_store.derivation_sources(memory_id),
+            "commitments": self.continuity_store.list_commitments(state="all", limit=500),
+        }
+
+    def ensure_memory_temporal_record(self, memory_id: str, **fields) -> dict:
+        if self.continuity_store is None:
+            raise RuntimeError("Long-term memory is disabled in configuration.")
+        return self.continuity_store.ensure_temporal_record(memory_id, **fields)
+
     def list_memory_commitments(self, *, state: str = "open", limit: int = 100) -> list[dict]:
         if self.continuity_store is None:
             raise RuntimeError("Long-term memory is disabled in configuration.")
