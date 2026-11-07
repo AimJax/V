@@ -15,14 +15,17 @@ from v.memory.store import MemoryStore
 
 
 class FakeProvider:
-    def __init__(self, content: str) -> None:
+    def __init__(self, content: str, on_call=None) -> None:
         self.content = content
         self.calls = 0
         self.last_messages = None
+        self.on_call = on_call
 
     async def chat(self, messages, *, temperature: float, max_tokens: int):
         self.calls += 1
         self.last_messages = messages
+        if self.on_call is not None:
+            self.on_call()
         return SimpleNamespace(content=self.content)
 
 
@@ -66,6 +69,10 @@ class MemoryConsolidationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report.groups_examined, 1)
         self.assertEqual(report.summaries_created, 1)
         self.assertEqual(provider.calls, 1)
+        self.assertEqual(
+            [self.store.get_memory(item.id).content for item in self.sources],
+            [item.content for item in self.sources],
+        )
         pattern = self.store.list_memories(memory_type="inferred_pattern")[0]
         sources = self.continuity.derivation_sources(pattern.id)
         self.assertEqual(len(sources), 3)
@@ -204,6 +211,25 @@ class MemoryConsolidationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(report.cancelled)
         self.assertEqual(provider.calls, 0)
+        self.assertEqual(self.store.count_inferred_patterns(), 0)
+
+
+    async def test_cancellation_after_model_response_prevents_summary_write(self):
+        cancelled = asyncio.Event()
+        provider = FakeProvider(
+            json.dumps({
+                "summary": "The user prefers restrained, practical interface aesthetics.",
+                "confidence": 0.94,
+                "importance": 4,
+            }),
+            on_call=cancelled.set,
+        )
+        consolidator = MemoryConsolidator(provider, self.store, self.continuity)
+
+        report = await consolidator.run(cancel_event=cancelled)
+
+        self.assertTrue(report.cancelled)
+        self.assertEqual(provider.calls, 1)
         self.assertEqual(self.store.count_inferred_patterns(), 0)
 
     async def test_expired_source_records_do_not_form_a_current_summary(self):
