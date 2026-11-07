@@ -148,6 +148,11 @@ class MemoryBackupTests(unittest.TestCase):
             {item.id for item in self.target.list_memory_evidence(pattern.id)},
             {item.id for item in sources},
         )
+        from v.memory.continuity import ContinuityStore
+        derivations = ContinuityStore(self.target.database_path).derivation_sources(
+            pattern.id
+        )
+        self.assertEqual({item["state"] for item in derivations}, {"pending"})
 
     def test_v2_backup_remains_importable(self):
         original = self.source.create_memory(content="A v2-compatible record.")
