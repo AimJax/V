@@ -1092,11 +1092,19 @@ class DesktopService:
         selected = self.memory_store.get_memory(memory_id)
         if selected is None:
             raise KeyError(memory_id)
-        if selected.subject.strip():
+        if selected.memory_key:
             related = [
                 item
                 for item in self.memory_store.list_memories(limit=10_000)
                 if item.subject.casefold() == selected.subject.casefold()
+                and item.memory_key == selected.memory_key
+            ]
+        elif selected.subject.strip():
+            related = [
+                item
+                for item in self.memory_store.list_memories(limit=10_000)
+                if item.subject.casefold() == selected.subject.casefold()
+                and item.memory_type == selected.memory_type
             ]
         else:
             related = [selected]
