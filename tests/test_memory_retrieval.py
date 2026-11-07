@@ -447,6 +447,8 @@ class MemoryRetrievalTests(unittest.TestCase):
         ]
         query = "How do I bake sourdough bread?"
         self.assertFalse(is_contextual_followup_query(query))
+        self.assertFalse(is_contextual_followup_query("Why is the sky blue?"))
+        self.assertTrue(is_contextual_followup_query("Why?"))
         self.assertEqual(build_contextual_memory_query(query, history), query)
 
     def test_commitment_context_selects_relevant_open_and_completed_records(self):
