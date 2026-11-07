@@ -997,6 +997,13 @@ class DesktopService:
                     "provenance": memory.provenance,
                     "confidence": memory.confidence,
                     "source_created_at": memory.source_created_at,
+                    "temporal_state": (
+                        temporal_records[memory.id]["state"]
+                        if temporal_records.get(memory.id, {}).get("recorded_at")
+                        else "unspecified"
+                    ),
+                    "valid_from": temporal_records.get(memory.id, {}).get("valid_from"),
+                    "valid_until": temporal_records.get(memory.id, {}).get("valid_until"),
                 }
                 for memory in memories
             ],
