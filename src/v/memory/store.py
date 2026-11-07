@@ -739,6 +739,22 @@ class MemoryStore:
                             """,
                             (memory_id, source_id, now),
                         )
+                    continuity_table = connection.execute(
+                        "SELECT 1 FROM sqlite_master "
+                        "WHERE type='table' AND name='memory_derivations'"
+                    ).fetchone()
+                    if continuity_table is not None:
+                        connection.executemany(
+                            """
+                            INSERT INTO memory_derivations(
+                                derived_memory_id, source_memory_id, state, created_at
+                            ) VALUES (?, ?, 'pending', ?)
+                            """,
+                            [
+                                (memory_id, source_id, now)
+                                for source_id in dict.fromkeys(evidence_memory_ids)
+                            ],
+                        )
                     self._refresh_memory_links(connection, memory_id)
         except sqlite3.IntegrityError as error:
             raise ValueError(
