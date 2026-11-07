@@ -348,6 +348,7 @@ class MemoryRetrievalTests(unittest.TestCase):
             memory_type="project",
             subject="Project V",
         )
+        expected_documents = len(self.store.list_memories(limit=10000))
         embeddings = EmbeddingStore(self.database_path)
         first = HybridMemoryRetriever(
             self.store,
@@ -358,7 +359,7 @@ class MemoryRetrievalTests(unittest.TestCase):
         )
         first_results = asyncio.run(first.retrieve("persistent local memory"))
         self.assertIn(memory.id, {item.id for item in first_results})
-        self.assertEqual(embeddings.count("embedding-model-a"), 1)
+        self.assertEqual(embeddings.count("embedding-model-a"), expected_documents)
 
         reopened_store = MemoryStore(self.database_path)
         reopened_embeddings = EmbeddingStore(self.database_path)
@@ -372,8 +373,8 @@ class MemoryRetrievalTests(unittest.TestCase):
         second_results = asyncio.run(second.retrieve("persistent local memory"))
 
         self.assertIn(memory.id, {item.id for item in second_results})
-        self.assertEqual(reopened_embeddings.count("embedding-model-b"), 1)
-        self.assertEqual(reopened_embeddings.count("embedding-model-a"), 1)
+        self.assertEqual(reopened_embeddings.count("embedding-model-b"), expected_documents)
+        self.assertEqual(reopened_embeddings.count("embedding-model-a"), expected_documents)
 
     def test_context_exposes_source_records_for_derived_summaries(self):
         derived = self.store.create_memory(
