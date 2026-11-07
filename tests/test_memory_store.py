@@ -102,6 +102,22 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual(self.store.count_inferred_patterns(), 1)
 
 
+
+    def test_procedural_memories_store_explicit_repeatable_workflows(self):
+        procedure = self.store.create_memory(
+            content="Before packaging, run the project tests and verify the build output.",
+            memory_type="procedural",
+            subject="Project V",
+            provenance="explicit",
+            source_conversation_id="conversation-procedure",
+            source_message_id=900,
+            evidence="Before packaging, run the project tests and verify the build output.",
+        )
+
+        restored = self.store.get_memory(procedure.id)
+        self.assertEqual(restored.memory_type, "procedural")
+        self.assertEqual(restored.provenance, "explicit")
+
     def test_inferred_pattern_is_pending_review_when_continuity_is_enabled(self):
         from v.memory.continuity import ContinuityStore
 
