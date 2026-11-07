@@ -430,13 +430,11 @@ class DesktopService:
                     for item in selected_commitments:
                         source_id = item.get("source_memory_id")
                         if source_id:
-                            try:
-                                source_memory = self.memory_store.get_memory(source_id)
-                            except KeyError:
-                                continue
-                            item["source_evidence"] = (
-                                source_memory.evidence or source_memory.content
-                            )
+                            source_memory = self.memory_store.get_memory(source_id)
+                            if source_memory is not None:
+                                item["source_evidence"] = (
+                                    source_memory.evidence or source_memory.content
+                                )
                     commitment_context = build_commitment_context(
                         selected_commitments, user_message
                     )
@@ -1025,13 +1023,11 @@ class DesktopService:
         for item in selected_commitments:
             source_id = item.get("source_memory_id")
             if source_id and self.memory_store is not None:
-                try:
-                    source_memory = self.memory_store.get_memory(source_id)
-                except KeyError:
-                    continue
-                item["source_evidence"] = (
-                    source_memory.evidence or source_memory.content
-                )
+                source_memory = self.memory_store.get_memory(source_id)
+                if source_memory is not None:
+                    item["source_evidence"] = (
+                        source_memory.evidence or source_memory.content
+                    )
         commitment_context = build_commitment_context(
             selected_commitments, query
         )
