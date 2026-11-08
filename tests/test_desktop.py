@@ -173,6 +173,25 @@ class DesktopWindowTests(unittest.TestCase):
         self.assertTrue(self.window.voice_button.isEnabled())
         self.assertFalse(self.window._voice_recorder.is_recording)
 
+    def test_attach_image_sends_selected_path_to_local_runtime(self):
+        snapshot = self._snapshot()
+        object.__setattr__(snapshot, "vision_settings", {"model": "gemma-chat"})
+        self.window._apply_snapshot(snapshot)
+
+        with patch(
+            "v.desktop.window.QFileDialog.getOpenFileName",
+            return_value=("G:/V/test-image.png", "Images (*.png)"),
+        ), patch.object(self.window, "_stop_speech") as stop, patch.object(
+            self.window.runtime, "send_image_turn"
+        ) as send_image:
+            self.window._attach_image()
+
+        stop.assert_called_once_with()
+        send_image.assert_called_once()
+        self.assertEqual(send_image.call_args.args[0], "G:/V/test-image.png")
+        self.assertIn("analyze the image", send_image.call_args.args[1].casefold())
+        self.assertTrue(self.window._busy)
+
     def test_image_attachment_is_enabled_only_when_vision_is_configured(self):
         snapshot = self._snapshot()
         object.__setattr__(snapshot, "vision_settings", {"model": "local-chat-model"})
