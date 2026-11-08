@@ -50,6 +50,21 @@ class CognitiveManagerDialog(QDialog):
         goal_controls.addWidget(update_goal)
         layout.addLayout(goal_controls)
 
+        layout.addWidget(QLabel("Pending evidence-backed goal candidates"))
+        self.goal_proposals = QListWidget()
+        layout.addWidget(self.goal_proposals, 1)
+        candidate_controls = QHBoxLayout()
+        propose_goal = QPushButton("Propose goal")
+        propose_goal.clicked.connect(self._propose_goal)
+        candidate_controls.addWidget(propose_goal)
+        accept_goal = QPushButton("Accept candidate")
+        accept_goal.clicked.connect(lambda: self._review_goal_proposal(True))
+        candidate_controls.addWidget(accept_goal)
+        reject_goal = QPushButton("Reject candidate")
+        reject_goal.clicked.connect(lambda: self._review_goal_proposal(False))
+        candidate_controls.addWidget(reject_goal)
+        layout.addLayout(candidate_controls)
+
         layout.addWidget(QLabel("Pending evidence-backed preferences"))
         self.preferences = QListWidget()
         layout.addWidget(self.preferences, 1)
@@ -93,6 +108,14 @@ class CognitiveManagerDialog(QDialog):
             )
             row.setData(256, goal.id)
             self.goals.addItem(row)
+        self.goal_proposals.clear()
+        for proposal in self.store.list_goal_proposals(status="pending"):
+            row = QListWidgetItem(
+                f"{proposal['title']} (priority {proposal['priority']:.2f})"
+            )
+            row.setData(256, proposal["id"])
+            row.setToolTip(proposal["rationale"])
+            self.goal_proposals.addItem(row)
         self.preferences.clear()
         for preference in self.store.list_preferences(status="pending"):
             row = QListWidgetItem(
@@ -126,6 +149,44 @@ class CognitiveManagerDialog(QDialog):
                 str(self.status_choice.currentData()),
                 rationale="Status changed explicitly by the user.",
             )
+        except (KeyError, ValueError) as error:
+            self.state_label.setText(str(error))
+            return
+        self.refresh()
+
+    def _propose_goal(self) -> None:
+        title, accepted = QInputDialog.getText(
+            self, "Propose goal", "Candidate goal title:"
+        )
+        if not accepted or not title.strip():
+            return
+        evidence, accepted = QInputDialog.getText(
+            self, "Goal evidence", "Evidence references (comma-separated):"
+        )
+        if not accepted:
+            return
+        refs = tuple(part.strip() for part in evidence.split(",") if part.strip())
+        priority, accepted = QInputDialog.getDouble(
+            self, "Goal priority", "Priority:", 0.5, 0.0, 1.0, 2
+        )
+        if not accepted:
+            return
+        try:
+            self.store.propose_goal(
+                title, evidence_refs=refs, priority=priority,
+                rationale="Submitted as a candidate for explicit user review.",
+            )
+        except ValueError as error:
+            self.state_label.setText(str(error))
+            return
+        self.refresh()
+
+    def _review_goal_proposal(self, accept: bool) -> None:
+        item = self.goal_proposals.currentItem()
+        if item is None:
+            return
+        try:
+            self.store.review_goal_proposal(str(item.data(256)), accept=accept)
         except (KeyError, ValueError) as error:
             self.state_label.setText(str(error))
             return
