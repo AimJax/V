@@ -885,7 +885,9 @@ class DesktopWindow(QMainWindow):
     ) -> None:
         # Retain compatibility with completed-turn audio results.
         if audio_wav:
-            self._enqueue_speech_audio(audio_wav)
+            self._enqueue_speech_audio(
+                (self.runtime.speech_generation, audio_wav)
+            )
         elif speech_error:
             self._on_speech_failed(speech_error)
 
