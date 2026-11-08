@@ -25,9 +25,18 @@ class FakePlayer:
         self.events.append(("set_source", source.isEmpty()))
 
 
+class FakeSignal:
+    def __init__(self, events):
+        self.events = events
+
+    def emit(self):
+        self.events.append("playback_finished")
+
+
 class PlaybackHarness:
     _release_buffer = SpeechPlayback._release_buffer
     _on_media_status = SpeechPlayback._on_media_status
+    _finish_session = SpeechPlayback._finish_session
     stop = SpeechPlayback.stop
 
     def __init__(self, *, pending):
@@ -35,6 +44,8 @@ class PlaybackHarness:
         self._buffer = FakeBuffer(self.events)
         self._pending = deque(pending)
         self.player = FakePlayer(self.events)
+        self._playback_session_active = True
+        self.playback_finished = FakeSignal(self.events)
 
     def _play_next(self):
         self.events.append("play_next")
@@ -59,6 +70,20 @@ def test_end_of_media_detaches_source_before_releasing_buffer_and_defers_next():
     ]
     assert scheduled == [(0, playback._play_next)]
     assert playback._buffer is None
+
+
+def test_end_of_media_finishes_session_after_last_chunk():
+    playback = PlaybackHarness(pending=[])
+
+    playback._on_media_status(QMediaPlayer.MediaStatus.EndOfMedia)
+
+    assert playback.events == [
+        "stop",
+        ("set_source", True),
+        "delete_buffer",
+        "playback_finished",
+    ]
+    assert not playback._playback_session_active
 
 
 def test_stop_detaches_source_before_releasing_buffer_and_clears_queue():
