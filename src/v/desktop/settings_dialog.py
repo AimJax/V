@@ -127,9 +127,9 @@ class SettingsDialog(QDialog):
         vision_layout.addLayout(vision_form)
         vision_note = QLabel(
             "Image analysis is disabled when no model is selected. Choose a vision-capable "
-            "model already loaded in LM Studio. V will not download, load, or switch models. "
-            "Keeping the chat and vision model identical avoids loading a second model into VRAM. "
-            "A different loaded model may exceed your GPU memory budget."
+            "vision-capable chat model already loaded in LM Studio. For VRAM safety, "
+            "the selected vision model must be the same as the chat model. V will not "
+            "download, load, or switch models."
         )
         vision_note.setObjectName("muted")
         vision_note.setWordWrap(True)
@@ -796,6 +796,15 @@ class SettingsDialog(QDialog):
             return
 
         values = self._settings_values()
+        if values["vision_model"] and values["vision_model"] != values["model"]:
+            QMessageBox.warning(
+                self,
+                "Vision model must match chat model",
+                "For VRAM safety, image analysis must use the selected chat model. "
+                "Choose the same model in both fields.",
+            )
+            return
+
         if (
             values["memory_enabled"]
             and values["retrieval_enabled"]
