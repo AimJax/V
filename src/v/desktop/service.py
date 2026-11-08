@@ -44,6 +44,11 @@ from v.voice.streaming import SpeechTextSegmenter, clean_speech_text
 from v.identity import IdentityStore
 from v.identity_evolution import IdentityEvolution
 from v.cognition import CognitiveStore
+from v.interaction import (
+    InteractionEvent,
+    InteractionEventKind,
+    InteractionModality,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +74,7 @@ class DesktopTurnResult:
     snapshot: DesktopSnapshot
     audio_wav: bytes | None = None
     speech_error: str | None = None
+    interaction_event: InteractionEvent | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +148,7 @@ class DesktopService:
         self._speech_worker_task: asyncio.Task[None] | None = None
         self._speech_active_task: asyncio.Task[None] | None = None
         self._speech_generation = 0
+        self.interaction_events: list[InteractionEvent] = []
 
     async def start(self) -> DesktopSnapshot:
         """Connect only to the configured local model and load local state."""
@@ -370,6 +377,9 @@ class DesktopService:
         on_token: Callable[[str], None],
         on_audio: Callable[[bytes], None] | None = None,
         on_speech_error: Callable[[str], None] | None = None,
+        *,
+        interaction_event: InteractionEvent | None = None,
+        on_interaction_event: Callable[[InteractionEvent], None] | None = None,
     ) -> DesktopTurnResult:
         """Stream one turn and persist it only after a complete response."""
         if (
@@ -383,6 +393,22 @@ class DesktopService:
         user_text = user_text.strip()
         if not user_text:
             raise ValueError("Message cannot be empty.")
+
+        event = interaction_event or InteractionEvent.now(
+            kind=InteractionEventKind.USER_MESSAGE,
+            modality=InteractionModality.TEXT,
+            activation_context="typed",
+            conversation_id=self.conversation.id,
+            content=user_text,
+        )
+        if event.conversation_id != self.conversation.id:
+            raise ValueError("Interaction event belongs to a different conversation.")
+        if event.content != user_text:
+            raise ValueError("Interaction event content must match the chat message.")
+        self.interaction_events.append(event)
+        del self.interaction_events[:-100]
+        if on_interaction_event is not None:
+            on_interaction_event(event)
 
         self.interrupt_speech()
         speech_generation = self._speech_generation
@@ -559,6 +585,7 @@ class DesktopService:
         return DesktopTurnResult(
             response=response,
             snapshot=self.snapshot(),
+            interaction_event=event,
         )
 
     async def _run_identity_evolution(self) -> None:
@@ -684,17 +711,32 @@ class DesktopService:
         on_token: Callable[[str], None],
         on_audio: Callable[[bytes], None] | None = None,
         on_speech_error: Callable[[str], None] | None = None,
+        on_interaction_event: Callable[[InteractionEvent], None] | None = None,
     ) -> DesktopVoiceTurnResult:
         """Transcribe locally and run the normal streaming chat/speech pipeline."""
         transcription = await self.transcribe_voice(wav_data)
+        event = InteractionEvent.now(
+            kind=InteractionEventKind.SPEECH_TRANSCRIPT,
+            modality=InteractionModality.AUDIO,
+            activation_context="push_to_talk",
+            conversation_id=self.conversation.id if self.conversation else None,
+            content=transcription,
+        )
         if on_audio is None and on_speech_error is None:
-            turn = await self.send_message(transcription, on_token)
+            turn = await self.send_message(
+                transcription,
+                on_token,
+                interaction_event=event,
+                on_interaction_event=on_interaction_event,
+            )
         else:
             turn = await self.send_message(
                 transcription,
                 on_token,
                 on_audio,
                 on_speech_error,
+                interaction_event=event,
+                on_interaction_event=on_interaction_event,
             )
         return DesktopVoiceTurnResult(
             transcription=transcription,
