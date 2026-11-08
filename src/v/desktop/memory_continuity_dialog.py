@@ -32,6 +32,7 @@ class MemoryContinuityDialog(QDialog):
     derivation_review_requested = Signal(str, str)
     commitment_create_requested = Signal(str, str, str, str)
     commitment_update_requested = Signal(str, str, str)
+    commitment_edit_requested = Signal(str, str, str, str, str)
     consolidation_requested = Signal()
     consolidation_cancel_requested = Signal()
 
@@ -198,9 +199,15 @@ class MemoryContinuityDialog(QDialog):
 
         commitment_actions = QHBoxLayout()
         self.add_commitment_button = QPushButton("Add commitment")
+        self.edit_commitment_button = QPushButton("Save selected details")
         self.complete_commitment_button = QPushButton("Mark completed")
         self.cancel_commitment_button = QPushButton("Cancel commitment")
+        self.edit_commitment_button.setEnabled(False)
+        self.commitment_table.itemSelectionChanged.connect(
+            self._load_selected_commitment
+        )
         self.add_commitment_button.clicked.connect(self._create_commitment)
+        self.edit_commitment_button.clicked.connect(self._edit_commitment)
         self.complete_commitment_button.clicked.connect(
             lambda: self._update_commitment("completed")
         )
@@ -208,6 +215,7 @@ class MemoryContinuityDialog(QDialog):
             lambda: self._update_commitment("cancelled")
         )
         commitment_actions.addWidget(self.add_commitment_button)
+        commitment_actions.addWidget(self.edit_commitment_button)
         commitment_actions.addStretch(1)
         commitment_actions.addWidget(self.complete_commitment_button)
         commitment_actions.addWidget(self.cancel_commitment_button)
@@ -385,6 +393,40 @@ class MemoryContinuityDialog(QDialog):
             return None
         item = self.commitment_table.item(row, 0)
         return str(item.data(Qt.ItemDataRole.UserRole)) if item else None
+
+    def _load_selected_commitment(self) -> None:
+        commitment_id = self._selected_commitment_id()
+        selected = next(
+            (
+                item for item in self._snapshot.get("commitments", [])
+                if item.get("id") == commitment_id
+            ),
+            None,
+        )
+        self.edit_commitment_button.setEnabled(selected is not None)
+        if selected is None:
+            return
+        self.commitment_title_input.setText(selected.get("title", ""))
+        self.commitment_description_input.setText(
+            selected.get("description", "")
+        )
+        self.commitment_due_input.setText(selected.get("due_at") or "")
+
+    def _edit_commitment(self) -> None:
+        commitment_id = self._selected_commitment_id()
+        title = self.commitment_title_input.text().strip()
+        if commitment_id is None:
+            return
+        if not title:
+            QMessageBox.warning(self, "Title required", "Enter a commitment title.")
+            return
+        self.commitment_edit_requested.emit(
+            commitment_id,
+            title,
+            self.commitment_description_input.text().strip(),
+            self.commitment_due_input.text().strip(),
+            self.memory_id,
+        )
 
     def _update_commitment(self, state: str) -> None:
         commitment_id = self._selected_commitment_id()
