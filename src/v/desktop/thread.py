@@ -216,6 +216,15 @@ class DesktopRuntimeThread(QThread):
                     self.operation_failed.emit(str(error))
                 continue
 
+            if command == "delete_conversation":
+                try:
+                    self.session_changed.emit(
+                        service.delete_conversation(str(payload))
+                    )
+                except Exception as error:
+                    self.operation_failed.emit(str(error))
+                continue
+
             if command == "select":
                 try:
                     self.session_changed.emit(
@@ -694,6 +703,9 @@ class DesktopRuntimeThread(QThread):
 
     def select_conversation(self, conversation_id: str) -> None:
         self._post("select", conversation_id)
+
+    def delete_conversation(self, conversation_id: str) -> None:
+        self._post("delete_conversation", conversation_id)
 
 
     def export_identity(self, destination: str, overwrite: bool = False) -> None:
