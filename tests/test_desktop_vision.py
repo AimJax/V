@@ -59,6 +59,7 @@ class DesktopVisionTurnTests(unittest.IsolatedAsyncioTestCase):
             return_value=self._turn_result(conversation)
         )
         events = []
+        callback = events.append
 
         with tempfile.TemporaryDirectory() as temporary:
             image_path = Path(temporary) / "user-image.png"
@@ -68,7 +69,7 @@ class DesktopVisionTurnTests(unittest.IsolatedAsyncioTestCase):
                 str(image_path),
                 "What is in this image?",
                 lambda _token: None,
-                on_interaction_event=events.append,
+                on_interaction_event=callback,
             )
 
             self.assertEqual(image_path.read_bytes(), original)
@@ -92,7 +93,7 @@ class DesktopVisionTurnTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(observation_event.activation_context, "local_vision_model")
         self.assertEqual(observation_event.source_ref, user_event.event_id)
         self.assertEqual(observation_event.content, "A blue ceramic mug on a wooden desk.")
-        self.assertEqual(events, [])
+        self.assertIs(call.kwargs["on_interaction_event"], callback)
         self.assertIn("UNTRUSTED VISUAL OBSERVATION", call.kwargs["additional_system_context"])
         self.assertNotIn(str(image_path), call.kwargs["additional_system_context"])
 
