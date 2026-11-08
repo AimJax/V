@@ -16,6 +16,7 @@ from v.core.config import project_root
 
 SETTING_FIELDS = {
     "model",
+    "vision_model",
     "temperature",
     "max_tokens",
     "history_messages",
@@ -144,6 +145,14 @@ def validate_desktop_settings(
     if normalized["model"] not in available_models:
         raise ValueError(
             f"Chat model '{normalized['model']}' is not loaded in LM Studio."
+        )
+
+    normalized["vision_model"] = _require_string(
+        normalized["vision_model"], "Vision model", allow_empty=True
+    )
+    if normalized["vision_model"] and normalized["vision_model"] not in available_models:
+        raise ValueError(
+            f"Vision model '{normalized['vision_model']}' is not loaded in LM Studio."
         )
 
     for field in (
@@ -432,6 +441,7 @@ def save_local_desktop_settings(
         ("privacy", privacy_values),
         ("memory", memory_values),
         ("voice", voice_values),
+        ("vision", {"model": normalized["vision_model"]}),
     ):
         section = document.get(section_name)
         if section is None:
