@@ -9,6 +9,7 @@ from PySide6.QtGui import QImage
 
 from v.conversations.store import Conversation
 from v.desktop.service import DesktopService, DesktopSnapshot, DesktopTurnResult
+from v.interaction import InteractionEvent, InteractionEventKind, InteractionModality
 
 
 class FakeVisionProvider:
@@ -139,16 +140,16 @@ class DesktopVisionTurnTests(unittest.IsolatedAsyncioTestCase):
         service.conversation = conversation
         service.personality = "You are V."
         service.started = True
-        user_event = __import__("v.interaction", fromlist=["InteractionEvent"]).InteractionEvent.now(
-            kind=__import__("v.interaction", fromlist=["InteractionEventKind"]).InteractionEventKind.USER_MESSAGE,
-            modality=__import__("v.interaction", fromlist=["InteractionModality"]).InteractionModality.IMAGE,
+        user_event = InteractionEvent.now(
+            kind=InteractionEventKind.USER_MESSAGE,
+            modality=InteractionModality.IMAGE,
             activation_context="user_upload",
             conversation_id=conversation.id,
             content="What is in this image?",
         )
-        observation_event = __import__("v.interaction", fromlist=["InteractionEvent"]).InteractionEvent.now(
-            kind=__import__("v.interaction", fromlist=["InteractionEventKind"]).InteractionEventKind.IMAGE_OBSERVATION,
-            modality=__import__("v.interaction", fromlist=["InteractionModality"]).InteractionModality.IMAGE,
+        observation_event = InteractionEvent.now(
+            kind=InteractionEventKind.IMAGE_OBSERVATION,
+            modality=InteractionModality.IMAGE,
             activation_context="local_vision_model",
             conversation_id=conversation.id,
             content="A blue mug on a desk.",
