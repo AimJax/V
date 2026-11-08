@@ -396,6 +396,14 @@ class DesktopWindow(QMainWindow):
         self.send_button.setEnabled(False)
         self.send_button.clicked.connect(self._send_message)
 
+        self.stop_speech_button = QPushButton("Stop speaking")
+        self.stop_speech_button.setFixedHeight(48)
+        self.stop_speech_button.setEnabled(False)
+        self.stop_speech_button.setToolTip(
+            "Immediately stop V's current speech and discard queued audio."
+        )
+        self.stop_speech_button.clicked.connect(self._stop_speech)
+
         self.voice_button = QPushButton("Hold to talk")
         self.voice_button.setFixedHeight(48)
         self.voice_button.setEnabled(False)
@@ -406,6 +414,7 @@ class DesktopWindow(QMainWindow):
         self.voice_button.released.connect(self._stop_voice_recording)
 
         composer_row.addWidget(self.message_input, 1)
+        composer_row.addWidget(self.stop_speech_button)
         composer_row.addWidget(self.voice_button)
         composer_row.addWidget(self.send_button)
         layout.addLayout(composer_row)
@@ -803,7 +812,6 @@ class DesktopWindow(QMainWindow):
             return
 
         self._stop_speech()
-        self.runtime.interrupt_speech()
         text = self.message_input.toPlainText().strip()
         if not text:
             return
@@ -841,12 +849,21 @@ class DesktopWindow(QMainWindow):
                 self._speech_player.playback_failed.connect(
                     self._on_speech_failed
                 )
+                self._speech_player.playback_finished.connect(
+                    self._on_speech_finished
+                )
             self._speech_player.enqueue(audio_wav)
+            self.stop_speech_button.setEnabled(True)
             self.statusBar().showMessage("V is speaking…")
         except Exception as error:
             self._on_speech_failed(str(error))
 
+    def _on_speech_finished(self) -> None:
+        self.stop_speech_button.setEnabled(False)
+        self.statusBar().showMessage("Speech playback finished.")
+
     def _on_speech_failed(self, message: str) -> None:
+        self.stop_speech_button.setEnabled(False)
         self.statusBar().showMessage(
             f"Text response is available; local speech failed: {message}"
         )
@@ -854,6 +871,8 @@ class DesktopWindow(QMainWindow):
     def _stop_speech(self) -> None:
         if self._speech_player is not None:
             self._speech_player.stop()
+        self.stop_speech_button.setEnabled(False)
+        self.runtime.interrupt_speech()
 
     def _play_speech_response(
         self,
@@ -926,7 +945,6 @@ class DesktopWindow(QMainWindow):
         if not self._ready or self._busy:
             return
         self._stop_speech()
-        self.runtime.interrupt_speech()
         if not self._voice_enabled or self._voice_recorder is None:
             self.statusBar().showMessage(
                 "Enable voice interaction in Settings and restart V."
