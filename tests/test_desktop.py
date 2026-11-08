@@ -13,6 +13,7 @@ from unittest.mock import patch
 from v.conversations.store import Conversation
 from v.desktop.service import DesktopSnapshot
 from v.desktop.window import DesktopWindow, MessageBubble
+from v.interaction import InteractionEventKind, InteractionModality
 from v.providers.base import ChatMessage
 
 
@@ -193,6 +194,20 @@ class DesktopWindowTests(unittest.TestCase):
         self.assertEqual(send_image.call_args.args[0], "G:/V/test-image.png")
         self.assertIn("analyze the image", send_image.call_args.args[1].casefold())
         self.assertTrue(self.window._busy)
+
+    def test_camera_sensor_state_is_recorded_with_camera_provenance(self):
+        snapshot = self._snapshot()
+        self.window._apply_snapshot(snapshot)
+
+        with patch.object(self.window.runtime, "record_interaction_event") as record:
+            self.window._on_camera_state_changed(True)
+
+        event = record.call_args.args[0]
+        self.assertEqual(event.kind, InteractionEventKind.SENSOR_STATE_CHANGED)
+        self.assertEqual(event.modality, InteractionModality.CAMERA)
+        self.assertEqual(event.activation_context, "user_camera_capture")
+        self.assertEqual(event.content, "camera active")
+        self.assertEqual(event.metadata["sensor"], "camera")
 
     def test_camera_snapshot_button_hands_one_frame_to_runtime(self):
         snapshot = self._snapshot()
