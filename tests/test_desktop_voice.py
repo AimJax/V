@@ -140,6 +140,9 @@ class DesktopVoiceTurnTests(unittest.IsolatedAsyncioTestCase):
         release_generation.set()
         result = await task
 
+        self.assertEqual(result.interaction_event.modality.value, "text")
+        self.assertEqual(result.interaction_event.activation_context, "typed")
+        self.assertEqual(result.interaction_event.conversation_id, service.conversation.id)
         self.assertEqual(result.response, "First sentence. Second sentence.")
         self.assertIsNone(result.audio_wav)
         self.assertIsNone(result.speech_error)
@@ -178,6 +181,33 @@ class DesktopVoiceTurnTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(call.kwargs["interaction_event"].kind.value, "speech_transcript")
         self.assertEqual(call.kwargs["interaction_event"].conversation_id, service.conversation.id)
+
+    async def test_voice_transcript_enters_normal_chat_and_emits_audio_provenance(self):
+        service = DesktopService()
+        service.settings = {"memory": {"retrieval_enabled": False}}
+        service.provider = FakeChatProvider()
+        service.conversation = self._turn_result().snapshot.conversation
+        service.conversation_store = FakeConversationStore(service.conversation)
+        service.personality = "You are V."
+        service.started = True
+        service.transcribe_voice = AsyncMock(return_value="A spoken request.")
+        events = []
+
+        result = await service.send_voice_message(
+            b"RIFFfake-wav",
+            lambda _token: None,
+            on_interaction_event=events.append,
+        )
+
+        self.assertEqual(result.turn.response, "Voice pipeline response.")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].kind.value, "speech_transcript")
+        self.assertEqual(events[0].modality.value, "audio")
+        self.assertEqual(events[0].activation_context, "push_to_talk")
+        self.assertEqual(events[0].conversation_id, service.conversation.id)
+        self.assertEqual(events[0].content, "A spoken request.")
+        self.assertEqual(result.turn.interaction_event, events[0])
+        self.assertEqual(service.conversation_store.saved[0], ("user", "A spoken request."))
 
     async def test_speech_synthesis_receives_cleaned_markdown(self):
         class StreamingVoice:
