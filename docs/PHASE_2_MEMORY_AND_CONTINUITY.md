@@ -162,14 +162,14 @@ Phase 2 is verified only when all of the following hold:
 - [x] Memory records retain their provenance and source-message references; derived summaries retain explicit links to every source.
 - [x] Temporal states distinguish current, superseded, corrected, disputed, and expired information. Current-focused recall excludes invalidated records while historical recall can still inspect them.
 - [x] Consolidation is evidence-backed, avoids duplicate output, detects contradictions, requires review before derived records become current recall sources, and invalidates accepted derivations when their source evidence changes.
-- [x] Explicit future commitments can be extracted, inspected, corrected, completed, cancelled, and selectively recalled with source quotations. They do not silently schedule notifications or authorize actions.
+- [x] Explicit future commitments can be extracted, inspected, edited (title, description, and due date), completed, cancelled, and selectively recalled with source quotations. They do not silently schedule notifications or authorize actions.
 - [x] Retrieval prioritizes direct current matches, resolves contextual follow-ups, respects a bounded context budget, and falls back safely when semantic retrieval is unavailable.
 - [x] The desktop UI exposes memory inspection, chronological timelines, temporal editing, derivation review, commitment management, deletion, backup/restore, and an exact recall-context preview.
 - [x] Background memory work is bounded and cancellable; interactive chat takes priority. Retrieval and memory processing remain local and do not send private content to web search or cloud LLM providers.
 - [x] Automated tests cover multiple conversations and sessions, restart persistence, temporal recall, derivation invalidation, backup/restore, schema migration, and embedding-model changes.
 - [ ] The configured local chat and embedding models pass the target-PC evaluation and desktop smoke-test checklist in Section 11 without a cloud fallback or resource failure.
 
-The first nine criteria are implemented and covered by the passing Windows CI run. The final target-PC criterion remains open; Phase 2 must stay In progress until the local-model/GPU smoke test passes.
+The implementation criteria are covered by automated tests, including editable prospective commitments. The final target-PC criterion remains open; Phase 2 must stay In progress until the local-model/GPU smoke test passes.
 
 ## 13. Explicitly out of scope
 
