@@ -868,9 +868,23 @@ class DesktopWindow(QMainWindow):
         try:
             dialog = CameraCaptureDialog(self)
             dialog.image_captured.connect(self._send_camera_image)
+            dialog.sensor_state_changed.connect(self._on_camera_state_changed)
             dialog.exec()
         except Exception as error:
             self.statusBar().showMessage(f"Camera unavailable: {error}")
+
+    def _on_camera_state_changed(self, active: bool) -> None:
+        if self._last_snapshot is None:
+            return
+        event = InteractionEvent.now(
+            kind=InteractionEventKind.SENSOR_STATE_CHANGED,
+            modality=InteractionModality.CAMERA,
+            activation_context="user_camera_capture",
+            conversation_id=self._last_snapshot.conversation.id,
+            content="camera active" if active else "camera inactive",
+            metadata={"sensor": "camera"},
+        )
+        self.runtime.record_interaction_event(event)
 
     def _send_camera_image(self, image_data: bytes, captured_at) -> None:
         if not self._ready or self._busy or not self._vision_enabled:
