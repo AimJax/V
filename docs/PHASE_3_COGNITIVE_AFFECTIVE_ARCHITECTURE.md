@@ -1,6 +1,6 @@
 # Phase 3 — Cognitive and Affective Architecture
 
-**Status:** Planned  
+**Status:** In progress  
 **Objective:** Introduce bounded functional internal state that influences V's attention, appraisal, preferences, motivation, reflection, and decisions coherently and inspectably.
 
 ## 1. Intended result
@@ -113,3 +113,19 @@ Phase 3 is verified when a persistent but bounded cognitive/affective model demo
 ## 9. Explicitly out of scope
 
 Replacing Phase 1 identity or Phase 2 memory, sensor/multimodal integration (Phase 4), and autonomous outreach/background execution (Phase 5), beyond the internal goal and reflection foundations.
+
+
+## 10. Implementation notes
+
+The first implementation slice adds a dedicated local SQLite cognitive store, deterministic text appraisal, bounded affect-like state transitions, time-based decay, event provenance, explicit goal lifecycle, evidence-backed preference proposals, and a compact context summary. The CLI and desktop chat paths share this store. The desktop Cognitive State manager exposes current signals and explicit goal controls; the CLI exposes `/goals`, `/goal add TITLE`, and `/goal ID STATUS`.
+
+Initial state dimensions and decay half-lives:
+- Valence: [-1, 1], two-hour half-life toward neutral.
+- Activation: [0, 1], fifteen-minute half-life toward baseline 0.2.
+- Frustration: [0, 1], thirty-minute half-life.
+- Curiosity: [0, 1], one-hour half-life.
+- Confidence: [0, 1], four-hour half-life toward neutral 0.5.
+
+Appraisal currently uses explicit textual cues, question/curiosity markers, and lexical overlap with active goal titles. It does not infer sensitive traits or hidden intent. Goal records are plans only; no goal runner, timer, external action, or permission grant is implemented in this phase. Preference proposals require evidence references and remain pending until reviewed.
+
+The current implementation is a foundation, not yet the final acceptance claim. Remaining work includes stronger calibration and repeated-obstacle handling, more complete risk/reversibility appraisal, goal utility/resource-cost ranking, bounded reflection outcomes, memory-salience integration, desktop/CLI integration tests, and full Windows CI verification.
