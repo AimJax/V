@@ -4,8 +4,9 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QLabel
+from PySide6.QtWidgets import QApplication, QLabel, QMessageBox
 from PySide6.QtCore import QEvent, Qt
+from unittest.mock import patch
 
 from v.conversations.store import Conversation
 from v.desktop.service import DesktopSnapshot
@@ -83,6 +84,33 @@ class DesktopWindowTests(unittest.TestCase):
         ]
         self.assertIn("Keep this conversation local.", labels)
         self.assertIn("The model runs locally.", labels)
+
+    def test_delete_chat_requires_confirmation_and_targets_selected_conversation(self):
+        snapshot = self._snapshot()
+        self.window._apply_snapshot(snapshot)
+        self.application.processEvents()
+
+        self.assertTrue(self.window.delete_chat_button.isEnabled())
+        with patch.object(
+            QMessageBox,
+            "question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ) as confirm, patch.object(self.window.runtime, "delete_conversation") as delete:
+            self.window._delete_conversation()
+
+        confirm.assert_called_once()
+        delete.assert_called_once_with(snapshot.conversation.id)
+
+    def test_delete_chat_cancel_does_not_delete_conversation(self):
+        snapshot = self._snapshot()
+        self.window._apply_snapshot(snapshot)
+        with patch.object(
+            QMessageBox,
+            "question",
+            return_value=QMessageBox.StandardButton.No,
+        ), patch.object(self.window.runtime, "delete_conversation") as delete:
+            self.window._delete_conversation()
+        delete.assert_not_called()
 
     def test_sidebar_elides_long_titles_without_horizontal_scrollbar(self):
         title = "How should you explain technical subjects to me?"
