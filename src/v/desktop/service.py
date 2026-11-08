@@ -111,6 +111,7 @@ class DesktopSettingsSnapshot:
     personality: str
     personality_path: str
     voice: dict[str, Any] = field(default_factory=dict)
+    vision: dict[str, Any] = field(default_factory=dict)
 
 
 class DesktopService:
@@ -800,6 +801,7 @@ class DesktopService:
             personality=self.personality,
             personality_path=str(personality_path),
             voice=dict(self.settings.get("voice", {})),
+            vision=dict(self.settings.get("vision", {})),
         )
 
     def save_desktop_settings(
