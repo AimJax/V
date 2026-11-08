@@ -217,7 +217,7 @@ class CognitiveStore:
             )
 
     def get_state(self, *, now: datetime | None = None) -> CognitiveState:
-        with self._connect() as db:
+        with closing(self._connect()) as connection, connection as db:
             row = db.execute("SELECT * FROM cognitive_state WHERE id=1").fetchone()
         state = CognitiveState(
             valence=float(row["valence"]),
@@ -285,7 +285,7 @@ class CognitiveStore:
             confidence=_clamp(confidence),
             updated_at=_timestamp(now),
         )
-        with self._connect() as db:
+        with closing(self._connect()) as connection, connection as db:
             db.execute(
                 """UPDATE cognitive_state SET valence=?,activation=?,frustration=?,
                 curiosity=?,confidence=?,updated_at=? WHERE id=1""",
@@ -342,7 +342,7 @@ class CognitiveStore:
         now = _timestamp()
         item = Goal(uuid.uuid4().hex, title, description[:2000], "active",
                     float(priority), origin, rationale[:1000], now, now)
-        with self._connect() as db:
+        with closing(self._connect()) as connection, connection as db:
             db.execute(
                 """INSERT INTO cognitive_goals VALUES(?,?,?,?,?,?,?,?,?)""",
                 (item.id,item.title,item.description,item.status,item.priority,
@@ -360,14 +360,14 @@ class CognitiveStore:
             params = (status,)
         query += " ORDER BY priority DESC, updated_at DESC LIMIT ?"
         params += (max(1, min(int(limit), 200)),)
-        with self._connect() as db:
+        with closing(self._connect()) as connection, connection as db:
             rows = db.execute(query, params).fetchall()
         return [Goal(**dict(row)) for row in rows]
 
     def update_goal(self, goal_id: str, status: str, *, rationale: str = "") -> Goal:
         if status not in {"active", "deferred", "completed", "abandoned"}:
             raise ValueError("Invalid goal status.")
-        with self._connect() as db:
+        with closing(self._connect()) as connection, connection as db:
             cursor = db.execute(
                 "UPDATE cognitive_goals SET status=?,rationale=?,updated_at=? WHERE id=?",
                 (status,rationale[:1000],_timestamp(),goal_id),
@@ -389,7 +389,7 @@ class CognitiveStore:
         if not math.isfinite(confidence) or not 0 <= confidence <= 1:
             raise ValueError("Confidence must be between 0 and 1.")
         identifier = uuid.uuid4().hex
-        with self._connect() as db:
+        with closing(self._connect()) as connection, connection as db:
             db.execute(
                 """INSERT INTO cognitive_preferences
                 VALUES(?,?, 'pending',?,'observed',?,?,?,NULL)""",
@@ -399,7 +399,7 @@ class CognitiveStore:
         return identifier
 
     def review_preference(self, preference_id: str, *, accept: bool) -> None:
-        with self._connect() as db:
+        with closing(self._connect()) as connection, connection as db:
             cursor = db.execute(
                 """UPDATE cognitive_preferences SET status=?,reviewed_at=?
                 WHERE id=? AND status='pending'""",
@@ -417,7 +417,7 @@ class CognitiveStore:
             query += " WHERE status=?"
             params = (status,)
         query += " ORDER BY created_at DESC LIMIT 100"
-        with self._connect() as db:
+        with closing(self._connect()) as connection, connection as db:
             rows = db.execute(query, params).fetchall()
         return [dict(row) for row in rows]
 
@@ -477,7 +477,7 @@ class CognitiveStore:
         return summary
 
     def recent_events(self, limit: int = 20) -> list[dict[str, Any]]:
-        with self._connect() as db:
+        with closing(self._connect()) as connection, connection as db:
             rows = db.execute(
                 "SELECT * FROM cognitive_events ORDER BY created_at DESC LIMIT ?",
                 (max(1, min(int(limit), 100)),),
