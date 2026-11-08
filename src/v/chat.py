@@ -171,11 +171,14 @@ def build_system_context(
     *,
     identity_context: str | None = None,
     memory_context: str | None = None,
+    cognition_context: str | None = None,
 ) -> str:
     """Compose bounded domain contexts without mixing their persistence."""
     sections = [personality.strip()]
     if identity_context:
         sections.append(identity_context.strip())
+    if cognition_context:
+        sections.append(cognition_context.strip())
     if memory_context:
         sections.append(memory_context.strip())
     return "\n\n".join(section for section in sections if section)
@@ -189,12 +192,14 @@ def _build_messages(
     *,
     memory_context: str | None = None,
     identity_context: str | None = None,
+    cognition_context: str | None = None,
 ) -> list[ChatMessage]:
     """Build one system message plus the selected conversation history."""
     system_content = build_system_context(
         personality,
         identity_context=identity_context,
         memory_context=memory_context,
+        cognition_context=cognition_context,
     )
     return [
         ChatMessage(role="system", content=system_content),
