@@ -10,6 +10,8 @@ import math
 import sqlite3
 import uuid
 
+from contextlib import closing
+
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -135,7 +137,7 @@ class CognitiveStore:
         return connection
 
     def _initialize(self) -> None:
-        with self._connect() as db:
+        with closing(self._connect()) as connection, connection as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS cognitive_meta (
                     key TEXT PRIMARY KEY,
