@@ -1,24 +1,24 @@
-"""Inspect functional cognitive state and manage bounded goals."""
+"""Inspect functional cognitive state and manage goals and preferences."""
 
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QHBoxLayout, QInputDialog, QLabel, QListWidget,
-    QPushButton, QVBoxLayout,
+    QListWidgetItem, QPushButton, QVBoxLayout,
 )
 
 from v.cognition import CognitiveStore
 
 
 class CognitiveManagerDialog(QDialog):
-    """User-facing state inspection and explicit goal controls."""
+    """User-facing state inspection and explicit goal/preference controls."""
 
     def __init__(self, store: CognitiveStore, parent=None) -> None:
         super().__init__(parent)
         self.store = store
         self.setWindowTitle("V — Cognitive state")
-        self.resize(680, 560)
-        self.setMinimumSize(520, 420)
+        self.resize(700, 680)
+        self.setMinimumSize(540, 500)
 
         layout = QVBoxLayout(self)
         heading = QLabel("Functional cognitive state")
@@ -29,40 +29,51 @@ class CognitiveManagerDialog(QDialog):
         ))
         self.state_label = QLabel()
         self.state_label.setWordWrap(True)
-        self.state_label.setTextInteractionFlags(
-            self.state_label.textInteractionFlags()
-        )
         layout.addWidget(self.state_label)
 
-        layout.addWidget(QLabel("Active and deferred goals"))
+        layout.addWidget(QLabel("Goals"))
         self.goals = QListWidget()
         layout.addWidget(self.goals, 1)
-
-        controls = QHBoxLayout()
-        self.add_button = QPushButton("Add goal")
-        self.add_button.clicked.connect(self._add_goal)
-        controls.addWidget(self.add_button)
+        goal_controls = QHBoxLayout()
+        add_goal = QPushButton("Add goal")
+        add_goal.clicked.connect(self._add_goal)
+        goal_controls.addWidget(add_goal)
         self.status_choice = QComboBox()
         for value, label in (
             ("active", "Active"), ("deferred", "Deferred"),
             ("completed", "Completed"), ("abandoned", "Abandoned"),
         ):
             self.status_choice.addItem(label, value)
-        controls.addWidget(self.status_choice)
-        self.update_button = QPushButton("Update selected")
-        self.update_button.clicked.connect(self._update_goal)
-        controls.addWidget(self.update_button)
-        self.refresh_button = QPushButton("Refresh")
-        self.refresh_button.clicked.connect(self.refresh)
-        controls.addWidget(self.refresh_button)
-        layout.addLayout(controls)
+        goal_controls.addWidget(self.status_choice)
+        update_goal = QPushButton("Update selected")
+        update_goal.clicked.connect(self._update_goal)
+        goal_controls.addWidget(update_goal)
+        layout.addLayout(goal_controls)
 
-        close_row = QHBoxLayout()
-        close_row.addStretch(1)
+        layout.addWidget(QLabel("Pending evidence-backed preferences"))
+        self.preferences = QListWidget()
+        layout.addWidget(self.preferences, 1)
+        preference_controls = QHBoxLayout()
+        propose = QPushButton("Propose preference")
+        propose.clicked.connect(self._propose_preference)
+        preference_controls.addWidget(propose)
+        accept = QPushButton("Accept")
+        accept.clicked.connect(lambda: self._review_preference(True))
+        preference_controls.addWidget(accept)
+        reject = QPushButton("Reject")
+        reject.clicked.connect(lambda: self._review_preference(False))
+        preference_controls.addWidget(reject)
+        layout.addLayout(preference_controls)
+
+        footer = QHBoxLayout()
+        refresh = QPushButton("Refresh")
+        refresh.clicked.connect(self.refresh)
+        footer.addWidget(refresh)
+        footer.addStretch(1)
         close = QPushButton("Close")
         close.clicked.connect(self.close)
-        close_row.addWidget(close)
-        layout.addLayout(close_row)
+        footer.addWidget(close)
+        layout.addLayout(footer)
         self.refresh()
 
     def refresh(self) -> None:
@@ -77,11 +88,19 @@ class CognitiveManagerDialog(QDialog):
         )
         self.goals.clear()
         for goal in self.store.list_goals(status="all"):
-            item = f"[{goal.status}] {goal.title} — {goal.origin} ({goal.priority:.2f})"
-            from PySide6.QtWidgets import QListWidgetItem
-            row = QListWidgetItem(item)
+            row = QListWidgetItem(
+                f"[{goal.status}] {goal.title} — {goal.origin} ({goal.priority:.2f})"
+            )
             row.setData(256, goal.id)
             self.goals.addItem(row)
+        self.preferences.clear()
+        for preference in self.store.list_preferences(status="pending"):
+            row = QListWidgetItem(
+                f"{preference['statement']} (confidence {preference['confidence']:.2f})"
+            )
+            row.setData(256, preference["id"])
+            row.setToolTip(preference["rationale"])
+            self.preferences.addItem(row)
 
     def _add_goal(self) -> None:
         title, accepted = QInputDialog.getText(self, "Add goal", "Goal title:")
@@ -108,6 +127,44 @@ class CognitiveManagerDialog(QDialog):
                 rationale="Status changed explicitly by the user.",
             )
         except (KeyError, ValueError) as error:
+            self.state_label.setText(str(error))
+            return
+        self.refresh()
+
+    def _propose_preference(self) -> None:
+        statement, accepted = QInputDialog.getText(
+            self, "Propose preference", "Preference statement:"
+        )
+        if not accepted or not statement.strip():
+            return
+        evidence, accepted = QInputDialog.getText(
+            self, "Preference evidence", "Evidence references (comma-separated):"
+        )
+        if not accepted:
+            return
+        refs = tuple(part.strip() for part in evidence.split(",") if part.strip())
+        confidence, accepted = QInputDialog.getDouble(
+            self, "Preference confidence", "Confidence:", 0.7, 0.0, 1.0, 2
+        )
+        if not accepted:
+            return
+        try:
+            self.store.propose_preference(
+                statement, evidence_refs=refs, confidence=confidence,
+                rationale="Submitted for explicit user review in Cognitive Manager.",
+            )
+        except ValueError as error:
+            self.state_label.setText(str(error))
+            return
+        self.refresh()
+
+    def _review_preference(self, accept: bool) -> None:
+        item = self.preferences.currentItem()
+        if item is None:
+            return
+        try:
+            self.store.review_preference(str(item.data(256)), accept=accept)
+        except KeyError as error:
             self.state_label.setText(str(error))
             return
         self.refresh()
