@@ -370,11 +370,16 @@ class CognitiveStore:
             labels.append("interaction activation is elevated")
         status = "; ".join(labels) if labels else "no strong transient state"
         ranked = (
-            self.rank_goals(query, limit=3)
+            self.rank_goals(query, limit=10)
             if query.strip()
             else [(goal, 0.0) for goal in self.list_goals(status="active", limit=3)]
         )
-        goal_text = "; ".join(goal.title for goal, _score in ranked)
+        selected_goals = (
+            [goal for goal, score in ranked if score >= 0.5][:3]
+            if query.strip()
+            else [goal for goal, _score in ranked[:3]]
+        )
+        goal_text = "; ".join(goal.title for goal in selected_goals)
         result = (
             "Functional cognitive state (computational signals, not subjective feelings): "
             f"valence={state.valence:.2f}, activation={state.activation:.2f}, "
@@ -656,12 +661,22 @@ class CognitiveStore:
         terms = {word for word in context.casefold().split() if len(word) >= 2}
         ranked = []
         for goal in self.list_goals(status="active", limit=200):
-            goal_terms = {word for word in goal.title.casefold().split() if len(word) >= 2}
+            goal_terms = {
+                word for word in re.findall(r"[\\w]+", goal.title.casefold())
+                if len(word) >= 2
+            }
             relevance = (
                 len(terms.intersection(goal_terms)) / len(goal_terms)
                 if goal_terms else 0.0
             )
-            score = _clamp(0.65 * goal.priority + 0.35 * relevance)
+            appraisal = appraise_event(
+                context, active_goal_titles=(goal.title,)
+            )
+            resource_fit = 1.0 - appraisal.resource_cost
+            score = _clamp(
+                0.45 * relevance + 0.30 * goal.priority
+                + 0.15 * appraisal.expected_utility + 0.10 * resource_fit
+            )
             ranked.append((goal, score))
         ranked.sort(key=lambda item: (item[1], item[0].updated_at), reverse=True)
         return ranked[:max(1, min(int(limit), 20))]
