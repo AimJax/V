@@ -158,6 +158,16 @@ class ConversationStore:
 
         return self._to_conversation(row)
 
+    def delete_conversation(self, conversation_id: str) -> bool:
+        """Permanently delete one conversation and its messages."""
+        with closing(self._connect()) as connection:
+            with connection:
+                cursor = connection.execute(
+                    "DELETE FROM conversations WHERE id = ?",
+                    (conversation_id,),
+                )
+                return cursor.rowcount > 0
+
     def get_latest_conversation(self) -> Conversation | None:
         with closing(self._connect()) as connection:
             row = connection.execute(
