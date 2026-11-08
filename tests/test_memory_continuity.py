@@ -271,3 +271,31 @@ def test_commitment_rejects_bad_dates_and_missing_source(continuity):
         continuity.create_commitment("A date without timezone", due_at="2026-11-10T12:00:00")
     with pytest.raises(KeyError):
         continuity.create_commitment("Missing source", source_memory_id="missing")
+
+
+def test_commitment_details_can_be_edited_and_due_date_cleared(continuity):
+    item = continuity.create_commitment(
+        "Initial title",
+        description="Initial description",
+        due_at="2026-11-10T12:00:00+07:00",
+        source_memory_id="m1",
+    )
+    updated = continuity.update_commitment(
+        item["id"],
+        title="Revised title",
+        description="Revised description",
+        due_at=None,
+    )
+    assert updated["title"] == "Revised title"
+    assert updated["description"] == "Revised description"
+    assert updated["due_at"] is None
+    assert updated["source_memory_id"] == "m1"
+    assert updated["state"] == "open"
+
+
+def test_commitment_edit_validation_is_atomic(continuity):
+    item = continuity.create_commitment("Keep original")
+    with pytest.raises(ValueError):
+        continuity.update_commitment(item["id"], title=" " * 2)
+    unchanged = continuity.list_commitments(state="all")[0]
+    assert unchanged["title"] == "Keep original"
