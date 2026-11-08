@@ -93,6 +93,36 @@ class CognitiveStoreTests(unittest.TestCase):
             store.review_preference(identifier, accept=True)
             self.assertEqual(store.list_preferences(status="accepted")[0]["id"], identifier)
 
+    def test_candidate_goal_requires_evidence_and_user_review(self):
+        with temporary_directory() as temp:
+            store = CognitiveStore(Path(temp) / "cognition.sqlite3")
+            with self.assertRaises(ValueError):
+                store.propose_goal(
+                    "Explore a new project",
+                    evidence_refs=("chat:1",),
+                    rationale="Only one ambiguous mention.",
+                )
+            proposal = store.propose_goal(
+                "Explore a new project",
+                evidence_refs=("chat:1", "chat:2"),
+                rationale="Repeated explicit interest.",
+            )
+            self.assertEqual(store.list_goals(status="active"), [])
+            self.assertEqual(store.list_goal_proposals()[0]["status"], "pending")
+            accepted = store.review_goal_proposal(proposal, accept=True)
+            self.assertEqual(accepted.origin, "v_candidate")
+            self.assertEqual(store.list_goals(status="active")[0].id, accepted.id)
+
+    def test_preference_requires_two_distinct_evidence_references(self):
+        with temporary_directory() as temp:
+            store = CognitiveStore(Path(temp) / "cognition.sqlite3")
+            with self.assertRaises(ValueError):
+                store.propose_preference(
+                    "Has a stable preference.",
+                    evidence_refs=("same-source", "same-source"),
+                    confidence=0.8, rationale="Not corroborated.",
+                )
+
     def test_goal_ranking_and_bounded_reflection(self):
         with temporary_directory() as temp:
             store = CognitiveStore(Path(temp) / "cognition.sqlite3")
@@ -116,7 +146,7 @@ class CognitiveStoreTests(unittest.TestCase):
             store = CognitiveStore(Path(temp) / "cognition.sqlite3")
             pending = store.propose_preference(
                 "Prefers direct technical explanations.",
-                evidence_refs=("chat:1",), confidence=0.8, rationale="Observed once.",
+                evidence_refs=("chat:1", "chat:2"), confidence=0.8, rationale="Repeated observation.",
             )
             self.assertNotIn("direct technical explanations", store.render_context())
             store.review_preference(pending, accept=True)
