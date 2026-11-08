@@ -345,6 +345,17 @@ class DesktopService:
             vision_settings=dict(self.settings.get("vision", {})),
         )
 
+    def record_interaction_event(self, event: InteractionEvent) -> None:
+        """Add a runtime lifecycle event without persisting raw media or content."""
+        if (
+            event.conversation_id is not None
+            and self.conversation is not None
+            and event.conversation_id != self.conversation.id
+        ):
+            return
+        self.interaction_events.append(event)
+        del self.interaction_events[:-100]
+
     def new_conversation(self) -> DesktopSnapshot:
         self.interrupt_speech()
         if self.conversation_store is None:
