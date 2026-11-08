@@ -548,6 +548,8 @@ class CognitiveStore:
         ))
         if len(unique_evidence) < 2 or len(unique_evidence) > 20:
             raise ValueError("Durable preference proposals require 2-20 distinct evidence references.")
+        if origin not in {"user_observed", "v_candidate"}:
+            raise ValueError("Unsupported preference origin.")
         if not math.isfinite(confidence) or not 0 <= confidence <= 1:
             raise ValueError("Confidence must be between 0 and 1.")
         identifier = uuid.uuid4().hex
