@@ -86,12 +86,15 @@ class DesktopVoiceTurnTests(unittest.IsolatedAsyncioTestCase):
         result = await service.send_voice_message(b"RIFFfake-wav", on_token)
 
         self.assertEqual(result.transcription, "Please help me test voice.")
+        self.assertEqual(service.interaction_events[-1].modality.value, "audio")
+        self.assertEqual(service.interaction_events[-1].activation_context, "push_to_talk")
+        self.assertEqual(service.interaction_events[-1].content, result.transcription)
         self.assertIsNone(result.audio_wav)
         self.assertIsNone(result.speech_error)
-        service.send_message.assert_awaited_once_with(
-            "Please help me test voice.",
-            on_token,
-        )
+        call = service.send_message.await_args
+        self.assertEqual(call.args, ("Please help me test voice.", on_token))
+        self.assertEqual(call.kwargs["interaction_event"].modality.value, "audio")
+        self.assertEqual(call.kwargs["interaction_event"].activation_context, "push_to_talk")
 
     async def test_speech_starts_queueing_before_chat_generation_finishes(self):
         import asyncio
@@ -168,12 +171,12 @@ class DesktopVoiceTurnTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result.transcription, "Please help me test voice.")
-        service.send_message.assert_awaited_once_with(
-            "Please help me test voice.",
-            on_token,
-            on_audio,
-            on_error,
+        call = service.send_message.await_args
+        self.assertEqual(
+            call.args,
+            ("Please help me test voice.", on_token, on_audio, on_error),
         )
+        self.assertEqual(call.kwargs["interaction_event"].kind.value, "speech_transcript")
 
     async def test_speech_synthesis_receives_cleaned_markdown(self):
         class StreamingVoice:
