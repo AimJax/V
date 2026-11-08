@@ -14,6 +14,7 @@ from v.desktop.settings_store import (
 def valid_changes():
     return {
         "model": "gemma-chat",
+        "vision_model": "",
         "temperature": 0.65,
         "max_tokens": 768,
         "history_messages": 30,
@@ -61,6 +62,16 @@ class DesktopSettingsStoreTests(unittest.TestCase):
         )
         self.assertEqual(normalized["model"], "gemma-chat")
         self.assertEqual(normalized["max_tokens"], 768)
+
+    def test_rejects_unloaded_vision_model(self):
+        changes = valid_changes()
+        changes["vision_model"] = "not-loaded"
+
+        with self.assertRaisesRegex(ValueError, "Vision model.*not loaded"):
+            validate_desktop_settings(
+                changes,
+                available_models=["gemma-chat", "nomic-embed"],
+            )
 
     def test_rejects_unloaded_chat_model(self):
         changes = valid_changes()
@@ -136,6 +147,7 @@ class DesktopSettingsStoreTests(unittest.TestCase):
             self.assertEqual(parsed["llm"]["max_tokens"], 768)
             self.assertEqual(parsed["memory"]["embedding_model"], "nomic-embed")
             self.assertEqual(parsed["voice"]["stt_device"], "cpu")
+            self.assertEqual(parsed["vision"]["model"], "")
             self.assertEqual(
                 parsed["voice"]["whisper_cuda_server_path"],
                 "apps/whisper.cpp/build-cuda/bin/whisper-server.exe",
