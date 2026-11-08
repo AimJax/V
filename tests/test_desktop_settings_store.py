@@ -67,7 +67,7 @@ class DesktopSettingsStoreTests(unittest.TestCase):
         changes = valid_changes()
         changes["vision_model"] = "separate-vision"
 
-        with self.assertRaisesRegex(ValueError, "same as the chat model"):
+        with self.assertRaisesRegex(ValueError, "selected chat model"):
             validate_desktop_settings(
                 changes,
                 available_models=["gemma-chat", "nomic-embed", "separate-vision"],
