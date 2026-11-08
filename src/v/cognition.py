@@ -662,7 +662,7 @@ class CognitiveStore:
         ranked = []
         for goal in self.list_goals(status="active", limit=200):
             goal_terms = {
-                word for word in re.findall(r"[\\w]+", goal.title.casefold())
+                word for word in re.findall(r"[\w]+", goal.title.casefold())
                 if len(word) >= 2
             }
             relevance = (
