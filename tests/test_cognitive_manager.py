@@ -4,6 +4,7 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from support import temporary_directory
@@ -39,6 +40,31 @@ class CognitiveManagerDialogTests(unittest.TestCase):
             self.application.processEvents()
             self.assertEqual(store.list_goal_proposals(status="pending"), [])
             self.assertEqual(store.list_goals(status="active")[0].origin, "v_candidate")
+            dialog.close()
+            dialog.deleteLater()
+            self.application.processEvents()
+
+    def test_empty_sections_explain_that_there_are_no_records(self):
+        with temporary_directory() as temp:
+            dialog = CognitiveManagerDialog(
+                CognitiveStore(Path(temp) / "cognition.sqlite3")
+            )
+            self.assertIn("No goals yet", dialog.goals.item(0).text())
+            self.assertIn("No pending goal candidates", dialog.goal_proposals.item(0).text())
+            self.assertIn("No pending preferences", dialog.preferences.item(0).text())
+            dialog.close()
+            dialog.deleteLater()
+            self.application.processEvents()
+
+    def test_dialog_exposes_native_minimize_maximize_and_close_controls(self):
+        with temporary_directory() as temp:
+            dialog = CognitiveManagerDialog(
+                CognitiveStore(Path(temp) / "cognition.sqlite3")
+            )
+            flags = dialog.windowFlags()
+            self.assertTrue(flags & Qt.WindowType.WindowMinimizeButtonHint)
+            self.assertTrue(flags & Qt.WindowType.WindowMaximizeButtonHint)
+            self.assertTrue(flags & Qt.WindowType.WindowCloseButtonHint)
             dialog.close()
             dialog.deleteLater()
             self.application.processEvents()
