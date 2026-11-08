@@ -637,7 +637,7 @@ class CognitiveStore:
         )
         return [item for _index, item in indexed]
 
-    def memory_salience(self, memory_id: str) -> float:
+    def memory_salience(self, memory_id: str, *, now: datetime | None = None) -> float:
         with closing(self._connect()) as connection, connection as db:
             row = db.execute(
                 "SELECT score,updated_at FROM cognitive_memory_salience WHERE memory_id=?",
@@ -646,7 +646,7 @@ class CognitiveStore:
         if row is None:
             return 0.0
         try:
-            elapsed = max(0.0, (_now() - datetime.fromisoformat(row["updated_at"])).total_seconds())
+            elapsed = max(0.0, ((now or _now()) - datetime.fromisoformat(row["updated_at"])).total_seconds())
         except ValueError:
             elapsed = 0.0
         return _clamp(_decay(float(row["score"]), elapsed, 21600))
