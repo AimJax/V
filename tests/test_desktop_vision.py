@@ -179,6 +179,43 @@ class DesktopVisionTurnTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotIn("A blue mug on a desk.", service.conversation_store.saved[0][1])
 
+    async def test_camera_snapshot_keeps_camera_modality_and_provenance(self):
+        conversation = Conversation(
+            id="c" * 32,
+            title="Camera test",
+            created_at="2026-11-08T00:00:00+00:00",
+            updated_at="2026-11-08T00:00:00+00:00",
+        )
+        service = DesktopService()
+        service.settings = {"vision": {"model": "local-vision-model"}}
+        service.model = "local-vision-model"
+        service.available_models = ["local-vision-model"]
+        service.provider = SimpleNamespace(base_url="http://127.0.0.1:1234/v1")
+        service.conversation = conversation
+        service.vision_provider = FakeVisionProvider()
+        service.cancel_background_model_work = AsyncMock()
+        service.send_message = AsyncMock(
+            return_value=self._turn_result(conversation)
+        )
+
+        await service.send_image_data(
+            b"camera-jpeg-bytes",
+            "image/jpeg",
+            "What is visible?",
+            lambda _token: None,
+            modality=InteractionModality.CAMERA,
+            activation_context="user_camera_capture",
+        )
+
+        call = service.send_message.await_args
+        user_event = call.kwargs["interaction_event"]
+        observation_event = call.kwargs["additional_events"][0]
+        self.assertEqual(user_event.modality, InteractionModality.CAMERA)
+        self.assertEqual(user_event.activation_context, "user_camera_capture")
+        self.assertEqual(observation_event.kind, InteractionEventKind.CAMERA_SNAPSHOT)
+        self.assertEqual(observation_event.modality, InteractionModality.CAMERA)
+        self.assertEqual(observation_event.source_ref, user_event.event_id)
+
     async def test_image_analysis_requires_selected_chat_model_to_protect_vram(self):
         service = DesktopService()
         service.settings = {"vision": {"model": "separate-vision-model"}}
