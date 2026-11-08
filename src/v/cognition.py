@@ -631,7 +631,7 @@ class CognitiveStore:
         indexed = list(enumerate(memories))
         indexed.sort(
             key=lambda pair: (
-                pair[0] - (1.1 if scores.get(pair[1].id, 0.0) >= 0.55 else 0.0),
+                pair[0] - (1.1 if scores.get(pair[1].id, 0.0) >= 0.18 else 0.0),
                 pair[0],
             )
         )
