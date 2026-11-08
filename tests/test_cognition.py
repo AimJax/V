@@ -123,10 +123,14 @@ class CognitiveStoreTests(unittest.TestCase):
         with temporary_directory() as temp:
             path = Path(temp) / "cognition.sqlite3"
             CognitiveStore(path)
-            with sqlite3.connect(path) as db:
-                db.execute(
+            connection = sqlite3.connect(path)
+            try:
+                connection.execute(
                     "UPDATE cognitive_meta SET value='999' WHERE key='schema_version'"
                 )
+                connection.commit()
+            finally:
+                connection.close()
             with self.assertRaisesRegex(RuntimeError, "newer than supported"):
                 CognitiveStore(path)
 
