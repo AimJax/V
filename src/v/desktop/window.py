@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QFileDialog,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
@@ -223,6 +224,7 @@ class DesktopWindow(QMainWindow):
         self._voice_user_bubble: MessageBubble | None = None
         self._voice_pending = False
         self._voice_enabled = False
+        self._vision_enabled = False
         self._speak_replies = False
 
         self.setWindowTitle("V — Local AI Companion")
@@ -404,6 +406,15 @@ class DesktopWindow(QMainWindow):
         )
         self.stop_speech_button.clicked.connect(self._stop_speech)
 
+        self.attach_image_button = QPushButton("Attach image")
+        self.attach_image_button.setFixedHeight(48)
+        self.attach_image_button.setEnabled(False)
+        self.attach_image_button.setToolTip(
+            "Analyze a selected image using the configured local vision model. "
+            "The image is processed in memory and is not saved by V."
+        )
+        self.attach_image_button.clicked.connect(self._attach_image)
+
         self.voice_button = QPushButton("Hold to talk")
         self.voice_button.setFixedHeight(48)
         self.voice_button.setEnabled(False)
@@ -415,6 +426,7 @@ class DesktopWindow(QMainWindow):
 
         composer_row.addWidget(self.message_input, 1)
         composer_row.addWidget(self.stop_speech_button)
+        composer_row.addWidget(self.attach_image_button)
         composer_row.addWidget(self.voice_button)
         composer_row.addWidget(self.send_button)
         layout.addLayout(composer_row)
@@ -471,6 +483,8 @@ class DesktopWindow(QMainWindow):
 
     def _apply_snapshot(self, snapshot: DesktopSnapshot) -> None:
         self._last_snapshot = snapshot
+        self._vision_enabled = bool(snapshot.vision_settings.get("model", ""))
+        self.attach_image_button.setEnabled(self._vision_enabled)
         self._ready = True
 
         self.conversation_title.setText(snapshot.conversation.title)
@@ -807,6 +821,32 @@ class DesktopWindow(QMainWindow):
     def _on_session_changed(self, snapshot: DesktopSnapshot) -> None:
         self._apply_snapshot(snapshot)
 
+    def _attach_image(self) -> None:
+        if not self._ready or self._busy or not self._vision_enabled:
+            return
+        image_path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Select an image for V",
+            "",
+            "Images (*.png *.jpg *.jpeg *.webp)",
+        )
+        if not image_path:
+            return
+
+        self._stop_speech()
+        user_prompt = (
+            "Please analyze the image I uploaded. Describe the visible content, "
+            "answer from what can be seen, and clearly state uncertainty."
+        )
+        self._append_bubble("You", "Image uploaded for local analysis.")
+        self._assistant_bubble = self._append_bubble("V")
+        self._assistant_text = ""
+        self._set_busy(True)
+        self.statusBar().showMessage(
+            "Preparing image in memory and analyzing with the local vision model…"
+        )
+        self.runtime.send_image_turn(image_path, user_prompt)
+
     def _send_message(self) -> None:
         if not self._ready or self._busy:
             return
@@ -1091,6 +1131,9 @@ class DesktopWindow(QMainWindow):
         self.settings_button.setEnabled(self._ready and not busy)
         self.voice_button.setEnabled(
             self._ready and self._voice_enabled and not busy
+        )
+        self.attach_image_button.setEnabled(
+            self._ready and self._vision_enabled and not busy
         )
         self.conversation_list.setEnabled(self._ready and not busy)
 
