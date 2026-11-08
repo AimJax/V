@@ -98,7 +98,7 @@ def appraise_event(
     """Produce a deterministic appraisal from explicit text and known goals."""
     text = f"{user_text} {assistant_text}".casefold()
     user_signal = user_text.casefold()
-    words = set(re.findall(r"[\w]+", text, flags=re.UNICODE))
+    words = set(re.findall(r"[\w]+", user_signal, flags=re.UNICODE))
     obstruction = 1.0 if any(term in user_signal for term in OBSTRUCTION_TERMS) else 0.0
     progress = 1.0 if any(term in user_signal for term in PROGRESS_TERMS) else 0.0
     curiosity = 1.0 if any(term in user_signal for term in CURIOSITY_TERMS) or "?" in user_text else 0.0
