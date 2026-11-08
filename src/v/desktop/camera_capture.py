@@ -28,6 +28,7 @@ class CameraCaptureDialog(QDialog):
     """Capture one still frame only after the user opens and confirms the dialog."""
 
     image_captured = Signal(bytes, object)
+    sensor_state_changed = Signal(bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -85,6 +86,7 @@ class CameraCaptureDialog(QDialog):
         self.camera.start()
 
     def _on_camera_active(self, active: bool) -> None:
+        self.sensor_state_changed.emit(active)
         if active:
             self.status.setText(
                 "CAMERA ACTIVE — preview is local. Press Capture once to send a still image to V."
