@@ -584,6 +584,22 @@ class DesktopRuntimeThread(QThread):
                     self.memory_continuity_failed.emit(str(error))
                 continue
 
+            if command == "memory_commitment_edit":
+                try:
+                    commitment_id, title, description, due_at, memory_id = payload
+                    service.update_memory_commitment(
+                        commitment_id,
+                        title=title,
+                        description=description,
+                        due_at=due_at or None,
+                    )
+                    self.memory_continuity_ready.emit(
+                        service.memory_continuity_snapshot(memory_id)
+                    )
+                except Exception as error:
+                    self.memory_continuity_failed.emit(str(error))
+                continue
+
             if command == "memory_list":
                 try:
                     query, memory_type, provenance = payload
@@ -750,6 +766,19 @@ class DesktopRuntimeThread(QThread):
         self._post(
             "memory_commitment_update",
             (commitment_id, state, memory_id),
+        )
+
+    def edit_memory_commitment(
+        self,
+        commitment_id: str,
+        title: str,
+        description: str,
+        due_at: str,
+        memory_id: str,
+    ) -> None:
+        self._post(
+            "memory_commitment_edit",
+            (commitment_id, title, description, due_at, memory_id),
         )
 
     def list_memories(
