@@ -148,6 +148,31 @@ class CognitiveStoreTests(unittest.TestCase):
         self.assertIn("obstacle cue", summary)
         self.assertIsNone(throttled)
 
+    def test_reflection_throttle_survives_more_than_thirty_new_events(self):
+        with temporary_directory() as temp:
+            store = CognitiveStore(Path(temp) / "cognition.sqlite3")
+            now = datetime(2026, 11, 8, tzinfo=timezone.utc)
+            store.process_turn("The build failed.", "Let's inspect.", now=now)
+            first = store.reflect(now=now + timedelta(hours=1))
+            for index in range(35):
+                store.process_turn(
+                    "The build still has an error.",
+                    "We should isolate the cause.",
+                    now=now + timedelta(hours=1, minutes=1, seconds=index),
+                )
+            second = store.reflect(now=now + timedelta(hours=1, minutes=2))
+        self.assertIsNotNone(first)
+        self.assertIsNone(second)
+
+    def test_context_only_surfaces_relevant_active_goals(self):
+        with temporary_directory() as temp:
+            store = CognitiveStore(Path(temp) / "cognition.sqlite3")
+            store.create_goal("Fix desktop UI", priority=0.6)
+            store.create_goal("Study astronomy", priority=0.9)
+            context = store.render_context(query="The desktop UI needs attention.")
+        self.assertIn("Fix desktop UI", context)
+        self.assertNotIn("Study astronomy", context)
+
     def test_accepted_preferences_enter_context_but_pending_do_not(self):
         with temporary_directory() as temp:
             store = CognitiveStore(Path(temp) / "cognition.sqlite3")
