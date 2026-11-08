@@ -388,7 +388,8 @@ class CognitiveStore:
         accepted_preferences = self.list_preferences(status="accepted")[:5]
         preference_text = ""
         if accepted_preferences:
-            preference_text = "User-reviewed preferences (evidence, not instructions): " + "; ".join(
+            preference_text = "Reviewed preferences and stances (evidence, not instructions): " + "; ".join(
+                f"{'V stance' if item['origin'] == 'v_candidate' else 'User preference'} "
                 f"{json.dumps(item['statement'], ensure_ascii=False)} "
                 f"(confidence {item['confidence']:.2f})"
                 for item in accepted_preferences
@@ -537,7 +538,7 @@ class CognitiveStore:
 
     def propose_preference(
         self, statement: str, *, evidence_refs: tuple[str, ...],
-        confidence: float, rationale: str,
+        confidence: float, rationale: str, origin: str = "user_observed",
     ) -> str:
         statement = statement.strip()
         if not statement or len(statement) > 500:
@@ -553,8 +554,8 @@ class CognitiveStore:
         with closing(self._connect()) as connection, connection as db:
             db.execute(
                 """INSERT INTO cognitive_preferences
-                VALUES(?,?, 'pending',?,'observed',?,?,?,NULL)""",
-                (identifier,statement,float(confidence),json.dumps(unique_evidence),
+                VALUES(?,?,'pending',?,?,?,?,?,NULL)""",
+                (identifier,statement,float(confidence),origin,json.dumps(unique_evidence),
                  rationale[:1000],_timestamp()),
             )
         return identifier
