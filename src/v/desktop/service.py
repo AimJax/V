@@ -404,6 +404,7 @@ class DesktopService:
         )
 
         memory_context = None
+        salient_memory_ids: tuple[str, ...] = ()
         if self.memory_store is not None and self.settings.get(
             "memory", {}
         ).get("retrieval_enabled", True):
@@ -419,6 +420,9 @@ class DesktopService:
                         retrieval_query,
                         limit=self.retrieval_limit,
                     )
+                if self.cognitive_store is not None:
+                    memories = self.cognitive_store.prioritize_memories(memories)
+                    salient_memory_ids = tuple(memory.id for memory in memories)
                 derivation_sources = {}
                 temporal_records = {}
                 if self.continuity_store is not None:
@@ -519,6 +523,7 @@ class DesktopService:
                 user_text,
                 response,
                 conversation_id=self.conversation.id,
+                salient_memory_ids=salient_memory_ids,
             )
             self.cognitive_store.reflect()
 
