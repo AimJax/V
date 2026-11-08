@@ -114,7 +114,7 @@ class CognitiveManagerDialog(QDialog):
                 f"{proposal['title']} (priority {proposal['priority']:.2f})"
             )
             row.setData(256, proposal["id"])
-            row.setToolTip(proposal["rationale"])
+            row.setToolTip(\n                proposal["rationale"] + "\\nEvidence: " + ", ".join(\n                    __import__("json").loads(proposal["evidence_refs_json"])\n                )\n            )
             self.goal_proposals.addItem(row)
         self.preferences.clear()
         for preference in self.store.list_preferences(status="pending"):
@@ -122,7 +122,7 @@ class CognitiveManagerDialog(QDialog):
                 f"{preference['statement']} (confidence {preference['confidence']:.2f})"
             )
             row.setData(256, preference["id"])
-            row.setToolTip(preference["rationale"])
+            row.setToolTip(\n                preference["rationale"] + "\\nEvidence: " + ", ".join(\n                    __import__("json").loads(preference["evidence_refs_json"])\n                )\n            )
             self.preferences.addItem(row)
 
     def _add_goal(self) -> None:
