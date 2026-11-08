@@ -89,6 +89,7 @@ class SpeechPlayback(QObject):
     ) -> None:
         if (
             state == QMediaPlayer.PlaybackState.PlayingState
+            and self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
             and not self._playback_session_active
         ):
             self._playback_session_active = True
