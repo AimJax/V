@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QHBoxLayout, QInputDialog, QLabel, QListWidget,
     QListWidgetItem, QPushButton, QVBoxLayout,
@@ -19,6 +20,12 @@ class CognitiveManagerDialog(QDialog):
         super().__init__(parent)
         self.store = store
         self.setWindowTitle("V — Cognitive state")
+        self.setWindowFlags(
+            self.windowFlags()
+            | Qt.WindowType.WindowMinimizeButtonHint
+            | Qt.WindowType.WindowMaximizeButtonHint
+            | Qt.WindowType.WindowCloseButtonHint
+        )
         self.resize(780, 820)
         self.setMinimumSize(620, 640)
 
@@ -110,6 +117,8 @@ class CognitiveManagerDialog(QDialog):
             )
             row.setData(256, goal.id)
             self.goals.addItem(row)
+        if self.goals.count() == 0:
+            self._add_empty_state(self.goals, "No goals yet. Add a goal to track it here.")
         self.goal_proposals.clear()
         for proposal in self.store.list_goal_proposals(status="pending"):
             row = QListWidgetItem(
@@ -122,6 +131,10 @@ class CognitiveManagerDialog(QDialog):
                 )
             )
             self.goal_proposals.addItem(row)
+        if self.goal_proposals.count() == 0:
+            self._add_empty_state(
+                self.goal_proposals, "No pending goal candidates."
+            )
         self.preferences.clear()
         for preference in self.store.list_preferences(status="pending"):
             origin_label = (
@@ -139,6 +152,16 @@ class CognitiveManagerDialog(QDialog):
                 )
             )
             self.preferences.addItem(row)
+        if self.preferences.count() == 0:
+            self._add_empty_state(
+                self.preferences, "No pending preferences or V stance candidates."
+            )
+
+    @staticmethod
+    def _add_empty_state(widget: QListWidget, message: str) -> None:
+        item = QListWidgetItem(message)
+        item.setFlags(Qt.ItemFlag.NoItemFlags)
+        widget.addItem(item)
 
     def _add_goal(self) -> None:
         title, accepted = QInputDialog.getText(self, "Add goal", "Goal title:")
