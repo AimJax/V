@@ -426,7 +426,7 @@ class CognitiveStore:
         terms = {word for word in context.casefold().split() if len(word) >= 2}
         ranked = []
         for goal in self.list_goals(status="active", limit=200):
-            goal_terms = {word for word in goal.title.casefold().split() if len(word) > 2}
+            goal_terms = {word for word in goal.title.casefold().split() if len(word) >= 2}
             relevance = (
                 len(terms.intersection(goal_terms)) / len(goal_terms)
                 if goal_terms else 0.0
