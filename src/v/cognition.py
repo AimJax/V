@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import sqlite3
 import uuid
 
@@ -96,19 +97,30 @@ def appraise_event(
 ) -> Appraisal:
     """Produce a deterministic appraisal from explicit text and known goals."""
     text = f"{user_text} {assistant_text}".casefold()
-    words = set(text.split())
-    obstruction = 1.0 if any(term in text for term in OBSTRUCTION_TERMS) else 0.0
-    progress = 1.0 if any(term in text for term in PROGRESS_TERMS) else 0.0
-    curiosity = 1.0 if any(term in text for term in CURIOSITY_TERMS) or "?" in user_text else 0.0
+    user_signal = user_text.casefold()
+    words = set(re.findall(r"[\\w]+", text, flags=re.UNICODE))
+    obstruction = 1.0 if any(term in user_signal for term in OBSTRUCTION_TERMS) else 0.0
+    progress = 1.0 if any(term in user_signal for term in PROGRESS_TERMS) else 0.0
+    curiosity = 1.0 if any(term in user_signal for term in CURIOSITY_TERMS) or "?" in user_text else 0.0
     relevance = 0.0
     for title in active_goal_titles:
         tokens = {part for part in title.casefold().split() if len(part) > 2}
         if tokens and tokens.intersection(words):
             relevance = max(relevance, len(tokens.intersection(words)) / len(tokens))
-    risk_terms = {"dangerous", "unsafe", "delete", "erase", "send", "publish", "purchase", "install", "execute"}
-    irreversible_terms = {"delete", "erase", "publish", "send", "purchase", "overwrite"}
-    risk = 0.75 if any(term in text for term in risk_terms) else 0.1
-    reversibility = 0.25 if any(term in text for term in irreversible_terms) else 0.85
+    action_pattern = re.compile(
+        r"\\b(?:please\\s+)?(?:delete|erase|publish|send|purchase|buy|install|execute|overwrite)"
+        r"\\s+(?:the|my|this|that|all|a|an)?\\s*"
+        r"(?:file|files|data|message|email|post|software|package|command|record|account)?\\b"
+    )
+    irreversible_pattern = re.compile(
+        r"\\b(?:delete|erase|publish|purchase|buy|overwrite)\\s+"
+        r"(?:the|my|this|that|all|a|an)?\\s*"
+        r"(?:file|files|data|message|email|post|software|package|record|account)?\\b"
+    )
+    risk = 0.8 if action_pattern.search(user_signal) else (
+        0.55 if any(term in user_signal for term in ("dangerous", "unsafe")) else 0.05
+    )
+    reversibility = 0.2 if irreversible_pattern.search(user_signal) else 0.85
     resource_cost = _clamp(0.05 + len((user_text + assistant_text).split()) / 1000)
     expected_utility = _clamp(
         0.35 * relevance + 0.25 * curiosity + 0.25 * progress
@@ -130,7 +142,12 @@ def appraise_event(
         novelty=_clamp(0.35 if curiosity else 0.1),
         obstruction=obstruction,
         progress=progress,
-        uncertainty=_clamp(0.65 if len(user_text.split()) < 4 else 0.35),
+        uncertainty=_clamp(
+            0.75 if any(marker in user_signal for marker in (
+                "maybe", "not sure", "uncertain", "i guess", "probably",
+                "might be", "could be",
+            )) else 0.55 if len(user_text.split()) < 4 else 0.25
+        ),
         risk=risk,
         reversibility=reversibility,
         resource_cost=resource_cost,
@@ -267,8 +284,9 @@ class CognitiveStore:
         )
         previous = self.get_state(now=now)
         combined = f"{user_text} {assistant_text}".casefold()
-        positive = any(term in combined for term in POSITIVE_TERMS)
-        negative = any(term in combined for term in NEGATIVE_TERMS)
+        user_signal = user_text.casefold()
+        positive = any(term in user_signal for term in POSITIVE_TERMS)
+        negative = any(term in user_signal for term in NEGATIVE_TERMS)
         valence = previous.valence * 0.75
         if appraisal.progress:
             valence += 0.18
@@ -423,8 +441,11 @@ class CognitiveStore:
         statement = statement.strip()
         if not statement or len(statement) > 500:
             raise ValueError("Preference statement must contain 1-500 characters.")
-        if not evidence_refs or len(evidence_refs) > 20:
-            raise ValueError("Durable preference proposals require 1-20 evidence references.")
+        unique_evidence = tuple(dict.fromkeys(
+            ref.strip() for ref in evidence_refs if isinstance(ref, str) and ref.strip()
+        ))
+        if len(unique_evidence) < 2 or len(unique_evidence) > 20:
+            raise ValueError("Durable preference proposals require 2-20 distinct evidence references.")
         if not math.isfinite(confidence) or not 0 <= confidence <= 1:
             raise ValueError("Confidence must be between 0 and 1.")
         identifier = uuid.uuid4().hex
@@ -432,7 +453,7 @@ class CognitiveStore:
             db.execute(
                 """INSERT INTO cognitive_preferences
                 VALUES(?,?, 'pending',?,'observed',?,?,?,NULL)""",
-                (identifier,statement,float(confidence),json.dumps(evidence_refs),
+                (identifier,statement,float(confidence),json.dumps(unique_evidence),
                  rationale[:1000],_timestamp()),
             )
         return identifier
