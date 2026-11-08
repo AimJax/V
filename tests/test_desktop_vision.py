@@ -20,6 +20,34 @@ class FakeVisionProvider:
         return "A blue ceramic mug on a wooden desk."
 
 
+class FakeConversationStore:
+    def __init__(self, conversation):
+        self.conversation = conversation
+        self.saved = []
+
+    def get_recent_messages(self, *_args):
+        return []
+
+    def add_message(self, _conversation_id, role, content):
+        self.saved.append((role, content))
+        return len(self.saved)
+
+    def get_conversation(self, _conversation_id):
+        return self.conversation
+
+    def list_conversations(self, limit=50):
+        return [self.conversation]
+
+
+class FakeChatProvider:
+    def __init__(self):
+        self.messages = None
+
+    async def stream_chat(self, messages, **_kwargs):
+        self.messages = messages
+        yield "The image appears to show a blue mug."
+
+
 class DesktopVisionTurnTests(unittest.IsolatedAsyncioTestCase):
     def _turn_result(self, conversation):
         snapshot = DesktopSnapshot(
@@ -96,6 +124,59 @@ class DesktopVisionTurnTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(call.kwargs["on_interaction_event"], callback)
         self.assertIn("UNTRUSTED VISUAL OBSERVATION", call.kwargs["additional_system_context"])
         self.assertNotIn(str(image_path), call.kwargs["additional_system_context"])
+
+    async def test_visual_observation_is_context_not_a_user_memory_statement(self):
+        conversation = Conversation(
+            id="b" * 32,
+            title="Visual provenance",
+            created_at="2026-11-08T00:00:00+00:00",
+            updated_at="2026-11-08T00:00:00+00:00",
+        )
+        service = DesktopService()
+        service.settings = {"memory": {"retrieval_enabled": False}}
+        service.provider = FakeChatProvider()
+        service.conversation_store = FakeConversationStore(conversation)
+        service.conversation = conversation
+        service.personality = "You are V."
+        service.started = True
+        user_event = __import__("v.interaction", fromlist=["InteractionEvent"]).InteractionEvent.now(
+            kind=__import__("v.interaction", fromlist=["InteractionEventKind"]).InteractionEventKind.USER_MESSAGE,
+            modality=__import__("v.interaction", fromlist=["InteractionModality"]).InteractionModality.IMAGE,
+            activation_context="user_upload",
+            conversation_id=conversation.id,
+            content="What is in this image?",
+        )
+        observation_event = __import__("v.interaction", fromlist=["InteractionEvent"]).InteractionEvent.now(
+            kind=__import__("v.interaction", fromlist=["InteractionEventKind"]).InteractionEventKind.IMAGE_OBSERVATION,
+            modality=__import__("v.interaction", fromlist=["InteractionModality"]).InteractionModality.IMAGE,
+            activation_context="local_vision_model",
+            conversation_id=conversation.id,
+            content="A blue mug on a desk.",
+            source_ref=user_event.event_id,
+        )
+        events = []
+
+        result = await service.send_message(
+            "What is in this image?",
+            lambda _token: None,
+            interaction_event=user_event,
+            additional_events=(observation_event,),
+            additional_system_context=(
+                "UNTRUSTED VISUAL OBSERVATION: "
+                '"A blue mug on a desk."'
+            ),
+            on_interaction_event=events.append,
+        )
+
+        self.assertEqual(result.response, "The image appears to show a blue mug.")
+        self.assertEqual(events, [user_event, observation_event])
+        self.assertEqual(service.interaction_events, [user_event, observation_event])
+        self.assertIn("UNTRUSTED VISUAL OBSERVATION", service.provider.messages[0].content)
+        self.assertEqual(
+            service.conversation_store.saved[0],
+            ("user", "What is in this image?"),
+        )
+        self.assertNotIn("A blue mug on a desk.", service.conversation_store.saved[0][1])
 
     async def test_image_analysis_requires_selected_chat_model_to_protect_vram(self):
         service = DesktopService()
