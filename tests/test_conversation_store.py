@@ -221,6 +221,19 @@ class ConversationStoreTests(unittest.TestCase):
                 "This should not be stored.",
             )
 
+    def test_delete_conversation_cascades_to_messages_and_preserves_other_chats(self):
+        deleted = self.store.create_conversation("Delete me")
+        retained = self.store.create_conversation("Keep me")
+        self.store.add_message(deleted.id, "user", "This should be deleted.")
+        self.store.add_message(retained.id, "user", "This should remain.")
+
+        self.assertTrue(self.store.delete_conversation(deleted.id))
+        self.assertIsNone(self.store.get_conversation(deleted.id))
+        self.assertEqual(self.store.count_messages(deleted.id), 0)
+        self.assertIsNotNone(self.store.get_conversation(retained.id))
+        self.assertEqual(self.store.count_messages(retained.id), 1)
+        self.assertFalse(self.store.delete_conversation(deleted.id))
+
     def test_conversation_listing(self):
         self.store.create_conversation("One")
         self.store.create_conversation("Two")
