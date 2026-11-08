@@ -63,6 +63,16 @@ class DesktopSettingsStoreTests(unittest.TestCase):
         self.assertEqual(normalized["model"], "gemma-chat")
         self.assertEqual(normalized["max_tokens"], 768)
 
+    def test_rejects_separate_vision_model_to_protect_vram(self):
+        changes = valid_changes()
+        changes["vision_model"] = "separate-vision"
+
+        with self.assertRaisesRegex(ValueError, "same as the chat model"):
+            validate_desktop_settings(
+                changes,
+                available_models=["gemma-chat", "nomic-embed", "separate-vision"],
+            )
+
     def test_rejects_unloaded_vision_model(self):
         changes = valid_changes()
         changes["vision_model"] = "not-loaded"
