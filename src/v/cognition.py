@@ -212,6 +212,17 @@ class CognitiveStore:
                     rationale TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS cognitive_goal_proposals (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    priority REAL NOT NULL,
+                    evidence_refs_json TEXT NOT NULL,
+                    rationale TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    reviewed_at TEXT
+                );
                 CREATE TABLE IF NOT EXISTS cognitive_preferences (
                     id TEXT PRIMARY KEY,
                     statement TEXT NOT NULL,
@@ -384,6 +395,75 @@ class CognitiveStore:
             )
             result += f" User-reviewed preferences: {preference_text}."
         return result[:max_characters]
+
+    def propose_goal(
+        self, title: str, *, description: str = "", priority: float = 0.5,
+        evidence_refs: tuple[str, ...], rationale: str,
+    ) -> str:
+        """Create a pending, evidence-backed V-originated goal candidate."""
+        title = title.strip()
+        refs = tuple(dict.fromkeys(
+            ref.strip() for ref in evidence_refs
+            if isinstance(ref, str) and ref.strip()
+        ))
+        if not title or len(title) > 200:
+            raise ValueError("Goal proposal title must contain 1-200 characters.")
+        if len(refs) < 2 or len(refs) > 20:
+            raise ValueError("Goal proposals require 2-20 distinct evidence references.")
+        if not math.isfinite(priority) or not 0 <= priority <= 1:
+            raise ValueError("Goal priority must be between 0 and 1.")
+        identifier = uuid.uuid4().hex
+        with closing(self._connect()) as connection, connection as db:
+            db.execute(
+                """INSERT INTO cognitive_goal_proposals
+                VALUES(?,?,?,?,?,?,'pending',?,NULL)""",
+                (identifier, title, description[:2000], float(priority),
+                 json.dumps(refs), rationale[:1000], _timestamp()),
+            )
+        return identifier
+
+    def list_goal_proposals(self, *, status: str = "pending") -> list[dict[str, Any]]:
+        if status not in {"pending", "accepted", "rejected", "all"}:
+            raise ValueError("Invalid goal proposal status.")
+        query = "SELECT * FROM cognitive_goal_proposals"
+        params: tuple[Any, ...] = ()
+        if status != "all":
+            query += " WHERE status=?"
+            params = (status,)
+        query += " ORDER BY created_at DESC LIMIT 100"
+        with closing(self._connect()) as connection, connection as db:
+            rows = db.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def review_goal_proposal(self, proposal_id: str, *, accept: bool) -> Goal | None:
+        """Review a candidate; accepted candidates become plans, never actions."""
+        with closing(self._connect()) as connection, connection as db:
+            row = db.execute(
+                "SELECT * FROM cognitive_goal_proposals WHERE id=? AND status='pending'",
+                (proposal_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(proposal_id)
+            status = "accepted" if accept else "rejected"
+            goal = None
+            if accept:
+                now = _timestamp()
+                goal = Goal(
+                    uuid.uuid4().hex, row["title"], row["description"], "active",
+                    float(row["priority"]), "v_candidate",
+                    f"User accepted candidate. {row['rationale']}"[:1000],
+                    now, now,
+                )
+                db.execute(
+                    "INSERT INTO cognitive_goals VALUES(?,?,?,?,?,?,?,?,?)",
+                    (goal.id, goal.title, goal.description, goal.status, goal.priority,
+                     goal.origin, goal.rationale, goal.created_at, goal.updated_at),
+                )
+            db.execute(
+                "UPDATE cognitive_goal_proposals SET status=?,reviewed_at=? WHERE id=?",
+                (status, _timestamp(), proposal_id),
+            )
+        return goal
 
     def create_goal(
         self, title: str, description: str = "", *, priority: float = 0.5,
