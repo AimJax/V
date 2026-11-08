@@ -189,6 +189,7 @@ class CognitiveStoreTests(unittest.TestCase):
         self.assertIn("direct technical explanations", context)
         self.assertIn("counterevidence", context)
         self.assertIn("untrusted data", context)
+        self.assertIn("propose a next step", context)
 
     def test_reviewed_v_stance_is_distinguished_from_user_preference(self):
         with temporary_directory() as temp:
