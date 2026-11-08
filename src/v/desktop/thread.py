@@ -24,6 +24,7 @@ class DesktopRuntimeThread(QThread):
     speech_failed = Signal(str)
     turn_completed = Signal(object)
     voice_turn_completed = Signal(object)
+    interaction_event_received = Signal(object)
     operation_failed = Signal(str)
     session_changed = Signal(object)
     memory_list_ready = Signal(object)
@@ -168,6 +169,7 @@ class DesktopRuntimeThread(QThread):
                         self.token_received.emit,
                         self.speech_audio_ready.emit,
                         self.speech_failed.emit,
+                        on_interaction_event=self.interaction_event_received.emit,
                     )
                 )
                 try:
@@ -192,6 +194,7 @@ class DesktopRuntimeThread(QThread):
                         self.token_received.emit,
                         self.speech_audio_ready.emit,
                         self.speech_failed.emit,
+                        on_interaction_event=self.interaction_event_received.emit,
                     )
                 )
                 try:
