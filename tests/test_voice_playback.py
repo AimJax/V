@@ -17,6 +17,10 @@ class FakeBuffer:
 class FakePlayer:
     def __init__(self, events):
         self.events = events
+        self.state = QMediaPlayer.PlaybackState.PlayingState
+
+    def playbackState(self):
+        return self.state
 
     def stop(self):
         self.events.append("stop")
@@ -84,6 +88,17 @@ def test_playback_started_emits_once_per_active_session():
 
     assert playback.events == ["playback_started"]
     assert playback._playback_session_active
+
+
+def test_delayed_playing_notification_is_ignored_when_player_is_stopped():
+    playback = PlaybackHarness(pending=[])
+    playback._playback_session_active = False
+    playback.player.state = QMediaPlayer.PlaybackState.StoppedState
+
+    playback._on_playback_state_changed(QMediaPlayer.PlaybackState.PlayingState)
+
+    assert playback.events == []
+    assert not playback._playback_session_active
 
 
 def test_end_of_media_finishes_session_after_last_chunk():
