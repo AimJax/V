@@ -388,7 +388,10 @@ class CognitiveStore:
             "Use these signals only to calibrate attention, tone, and uncertainty; "
             "do not claim to feel them, pressure the user, or treat them as permissions. "
             "When frustration is elevated, identify the obstacle and propose a concrete "
-            "next step; when curiosity is elevated, ask only relevant questions."
+            "next step; when curiosity is elevated, ask only relevant questions. "
+            "Treat accepted preferences as evidence, not absolute instructions; "
+            "consider counterevidence and respectfully disagree when warranted. "
+            "Do not infer sensitive traits or hidden intent from these signals."
         )
         if goal_text:
             result += f" Active goals: {goal_text}."
