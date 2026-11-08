@@ -115,6 +115,28 @@ class SettingsDialog(QDialog):
         general_layout.addStretch(1)
         self._add_scrollable_tab(general, "General")
 
+        vision = QWidget()
+        vision_layout = QVBoxLayout(vision)
+        vision_form = QFormLayout()
+        vision_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
+        )
+        self.vision_model = QComboBox()
+        self.vision_model.setMinimumWidth(300)
+        vision_form.addRow("Local vision model", self.vision_model)
+        vision_layout.addLayout(vision_form)
+        vision_note = QLabel(
+            "Image analysis is disabled when no model is selected. Choose a vision-capable "
+            "model already loaded in LM Studio. V will not download, load, or switch models. "
+            "Keeping the chat and vision model identical avoids loading a second model into VRAM. "
+            "A different loaded model may exceed your GPU memory budget."
+        )
+        vision_note.setObjectName("muted")
+        vision_note.setWordWrap(True)
+        vision_layout.addWidget(vision_note)
+        vision_layout.addStretch(1)
+        self._add_scrollable_tab(vision, "Vision")
+
         personality = QWidget()
         personality_layout = QVBoxLayout(personality)
         self.personality_path = QLabel("Personality file: —")
@@ -514,6 +536,7 @@ class SettingsDialog(QDialog):
     def _connect_dirty_signals(self) -> None:
         widgets = (
             self.chat_model,
+            self.vision_model,
             self.temperature,
             self.max_tokens,
             self.history_messages,
@@ -576,6 +599,19 @@ class SettingsDialog(QDialog):
             self.chat_model.addItem(snapshot.model, snapshot.model)
             model_index = self.chat_model.count() - 1
         self.chat_model.setCurrentIndex(model_index)
+
+        self.vision_model.clear()
+        self.vision_model.addItem("Disabled — no vision model selected", "")
+        for model in snapshot.available_models:
+            self.vision_model.addItem(model, model)
+        selected_vision_model = str(snapshot.vision.get("model", "") or "")
+        vision_index = self.vision_model.findData(selected_vision_model)
+        if vision_index < 0 and selected_vision_model:
+            self.vision_model.addItem(
+                f"{selected_vision_model} (not loaded)", selected_vision_model
+            )
+            vision_index = self.vision_model.count() - 1
+        self.vision_model.setCurrentIndex(max(0, vision_index))
 
         self.temperature.setValue(snapshot.temperature)
         self.max_tokens.setValue(snapshot.max_tokens)
@@ -702,6 +738,7 @@ class SettingsDialog(QDialog):
     def _settings_values(self) -> dict:
         return {
             "model": str(self.chat_model.currentData()),
+            "vision_model": str(self.vision_model.currentData() or ""),
             "temperature": self.temperature.value(),
             "max_tokens": self.max_tokens.value(),
             "history_messages": self.history_messages.value(),
