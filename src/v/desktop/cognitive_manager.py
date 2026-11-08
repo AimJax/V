@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QHBoxLayout, QInputDialog, QLabel, QListWidget,
     QListWidgetItem, QPushButton, QVBoxLayout,
@@ -114,7 +116,7 @@ class CognitiveManagerDialog(QDialog):
                 f"{proposal['title']} (priority {proposal['priority']:.2f})"
             )
             row.setData(256, proposal["id"])
-            row.setToolTip(\n                proposal["rationale"] + "\\nEvidence: " + ", ".join(\n                    __import__("json").loads(proposal["evidence_refs_json"])\n                )\n            )
+            row.setToolTip(\n                proposal["rationale"] + "\\nEvidence: " + ", ".join(\n                    json.loads(proposal["evidence_refs_json"])\n                )\n            )
             self.goal_proposals.addItem(row)
         self.preferences.clear()
         for preference in self.store.list_preferences(status="pending"):
