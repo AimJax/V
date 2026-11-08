@@ -181,6 +181,9 @@ class DesktopWindowTests(unittest.TestCase):
             def stop(self):
                 self.stopped = True
 
+            def close(self):
+                return None
+
         self.window._speech_player = FakePlayer()
         self.window.stop_speech_button.setEnabled(True)
 
