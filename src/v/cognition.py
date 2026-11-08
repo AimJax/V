@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DIMENSIONS = ("valence", "activation", "frustration", "curiosity", "confidence")
 OBSTRUCTION_TERMS = {
     "failed", "failure", "broken", "stuck", "error", "blocked", "doesn't work",
@@ -188,6 +188,13 @@ class CognitiveStore:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS cognitive_memory_salience (
+                    memory_id TEXT PRIMARY KEY,
+                    score REAL NOT NULL CHECK(score >= 0 AND score <= 1),
+                    hits INTEGER NOT NULL DEFAULT 1,
+                    rationale TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS cognitive_preferences (
                     id TEXT PRIMARY KEY,
                     statement TEXT NOT NULL,
@@ -248,6 +255,7 @@ class CognitiveStore:
         assistant_text: str,
         *,
         conversation_id: str | None = None,
+        salient_memory_ids: tuple[str, ...] = (),
         now: datetime | None = None,
     ) -> tuple[Appraisal, CognitiveState]:
         """Apply a bounded state transition and persist its explainable event."""
@@ -272,11 +280,29 @@ class CognitiveStore:
             valence -= 0.08
         activation = 0.2 + (previous.activation - 0.2) * 0.55
         activation += 0.18 * max(appraisal.obstruction, appraisal.progress, appraisal.novelty)
-        frustration = previous.frustration * 0.65 + appraisal.obstruction * 0.25
+        recent_events = self.recent_events(limit=12)
+        recent_obstacles = sum(
+            1 for event in recent_events
+            if event["event_type"] == "conversation_turn"
+            and bool(json.loads(event["appraisal_json"]).get("obstruction"))
+        )
+        repeated_pressure = min(0.12, max(0, recent_obstacles - 1) * 0.03)
+        frustration = (
+            previous.frustration * 0.65
+            + appraisal.obstruction * (0.20 + repeated_pressure)
+        )
         if appraisal.progress:
             frustration *= 0.55
         curiosity = previous.curiosity * 0.65 + appraisal.novelty * 0.25
-        confidence = previous.confidence * 0.8 + (0.65 if assistant_text.strip() else 0.5) * 0.2
+        assistant_uncertainty = any(
+            marker in assistant_text.casefold()
+            for marker in ("i am not sure", "i'm not sure", "uncertain", "i cannot verify", "i don't know")
+        )
+        confidence_target = (
+            0.42 if assistant_uncertainty else
+            0.58 if appraisal.uncertainty >= 0.6 else 0.62
+        )
+        confidence = previous.confidence * 0.8 + confidence_target * 0.2
         state = CognitiveState(
             valence=_clamp(valence, -1.0, 1.0),
             activation=_clamp(activation),
@@ -299,6 +325,8 @@ class CognitiveStore:
                 (uuid.uuid4().hex,conversation_id,"conversation_turn",
                  json.dumps(asdict(appraisal)),json.dumps(asdict(state)),state.updated_at),
             )
+        if salient_memory_ids:
+            self.record_memory_salience(salient_memory_ids, appraisal, now=now)
         return appraisal, state
 
     def render_context(self, *, max_characters: int = 700, query: str = "") -> str:
@@ -330,6 +358,13 @@ class CognitiveStore:
         )
         if goal_text:
             result += f" Active goals: {goal_text}."
+        accepted_preferences = self.list_preferences(status="accepted")[:5]
+        if accepted_preferences:
+            preference_text = "; ".join(
+                f"{item['statement']} (confidence {item['confidence']:.2f})"
+                for item in accepted_preferences
+            )
+            result += f" User-reviewed preferences: {preference_text}."
         return result[:max_characters]
 
     def create_goal(
@@ -424,6 +459,96 @@ class CognitiveStore:
         with closing(self._connect()) as connection, connection as db:
             rows = db.execute(query, params).fetchall()
         return [dict(row) for row in rows]
+
+    def record_memory_salience(
+        self, memory_ids: tuple[str, ...] | list[str], appraisal: Appraisal,
+        *, now: datetime | None = None,
+    ) -> None:
+        """Persist bounded attention salience without changing source memories."""
+        current = _timestamp(now)
+        increment = _clamp(
+            0.04 + 0.10 * appraisal.relevance
+            + 0.08 * appraisal.novelty + 0.06 * appraisal.progress
+        )
+        rationale = "; ".join(appraisal.rationale)[:500]
+        unique_ids = tuple(dict.fromkeys(
+            item.strip() for item in memory_ids if isinstance(item, str) and item.strip()
+        ))[:50]
+        if not unique_ids:
+            return
+        with closing(self._connect()) as connection, connection as db:
+            for memory_id in unique_ids:
+                row = db.execute(
+                    "SELECT score,hits,updated_at FROM cognitive_memory_salience WHERE memory_id=?",
+                    (memory_id,),
+                ).fetchone()
+                previous = 0.0
+                hits = 0
+                if row is not None:
+                    try:
+                        elapsed = max(
+                            0.0,
+                            (datetime.fromisoformat(current)
+                             - datetime.fromisoformat(row["updated_at"])).total_seconds(),
+                        )
+                    except ValueError:
+                        elapsed = 0.0
+                    previous = _decay(float(row["score"]), elapsed, 21600)
+                    hits = int(row["hits"])
+                db.execute(
+                    """INSERT INTO cognitive_memory_salience
+                    (memory_id,score,hits,rationale,updated_at) VALUES(?,?,?,?,?)
+                    ON CONFLICT(memory_id) DO UPDATE SET
+                    score=excluded.score,hits=excluded.hits,
+                    rationale=excluded.rationale,updated_at=excluded.updated_at""",
+                    (memory_id, _clamp(previous + increment), hits + 1, rationale, current),
+                )
+
+    def prioritize_memories(self, memories: list[Any]) -> list[Any]:
+        """Apply a small salience tie-break while preserving retrieval relevance."""
+        if len(memories) < 2:
+            return list(memories)
+        ids = [item.id for item in memories]
+        placeholders = ",".join("?" for _ in ids)
+        with closing(self._connect()) as connection, connection as db:
+            rows = db.execute(
+                f"SELECT memory_id,score,updated_at FROM cognitive_memory_salience "
+                f"WHERE memory_id IN ({placeholders})",
+                ids,
+            ).fetchall()
+        scores = {}
+        now = _now()
+        for row in rows:
+            try:
+                elapsed = max(
+                    0.0,
+                    (now - datetime.fromisoformat(row["updated_at"])).total_seconds(),
+                )
+            except ValueError:
+                elapsed = 0.0
+            scores[row["memory_id"]] = _decay(float(row["score"]), elapsed, 21600)
+        indexed = list(enumerate(memories))
+        indexed.sort(
+            key=lambda pair: (
+                pair[0] - (0.75 if scores.get(pair[1].id, 0.0) >= 0.55 else 0.0),
+                pair[0],
+            )
+        )
+        return [item for _index, item in indexed]
+
+    def memory_salience(self, memory_id: str) -> float:
+        with closing(self._connect()) as connection, connection as db:
+            row = db.execute(
+                "SELECT score,updated_at FROM cognitive_memory_salience WHERE memory_id=?",
+                (memory_id,),
+            ).fetchone()
+        if row is None:
+            return 0.0
+        try:
+            elapsed = max(0.0, (_now() - datetime.fromisoformat(row["updated_at"])).total_seconds())
+        except ValueError:
+            elapsed = 0.0
+        return _clamp(_decay(float(row["score"]), elapsed, 21600))
 
     def rank_goals(self, context: str, *, limit: int = 5) -> list[tuple[Goal, float]]:
         """Rank existing goals for attention; ranking never executes a goal."""
