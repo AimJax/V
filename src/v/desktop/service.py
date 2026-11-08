@@ -352,6 +352,18 @@ class DesktopService:
         self.conversation = conversation
         return self.snapshot()
 
+    def delete_conversation(self, conversation_id: str) -> DesktopSnapshot:
+        """Delete one chat and select a remaining chat or create a fresh one."""
+        if self.conversation_store is None:
+            raise RuntimeError("Desktop service has not started.")
+        if not self.conversation_store.delete_conversation(conversation_id):
+            raise KeyError(f"Conversation not found: {conversation_id}")
+        if self.conversation is not None and self.conversation.id == conversation_id:
+            self.conversation = self.conversation_store.get_latest_conversation()
+            if self.conversation is None:
+                self.conversation = self.conversation_store.create_conversation()
+        return self.snapshot()
+
     async def send_message(
         self,
         user_text: str,
