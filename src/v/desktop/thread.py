@@ -167,7 +167,7 @@ class DesktopRuntimeThread(QThread):
                 await self._cancel_context_preview()
                 self._active_task = asyncio.create_task(
                     service.send_message(
-                        wav_data,
+                        user_text,
                         self.token_received.emit,
                         lambda audio: self.speech_audio_ready.emit(
                             (speech_generation, audio)
@@ -195,9 +195,11 @@ class DesktopRuntimeThread(QThread):
                 await self._cancel_context_preview()
                 self._active_task = asyncio.create_task(
                     service.send_voice_message(
-                        payload,
+                        wav_data,
                         self.token_received.emit,
-                        self.speech_audio_ready.emit,
+                        lambda audio: self.speech_audio_ready.emit(
+                            (speech_generation, audio)
+                        ),
                         self.speech_failed.emit,
                         on_interaction_event=self.interaction_event_received.emit,
                     )
