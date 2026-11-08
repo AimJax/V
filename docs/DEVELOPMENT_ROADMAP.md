@@ -23,7 +23,7 @@ The branch documentation identifies gaps including a dedicated persistent identi
 |---|---|---|
 | 1 | [Persistent Identity](PHASE_1_PERSISTENT_IDENTITY.md) | In progress | Versioned identity independent of prompts, models, sessions, and memory |
 | 2 | [Memory and Continuity](PHASE_2_MEMORY_AND_CONTINUITY.md) | Verified | Evidence-linked autobiographical continuity and contextual recall |
-| 3 | [Cognitive and Affective Architecture](PHASE_3_COGNITIVE_AFFECTIVE_ARCHITECTURE.md) | In progress | Functional appraisal, affect, motivation, preferences, and reflection |
+| 3 | [Cognitive and Affective Architecture](PHASE_3_COGNITIVE_AFFECTIVE_ARCHITECTURE.md) | Implemented, unverified | Functional appraisal, affect, motivation, preferences, and reflection |
 | 4 | [Integrated Multimodal Interaction](PHASE_4_MULTIMODAL_INTERACTION.md) | Planned | Text, voice, and vision as one consent-based interaction system |
 | 5 | [Initiative and Bounded Autonomy](PHASE_5_INITIATIVE_AND_AUTONOMY.md) | Planned | Contextual proactive conversation and safe background work |
 
