@@ -1,6 +1,6 @@
 # Phase 3 — Cognitive and Affective Architecture
 
-**Status:** In progress  
+**Status:** Implemented, unverified  
 **Objective:** Introduce bounded functional internal state that influences V's attention, appraisal, preferences, motivation, reflection, and decisions coherently and inspectably.
 
 ## 1. Intended result
@@ -128,4 +128,23 @@ Initial state dimensions and decay half-lives:
 
 Appraisal currently uses explicit textual cues, question/curiosity markers, and lexical overlap with active goal titles. It does not infer sensitive traits or hidden intent. Goal records are plans only; no goal runner, timer, external action, or permission grant is implemented in this phase. Preference proposals require evidence references and remain pending until reviewed.
 
-The current implementation is a foundation, not yet the final acceptance claim. Remaining work includes stronger calibration and repeated-obstacle handling, more complete risk/reversibility appraisal, goal utility/resource-cost ranking, bounded reflection outcomes, memory-salience integration, desktop/CLI integration tests, and full Windows CI verification.
+The implementation now covers the functional architecture and automated acceptance checks. It remains **implemented, unverified** until the user completes the target-PC smoke test and multi-session evaluation.
+
+### 10.1 Final implementation details
+
+- Cognitive database schema v2 adds a separate memory-salience ledger and evidence-backed goal-candidate queue. Existing v1 cognitive databases are upgraded additively; state, events, goals, and preferences are retained.
+- Appraisal is deterministic and explainable. It distinguishes user-reported progress/obstacles from assistant wording, uses bounded novelty and uncertainty cues, estimates text-proportional resource cost, and detects consequential actions only when a concrete target is present. It does not grant or execute permissions.
+- Repeated obstacle cues across recent interaction events increase frustration pressure with a hard [0, 1] bound. Positive/negative social cues are derived from the user's message rather than V's own generated wording. Confidence responds to explicit uncertainty markers and conservative appraisal signals.
+- Goal ranking combines contextual title relevance, user-set priority, expected utility, and a bounded resource-fit estimate. Active goals can be deferred, resumed, completed, or abandoned with a recorded rationale.
+- V-originated goal candidates are stored as pending proposals. At least two distinct evidence references are required, and explicit user approval is required before a candidate becomes an active plan. Candidate goals do not execute.
+- Durable preference proposals require at least two distinct evidence references. They remain pending until explicit review; only accepted preferences enter the compact response context.
+- Retrieved memories receive a separate salience score in the cognitive database. Scores are bounded, decay with a six-hour half-life, and can advance a previously relevant retrieval result by at most one position. Original memory content, importance, provenance, and chronology are never rewritten by salience.
+- Reflection is deterministic, local, rate-limited to at most once per 15 minutes, and bounded to a small recent event window. It stores concise outcome counts and uncertainty summaries, not hidden reasoning or token-level traces. It performs no network access and starts no background model job.
+- Both desktop and CLI paths pass retrieved memory identifiers into the cognitive transition and inject the compact cognitive context into the next response. Cognitive failures must not authorize actions or bypass network policy.
+- The Cognitive Manager exposes state, active goals, pending candidate goals, and pending preference proposals. Evidence references are visible in proposal tooltips. The CLI retains /goals, /goal add TITLE, and /goal ID STATUS.
+
+### 10.2 Automated verification coverage
+
+The cognitive test suite covers deterministic appraisal, cue specificity, bounded state transitions, persistence and decay across store reconstruction, repeated-obstacle pressure, goal lifecycle and evidence-gated candidate approval, preference evidence and explicit review, accepted-preference context injection, salience persistence/decay/ranking, bounded reflection, and context-size/consciousness-claim safeguards. A desktop dialog test covers proposal review and window sizing.
+
+Automated CI is necessary but not sufficient. Target-machine testing must confirm that the cognitive manager opens, remains resizable/closable, displays evidence, and can approve/reject proposals; that state and salience persist across application restarts; and that behavior remains calibrated over multiple sessions.
