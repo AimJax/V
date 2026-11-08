@@ -683,41 +683,57 @@ class CognitiveStore:
 
     def reflect(self, *, now: datetime | None = None,
                 minimum_interval_seconds: int = 900) -> str | None:
-        """Create a short, rate-limited outcome summary from recorded events."""
+        """Create a short, globally rate-limited outcome summary from recorded events."""
         current = now or _now()
+        interval = max(900, min(int(minimum_interval_seconds), 86400))
         events = self.recent_events(limit=30)
-        previous_reflection = next(
-            (event for event in events if event["event_type"] == "reflection"),
-            None,
-        )
-        if previous_reflection is not None:
-            try:
-                last_time = datetime.fromisoformat(previous_reflection["created_at"])
-                if (current - last_time).total_seconds() < minimum_interval_seconds:
-                    return None
-            except ValueError:
-                pass
-        turns = [event for event in events if event["event_type"] == "conversation_turn"]
-        turns = turns[:10]
+        turns = [
+            event for event in events
+            if event["event_type"] == "conversation_turn"
+        ][:10]
         if not turns:
             return None
-        appraisals = [json.loads(event["appraisal_json"]) for event in turns]
-        obstacles = sum(bool(item.get("obstruction")) for item in appraisals)
-        progress = sum(bool(item.get("progress")) for item in appraisals)
-        uncertainty = sum(float(item.get("uncertainty", 0)) for item in appraisals) / len(appraisals)
-        summary = (
-            f"Reviewed {len(turns)} recent interaction event(s): "
-            f"{progress} progress cue(s), {obstacles} obstacle cue(s); "
-            f"mean uncertainty signal {uncertainty:.2f}. "
-            "This summary is an outcome record, not private reasoning."
-        )
+        appraisals = []
+        for event in turns:
+            try:
+                appraisals.append(json.loads(event["appraisal_json"]))
+            except (TypeError, json.JSONDecodeError):
+                continue
+        if not appraisals:
+            return None
         with closing(self._connect()) as connection, connection as db:
+            row = db.execute(
+                "SELECT value FROM cognitive_meta WHERE key='last_reflection_at'"
+            ).fetchone()
+            if row is not None:
+                try:
+                    last_time = datetime.fromisoformat(row["value"])
+                    if (current - last_time).total_seconds() < interval:
+                        return None
+                except ValueError:
+                    pass
+            obstacles = sum(bool(item.get("obstruction")) for item in appraisals)
+            progress = sum(bool(item.get("progress")) for item in appraisals)
+            uncertainty = sum(
+                float(item.get("uncertainty", 0)) for item in appraisals
+            ) / len(appraisals)
+            summary = (
+                f"Reviewed {len(appraisals)} recent interaction event(s): "
+                f"{progress} progress cue(s), {obstacles} obstacle cue(s); "
+                f"mean uncertainty signal {uncertainty:.2f}. "
+                "This summary is an outcome record, not private reasoning."
+            )
             db.execute(
                 """INSERT INTO cognitive_events
                 (id,conversation_id,event_type,appraisal_json,state_json,created_at)
                 VALUES(?,NULL,'reflection',?,?,?)""",
-                (uuid.uuid4().hex,json.dumps({"summary":summary}),
-                 json.dumps(asdict(self.get_state(now=current))),_timestamp(current)),
+                (uuid.uuid4().hex, json.dumps({"summary": summary}),
+                 json.dumps(asdict(self.get_state(now=current))), _timestamp(current)),
+            )
+            db.execute(
+                """INSERT INTO cognitive_meta(key,value) VALUES('last_reflection_at',?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value""",
+                (_timestamp(current),),
             )
         return summary
 
