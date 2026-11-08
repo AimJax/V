@@ -219,7 +219,7 @@ class DesktopRuntimeThread(QThread):
                 continue
 
             if command == "camera_turn":
-                image_data, user_prompt, speech_generation = payload
+                image_data, user_prompt, captured_at, speech_generation = payload
                 await self._cancel_backfill()
                 await self._cancel_consolidation()
                 await self._cancel_context_preview()
@@ -235,6 +235,7 @@ class DesktopRuntimeThread(QThread):
                         self.speech_failed.emit,
                         modality=InteractionModality.CAMERA,
                         activation_context="user_camera_capture",
+                        occurred_at=captured_at,
                         on_interaction_event=self.interaction_event_received.emit,
                     )
                 )
@@ -777,10 +778,15 @@ class DesktopRuntimeThread(QThread):
             (image_path, user_prompt, self._speech_generation),
         )
 
-    def send_camera_turn(self, image_data: bytes, user_prompt: str) -> None:
+    def send_camera_turn(
+        self,
+        image_data: bytes,
+        user_prompt: str,
+        captured_at,
+    ) -> None:
         self._post(
             "camera_turn",
-            (image_data, user_prompt, self._speech_generation),
+            (image_data, user_prompt, captured_at, self._speech_generation),
         )
 
     @property
