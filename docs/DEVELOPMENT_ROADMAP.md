@@ -15,7 +15,7 @@ The governing product direction is [Product Philosophy](PRODUCT_PHILOSOPHY.md).
 
 The active branch already contains local LM Studio inference, persistent conversations, configurable personality instructions, a substantial SQLite memory system, memory review/backfill and evidence provenance, hybrid retrieval, a Windows desktop application, local Whisper.cpp/VAD speech recognition, Kokoro speech synthesis, and application-level network/offline policy.
 
-The Phase 4 audit confirmed that the existing push-to-talk, local STT/TTS, streaming speech, and playback pipeline should be reused. Phase 4 now has a shared modality/provenance contract, typed and spoken turn integration, generation-guarded speech interruption, and initial user-uploaded image analysis through a local LM Studio vision-capable chat model. Wake phrase, camera capture, durable event history, independent vision-model resource arbitration, and target-PC multimodal verification remain outstanding.
+The Phase 4 audit confirmed that the existing push-to-talk, local STT/TTS, streaming speech, and playback pipeline should be reused. Phase 4 now has a shared modality/provenance contract, typed and spoken turn integration, generation-guarded speech interruption, user-uploaded image analysis, and an explicit one-shot camera snapshot path through a local LM Studio vision-capable chat model. Wake phrase, periodic snapshots, durable event history, independent vision-model resource arbitration, and target-PC multimodal verification remain outstanding.
 
 ## Phase sequence
 
