@@ -17,8 +17,8 @@ class CognitiveManagerDialog(QDialog):
         super().__init__(parent)
         self.store = store
         self.setWindowTitle("V — Cognitive state")
-        self.resize(700, 680)
-        self.setMinimumSize(540, 500)
+        self.resize(780, 820)
+        self.setMinimumSize(620, 640)
 
         layout = QVBoxLayout(self)
         heading = QLabel("Functional cognitive state")
