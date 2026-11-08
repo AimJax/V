@@ -26,16 +26,18 @@ class FakePlayer:
 
 
 class FakeSignal:
-    def __init__(self, events):
+    def __init__(self, events, label):
         self.events = events
+        self.label = label
 
     def emit(self):
-        self.events.append("playback_finished")
+        self.events.append(self.label)
 
 
 class PlaybackHarness:
     _release_buffer = SpeechPlayback._release_buffer
     _on_media_status = SpeechPlayback._on_media_status
+    _on_playback_state_changed = SpeechPlayback._on_playback_state_changed
     _finish_session = SpeechPlayback._finish_session
     stop = SpeechPlayback.stop
 
@@ -45,7 +47,8 @@ class PlaybackHarness:
         self._pending = deque(pending)
         self.player = FakePlayer(self.events)
         self._playback_session_active = True
-        self.playback_finished = FakeSignal(self.events)
+        self.playback_started = FakeSignal(self.events, "playback_started")
+        self.playback_finished = FakeSignal(self.events, "playback_finished")
 
     def _play_next(self):
         self.events.append("play_next")
@@ -70,6 +73,17 @@ def test_end_of_media_detaches_source_before_releasing_buffer_and_defers_next():
     ]
     assert scheduled == [(0, playback._play_next)]
     assert playback._buffer is None
+
+
+def test_playback_started_emits_once_per_active_session():
+    playback = PlaybackHarness(pending=[])
+
+    playback._playback_session_active = False
+    playback._on_playback_state_changed(QMediaPlayer.PlaybackState.PlayingState)
+    playback._on_playback_state_changed(QMediaPlayer.PlaybackState.PlayingState)
+
+    assert playback.events == ["playback_started"]
+    assert playback._playback_session_active
 
 
 def test_end_of_media_finishes_session_after_last_chunk():
