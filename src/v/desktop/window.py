@@ -872,7 +872,7 @@ class DesktopWindow(QMainWindow):
         except Exception as error:
             self.statusBar().showMessage(f"Camera unavailable: {error}")
 
-    def _send_camera_image(self, image_data: bytes) -> None:
+    def _send_camera_image(self, image_data: bytes, captured_at) -> None:
         if not self._ready or self._busy or not self._vision_enabled:
             return
         self._stop_speech()
@@ -887,7 +887,7 @@ class DesktopWindow(QMainWindow):
         self.statusBar().showMessage(
             "Analyzing the camera snapshot with the local vision model…"
         )
-        self.runtime.send_camera_turn(image_data, user_prompt)
+        self.runtime.send_camera_turn(image_data, user_prompt, captured_at)
 
     def _send_message(self) -> None:
         if not self._ready or self._busy:
