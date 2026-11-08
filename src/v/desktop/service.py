@@ -606,6 +606,10 @@ class DesktopService:
             interaction_event=event,
         )
 
+    def _configured_vision_model(self) -> str:
+        vision_model = self._configured_vision_model()
+        return vision_model
+
     async def send_image_message(
         self,
         image_path: str,
@@ -617,6 +621,7 @@ class DesktopService:
         on_interaction_event: Callable[[InteractionEvent], None] | None = None,
     ) -> DesktopTurnResult:
         """Normalize a user-selected file, then analyze it through the local vision path."""
+        self._configured_vision_model()
         from v.vision.image import prepare_image_file
 
         image_data, mime_type = await asyncio.to_thread(
