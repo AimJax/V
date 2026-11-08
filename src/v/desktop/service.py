@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
@@ -527,7 +528,9 @@ class DesktopService:
         )
         if additional_system_context:
             if len(additional_system_context) > 12000:
-                raise ValueError("Additional interaction context exceeds 12000 characters.")
+                raise ValueError(
+                    "Additional interaction context exceeds 12000 characters."
+                )
             system_content += "\n\n" + additional_system_context
 
         messages = [
@@ -616,11 +619,13 @@ class DesktopService:
         """Analyze a user-selected image locally, then enter the normal chat path."""
         from v.vision.image import prepare_image_file
         from v.vision.lm_studio import LMStudioVisionProvider
-        import json
 
         vision_model = str(self.settings.get("vision", {}).get("model", "")).strip()
         if not vision_model:
-            raise RuntimeError("Image analysis is disabled. Select a local vision model in Settings and restart V.")
+            raise RuntimeError(
+                "Image analysis is disabled. Select a local vision model in Settings "
+                "and restart V."
+            )
         if vision_model != self.model:
             raise RuntimeError(
                 "For VRAM safety, image analysis currently requires the vision model "
@@ -628,7 +633,8 @@ class DesktopService:
             )
         if vision_model not in self.available_models:
             raise RuntimeError(
-                f"The configured vision model '{vision_model}' is not currently loaded in LM Studio."
+                f"The configured vision model '{vision_model}' is not currently "
+                "loaded in LM Studio."
             )
         if self.provider is None or self.conversation is None:
             raise RuntimeError("Desktop service is not ready.")
