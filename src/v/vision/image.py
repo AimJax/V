@@ -13,6 +13,31 @@ MAX_IMAGE_PIXELS = 25_000_000
 MAX_IMAGE_EDGE = 2048
 
 
+
+def prepare_qimage(image) -> tuple[bytes, str]:
+    """Bound and JPEG-encode a captured Qt image without writing it to disk."""
+    if image is None or image.isNull():
+        raise ValueError("The captured camera image is empty.")
+    if image.width() * image.height() > MAX_IMAGE_PIXELS:
+        raise ValueError("The captured image exceeds the 25-megapixel limit.")
+    if image.width() > MAX_IMAGE_EDGE or image.height() > MAX_IMAGE_EDGE:
+        image = image.scaled(
+            MAX_IMAGE_EDGE,
+            MAX_IMAGE_EDGE,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+    output = QByteArray()
+    output_buffer = QBuffer(output)
+    if not output_buffer.open(QIODevice.OpenModeFlag.WriteOnly):
+        raise RuntimeError("Could not create the camera image buffer.")
+    if not image.save(output_buffer, "JPEG", 88):
+        output_buffer.close()
+        raise RuntimeError("Could not normalize the camera image.")
+    output_buffer.close()
+    return bytes(output), "image/jpeg"
+
+
 def prepare_image_file(path: str | Path) -> tuple[bytes, str]:
     """Decode, bound, and JPEG-normalize a user-selected image in memory.
 
