@@ -2,6 +2,8 @@ import gc
 import os
 import unittest
 
+from datetime import datetime, timezone
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QLabel, QMessageBox
@@ -197,7 +199,6 @@ class DesktopWindowTests(unittest.TestCase):
         object.__setattr__(snapshot, "vision_settings", {"model": "gemma-chat"})
         self.window._apply_snapshot(snapshot)
         image_data = b"\xff\xd8camera-frame"
-        from datetime import datetime, timezone
         captured_at = datetime.now(timezone.utc)
 
         with patch.object(self.window, "_stop_speech"), patch.object(
