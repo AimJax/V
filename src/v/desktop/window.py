@@ -995,6 +995,11 @@ class DesktopWindow(QMainWindow):
         self.runtime.record_interaction_event(event)
 
     def _on_speech_started(self) -> None:
+        if (
+            self._speech_player is None
+            or not getattr(self._speech_player, "is_playing", False)
+        ):
+            return
         self._record_audio_event(
             InteractionEventKind.AUDIO_PLAYBACK_STARTED,
             "assistant_tts",
