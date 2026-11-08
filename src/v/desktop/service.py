@@ -347,10 +347,9 @@ class DesktopService:
 
     def record_interaction_event(self, event: InteractionEvent) -> None:
         """Add a runtime lifecycle event without persisting raw media or content."""
-        if (
-            event.conversation_id is not None
-            and self.conversation is not None
-            and event.conversation_id != self.conversation.id
+        if event.conversation_id is not None and (
+            self.conversation is None
+            or event.conversation_id != self.conversation.id
         ):
             return
         self.interaction_events.append(event)
