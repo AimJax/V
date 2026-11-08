@@ -421,6 +421,61 @@ class CognitiveStore:
             rows = db.execute(query, params).fetchall()
         return [dict(row) for row in rows]
 
+    def rank_goals(self, context: str, *, limit: int = 5) -> list[tuple[Goal, float]]:
+        """Rank existing goals for attention; ranking never executes a goal."""
+        terms = {word for word in context.casefold().split() if len(word) > 2}
+        ranked = []
+        for goal in self.list_goals(status="active", limit=200):
+            goal_terms = {word for word in goal.title.casefold().split() if len(word) > 2}
+            relevance = (
+                len(terms.intersection(goal_terms)) / len(goal_terms)
+                if goal_terms else 0.0
+            )
+            score = _clamp(0.65 * goal.priority + 0.35 * relevance)
+            ranked.append((goal, score))
+        ranked.sort(key=lambda item: (item[1], item[0].updated_at), reverse=True)
+        return ranked[:max(1, min(int(limit), 20))]
+
+    def reflect(self, *, now: datetime | None = None,
+                minimum_interval_seconds: int = 900) -> str | None:
+        """Create a short, rate-limited outcome summary from recorded events."""
+        current = now or _now()
+        events = self.recent_events(limit=30)
+        previous_reflection = next(
+            (event for event in events if event["event_type"] == "reflection"),
+            None,
+        )
+        if previous_reflection is not None:
+            try:
+                last_time = datetime.fromisoformat(previous_reflection["created_at"])
+                if (current - last_time).total_seconds() < minimum_interval_seconds:
+                    return None
+            except ValueError:
+                pass
+        turns = [event for event in events if event["event_type"] == "conversation_turn"]
+        turns = turns[:10]
+        if not turns:
+            return None
+        appraisals = [json.loads(event["appraisal_json"]) for event in turns]
+        obstacles = sum(bool(item.get("obstruction")) for item in appraisals)
+        progress = sum(bool(item.get("progress")) for item in appraisals)
+        uncertainty = sum(float(item.get("uncertainty", 0)) for item in appraisals) / len(appraisals)
+        summary = (
+            f"Reviewed {len(turns)} recent interaction event(s): "
+            f"{progress} progress cue(s), {obstacles} obstacle cue(s); "
+            f"mean uncertainty signal {uncertainty:.2f}. "
+            "This summary is an outcome record, not private reasoning."
+        )
+        with closing(self._connect()) as connection, connection as db:
+            db.execute(
+                """INSERT INTO cognitive_events
+                (id,conversation_id,event_type,appraisal_json,state_json,created_at)
+                VALUES(?,NULL,'reflection',?,?,?)""",
+                (uuid.uuid4().hex,json.dumps({"summary":summary}),
+                 json.dumps(asdict(self.get_state(now=current))),_timestamp(current)),
+            )
+        return summary
+
     def recent_events(self, limit: int = 20) -> list[dict[str, Any]]:
         with self._connect() as db:
             rows = db.execute(
