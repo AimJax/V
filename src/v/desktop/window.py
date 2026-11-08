@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QPlainTextEdit,
     QPushButton,
+    QMessageBox,
     QScrollArea,
     QSizePolicy,
     QSplitter,
@@ -316,6 +317,10 @@ class DesktopWindow(QMainWindow):
         )
         self.conversation_list.setEnabled(False)
 
+        self.delete_chat_button = QPushButton("Delete selected chat")
+        self.delete_chat_button.clicked.connect(self._delete_conversation)
+        self.delete_chat_button.setEnabled(False)
+
         self.sidebar_hint = QLabel("Your conversations stay on this PC.")
         self.sidebar_hint.setObjectName("muted")
         self.sidebar_hint.setWordWrap(True)
@@ -332,6 +337,7 @@ class DesktopWindow(QMainWindow):
         layout.addSpacing(14)
         layout.addWidget(recent_label)
         layout.addWidget(self.conversation_list, 1)
+        layout.addWidget(self.delete_chat_button)
         layout.addWidget(self.sidebar_hint)
         return sidebar
 
@@ -498,6 +504,7 @@ class DesktopWindow(QMainWindow):
         self.identity_button.setEnabled(True)
         self.settings_button.setEnabled(True)
         self.conversation_list.setEnabled(True)
+        self.delete_chat_button.setEnabled(bool(snapshot.conversations))
         self._configure_voice(snapshot)
         self.message_input.setEnabled(True)
         self.send_button.setEnabled(True)
@@ -759,6 +766,29 @@ class DesktopWindow(QMainWindow):
         self.runtime.list_memory_review_candidates(
             status=str(self.memory_backfill_dialog.review_filter.currentData() or "pending")
         )
+
+    def _delete_conversation(self) -> None:
+        if not self._ready or self._busy:
+            return
+        item = self.conversation_list.currentItem()
+        if item is None:
+            return
+        conversation_id = str(item.data(Qt.ItemDataRole.UserRole) or "")
+        if not conversation_id:
+            return
+        answer = QMessageBox.question(
+            self,
+            "Delete chat?",
+            "Permanently delete this conversation and all its messages? "
+            "V's separate long-term memories and identity will remain.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self._stop_speech()
+        self.runtime.delete_conversation(conversation_id)
+        self.statusBar().showMessage("Deleting conversation…")
 
     def _new_conversation(self) -> None:
         if self._ready and not self._busy:
@@ -1031,6 +1061,9 @@ class DesktopWindow(QMainWindow):
         self.send_button.setEnabled(self._ready and not busy)
         self.message_input.setEnabled(self._ready and not busy)
         self.new_chat_button.setEnabled(self._ready and not busy)
+        self.delete_chat_button.setEnabled(
+            self._ready and not busy and self.conversation_list.count() > 0
+        )
         self.memory_manager_button.setEnabled(self._ready and not busy)
         self.settings_button.setEnabled(self._ready and not busy)
         self.voice_button.setEnabled(
