@@ -1,6 +1,8 @@
 import tempfile
 import unittest
 
+from datetime import datetime, timedelta, timezone
+
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -198,6 +200,7 @@ class DesktopVisionTurnTests(unittest.IsolatedAsyncioTestCase):
             return_value=self._turn_result(conversation)
         )
 
+        captured_at = datetime.now(timezone.utc) - timedelta(seconds=3)
         await service.send_image_data(
             b"camera-jpeg-bytes",
             "image/jpeg",
@@ -205,6 +208,7 @@ class DesktopVisionTurnTests(unittest.IsolatedAsyncioTestCase):
             lambda _token: None,
             modality=InteractionModality.CAMERA,
             activation_context="user_camera_capture",
+            occurred_at=captured_at,
         )
 
         call = service.send_message.await_args
@@ -212,6 +216,8 @@ class DesktopVisionTurnTests(unittest.IsolatedAsyncioTestCase):
         observation_event = call.kwargs["additional_events"][0]
         self.assertEqual(user_event.modality, InteractionModality.CAMERA)
         self.assertEqual(user_event.activation_context, "user_camera_capture")
+        self.assertEqual(user_event.occurred_at, captured_at)
+        self.assertGreaterEqual(user_event.received_at, captured_at)
         self.assertEqual(observation_event.kind, InteractionEventKind.CAMERA_SNAPSHOT)
         self.assertEqual(observation_event.modality, InteractionModality.CAMERA)
         self.assertEqual(observation_event.source_ref, user_event.event_id)
