@@ -888,7 +888,7 @@ async def run_chat() -> int:
                 history_limit,
                 memory_context=memory_context,
                 identity_context=identity_context,
-                cognition_context=cognitive_store.render_context(),
+                cognition_context=cognitive_store.render_context(query=user_input),
             )
 
             messages.append(
