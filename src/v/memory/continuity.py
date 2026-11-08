@@ -15,6 +15,7 @@ from typing import Any
 MEMORY_STATES = {"current", "superseded", "corrected", "disputed", "expired"}
 COMMITMENT_STATES = {"open", "completed", "cancelled"}
 DERIVATION_STATES = {"pending", "accepted", "rejected"}
+_UNSET = object()
 
 
 def _now() -> str:
@@ -553,7 +554,7 @@ class ContinuityStore:
         *,
         title: str | None = None,
         description: str | None = None,
-        due_at: str | None = None,
+        due_at: str | None | object = _UNSET,
     ) -> dict[str, Any]:
         """Update commitment status and/or editable details atomically."""
         if state is not None and (
@@ -568,7 +569,7 @@ class ContinuityStore:
             not isinstance(description, str) or len(description) > 4000
         ):
             raise ValueError("description must be at most 4000 characters.")
-        due = _timestamp(due_at, "due_at") if due_at is not None else None
+        due = _timestamp(due_at, "due_at") if due_at is not _UNSET and due_at is not None else None
         fields = []
         values: list[Any] = []
         if state is not None:
@@ -580,7 +581,7 @@ class ContinuityStore:
         if description is not None:
             fields.append("description=?")
             values.append(description.strip())
-        if due_at is not None:
+        if due_at is not _UNSET:
             fields.append("due_at=?")
             values.append(due)
         if not fields:
