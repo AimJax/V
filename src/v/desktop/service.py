@@ -43,6 +43,7 @@ from v.voice.service import LocalVoiceService
 from v.voice.streaming import SpeechTextSegmenter, clean_speech_text
 from v.identity import IdentityStore
 from v.identity_evolution import IdentityEvolution
+from v.cognition import CognitiveStore
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +117,7 @@ class DesktopService:
         self.memory_store: MemoryStore | None = None
         self.continuity_store: ContinuityStore | None = None
         self.identity_store: IdentityStore | None = None
+        self.cognitive_store: CognitiveStore | None = None
         self.identity_context = ''
         self.identity_evolution: IdentityEvolution | None = None
         self._identity_evolution_task: asyncio.Task | None = None
@@ -159,6 +161,9 @@ class DesktopService:
             _configured_data_path(self.settings, 'identity_db')
         )
         self.identity_context = self.identity_store.render_context()
+        self.cognitive_store = CognitiveStore(
+            _configured_data_path(self.settings, "cognition_db")
+        )
         self.conversation_store = ConversationStore(
             _configured_data_path(self.settings, "conversation_db")
         )
@@ -457,10 +462,15 @@ class DesktopService:
                 # Memory failures must never prevent the user from chatting.
                 memory_context = None
 
+        cognition_context = (
+            self.cognitive_store.render_context()
+            if self.cognitive_store is not None else None
+        )
         system_content = build_system_context(
             self.personality,
             identity_context=self.identity_context,
             memory_context=memory_context,
+            cognition_context=cognition_context,
         )
 
         messages = [
@@ -503,6 +513,13 @@ class DesktopService:
             "assistant",
             response,
         )
+        if self.cognitive_store is not None:
+            # State transitions are deterministic and derived only from this turn.
+            self.cognitive_store.process_turn(
+                user_text,
+                response,
+                conversation_id=self.conversation.id,
+            )
 
         if self.extraction_queue is not None:
             self.extraction_queue.enqueue(
