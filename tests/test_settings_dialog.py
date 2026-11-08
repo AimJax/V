@@ -102,6 +102,17 @@ class SettingsDialogTests(unittest.TestCase):
             "models/kokoro/voices-v1.0.bin",
         )
 
+    def test_vision_model_is_explicit_and_saved_with_settings(self):
+        self.assertEqual(self.dialog.vision_model.currentData(), "")
+        self.dialog.vision_model.setCurrentIndex(
+            self.dialog.vision_model.findData("gemma-chat")
+        )
+
+        values = self.dialog._settings_values()
+
+        self.assertEqual(values["vision_model"], "gemma-chat")
+        self.assertTrue(self.dialog._dirty)
+
     def test_voice_activation_and_speech_output_are_explicit_opt_ins(self):
         self.assertFalse(self.dialog.voice_enabled.isChecked())
         self.assertFalse(self.dialog.speak_replies.isChecked())
