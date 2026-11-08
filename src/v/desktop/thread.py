@@ -6,6 +6,8 @@ import asyncio
 
 from PySide6.QtCore import QThread, Signal
 
+from v.interaction import InteractionModality
+
 from v.desktop.service import (
     DesktopService,
     DesktopSnapshot,
@@ -202,6 +204,37 @@ class DesktopRuntimeThread(QThread):
                             (speech_generation, audio)
                         ),
                         self.speech_failed.emit,
+                        on_interaction_event=self.interaction_event_received.emit,
+                    )
+                )
+                try:
+                    result: DesktopTurnResult = await self._active_task
+                    self.turn_completed.emit(result)
+                except asyncio.CancelledError:
+                    pass
+                except Exception as error:
+                    self.operation_failed.emit(str(error))
+                finally:
+                    self._active_task = None
+                continue
+
+            if command == "camera_turn":
+                image_data, user_prompt, speech_generation = payload
+                await self._cancel_backfill()
+                await self._cancel_consolidation()
+                await self._cancel_context_preview()
+                self._active_task = asyncio.create_task(
+                    service.send_image_data(
+                        image_data,
+                        "image/jpeg",
+                        user_prompt,
+                        self.token_received.emit,
+                        lambda audio: self.speech_audio_ready.emit(
+                            (speech_generation, audio)
+                        ),
+                        self.speech_failed.emit,
+                        modality=InteractionModality.CAMERA,
+                        activation_context="user_camera_capture",
                         on_interaction_event=self.interaction_event_received.emit,
                     )
                 )
@@ -737,6 +770,12 @@ class DesktopRuntimeThread(QThread):
         self._post(
             "image_turn",
             (image_path, user_prompt, self._speech_generation),
+        )
+
+    def send_camera_turn(self, image_data: bytes, user_prompt: str) -> None:
+        self._post(
+            "camera_turn",
+            (image_data, user_prompt, self._speech_generation),
         )
 
     @property
