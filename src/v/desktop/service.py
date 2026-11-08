@@ -463,7 +463,7 @@ class DesktopService:
                 memory_context = None
 
         cognition_context = (
-            self.cognitive_store.render_context()
+            self.cognitive_store.render_context(query=user_text)
             if self.cognitive_store is not None else None
         )
         system_content = build_system_context(
