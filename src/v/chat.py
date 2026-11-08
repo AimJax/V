@@ -936,6 +936,7 @@ async def run_chat() -> int:
                     response,
                     conversation_id=conversation.id,
                 )
+                cognitive_store.reflect()
 
                 if identity_evolution is not None:
                     proposals = await identity_evolution.evaluate_if_due()
