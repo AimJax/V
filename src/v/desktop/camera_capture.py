@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtMultimedia import (
     QCamera,
@@ -25,7 +27,7 @@ from v.vision.image import prepare_qimage
 class CameraCaptureDialog(QDialog):
     """Capture one still frame only after the user opens and confirms the dialog."""
 
-    image_captured = Signal(bytes)
+    image_captured = Signal(bytes, object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -108,7 +110,7 @@ class CameraCaptureDialog(QDialog):
             self.status.setText(f"Could not prepare camera image: {error}")
             self.capture_button.setEnabled(self.capture.isReadyForCapture())
             return
-        self.image_captured.emit(image_data)
+        self.image_captured.emit(image_data, datetime.now(timezone.utc))
         self.accept()
 
     def _on_capture_error(self, _request_id, _error, message: str) -> None:
