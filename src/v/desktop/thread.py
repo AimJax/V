@@ -188,6 +188,34 @@ class DesktopRuntimeThread(QThread):
                     self._active_task = None
                 continue
 
+            if command == "image_turn":
+                image_path, user_prompt, speech_generation = payload
+                await self._cancel_backfill()
+                await self._cancel_consolidation()
+                await self._cancel_context_preview()
+                self._active_task = asyncio.create_task(
+                    service.send_image_message(
+                        image_path,
+                        user_prompt,
+                        self.token_received.emit,
+                        lambda audio: self.speech_audio_ready.emit(
+                            (speech_generation, audio)
+                        ),
+                        self.speech_failed.emit,
+                        on_interaction_event=self.interaction_event_received.emit,
+                    )
+                )
+                try:
+                    result: DesktopTurnResult = await self._active_task
+                    self.turn_completed.emit(result)
+                except asyncio.CancelledError:
+                    pass
+                except Exception as error:
+                    self.operation_failed.emit(str(error))
+                finally:
+                    self._active_task = None
+                continue
+
             if command == "voice_turn":
                 wav_data, speech_generation = payload
                 await self._cancel_backfill()
@@ -704,6 +732,12 @@ class DesktopRuntimeThread(QThread):
 
     def send_voice_turn(self, wav_data: bytes) -> None:
         self._post("voice_turn", (wav_data, self._speech_generation))
+
+    def send_image_turn(self, image_path: str, user_prompt: str) -> None:
+        self._post(
+            "image_turn",
+            (image_path, user_prompt, self._speech_generation),
+        )
 
     @property
     def speech_generation(self) -> int:
