@@ -132,6 +132,43 @@ class MemoryContinuityDialogTests(unittest.TestCase):
         self.assertIn("not scheduled reminders", self.dialog.status_label.text())
 
 
+    def test_selected_commitment_can_be_edited(self):
+        self.dialog.set_snapshot({
+            "memory_id": "memory-selected",
+            "temporal": {"state": "current"},
+            "timeline": [],
+            "derivation_sources": [],
+            "commitments": [{
+                "id": "commitment-edit",
+                "title": "Original title",
+                "description": "Original description",
+                "due_at": "2026-11-10T10:00:00+00:00",
+                "state": "open",
+                "source_memory_id": "memory-selected",
+            }],
+        })
+        edits = []
+        self.dialog.commitment_edit_requested.connect(
+            lambda *args: edits.append(args)
+        )
+        self.dialog.commitment_table.selectRow(0)
+        self.assertEqual(self.dialog.commitment_title_input.text(), "Original title")
+        self.assertEqual(
+            self.dialog.commitment_description_input.text(),
+            "Original description",
+        )
+        self.dialog.commitment_title_input.setText("Revised title")
+        self.dialog.commitment_description_input.setText("Revised description")
+        self.dialog.commitment_due_input.clear()
+        self.dialog.edit_commitment_button.click()
+        self.assertEqual(edits, [(
+            "commitment-edit",
+            "Revised title",
+            "Revised description",
+            "",
+            "memory-selected",
+        )])
+
     def test_consolidation_status_distinguishes_duplicates_from_rejected_groups(self):
         from types import SimpleNamespace
 
