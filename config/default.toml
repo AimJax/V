@@ -44,6 +44,10 @@ idle_delay_seconds = 20
 max_jobs_per_idle_cycle = 8
 minimum_confidence = 0.90
 
+[vision]
+# Empty disables image analysis. Select a model already loaded in LM Studio.
+model = ""
+
 [voice]
 # Voice mode remains inactive until local engines are installed and validated.
 enabled = false
