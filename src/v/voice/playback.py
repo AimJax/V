@@ -11,6 +11,7 @@ from PySide6.QtMultimedia import QAudioOutput, QMediaDevices, QMediaPlayer
 class SpeechPlayback(QObject):
     """Play a sequence of synthesized WAV chunks without writing audio to disk."""
 
+    playback_started = Signal()
     playback_finished = Signal()
     playback_failed = Signal(str)
 
@@ -24,6 +25,7 @@ class SpeechPlayback(QObject):
         self.device_id = device_id
         self._buffer: QBuffer | None = None
         self._pending: deque[bytes] = deque()
+        self._playback_session_active = False
 
         self.output = QAudioOutput(self)
         if device_id:
@@ -41,6 +43,7 @@ class SpeechPlayback(QObject):
         self.player = QMediaPlayer(self)
         self.player.setAudioOutput(self.output)
         self.player.mediaStatusChanged.connect(self._on_media_status)
+        self.player.playbackStateChanged.connect(self._on_playback_state_changed)
         self.player.errorOccurred.connect(self._on_error)
 
     @property
@@ -65,7 +68,7 @@ class SpeechPlayback(QObject):
         if self._buffer is not None:
             return
         if not self._pending:
-            self.playback_finished.emit()
+            self._finish_session()
             return
 
         buffer = QBuffer(self)
@@ -80,6 +83,22 @@ class SpeechPlayback(QObject):
         self.player.setSourceDevice(buffer, QUrl("memory://v-speech.wav"))
         self.player.play()
 
+    def _on_playback_state_changed(
+        self,
+        state: QMediaPlayer.PlaybackState,
+    ) -> None:
+        if (
+            state == QMediaPlayer.PlaybackState.PlayingState
+            and not self._playback_session_active
+        ):
+            self._playback_session_active = True
+            self.playback_started.emit()
+
+    def _finish_session(self) -> None:
+        if self._playback_session_active:
+            self._playback_session_active = False
+            self.playback_finished.emit()
+
     def _release_buffer(self) -> None:
         """Defer buffer destruction until Qt has processed the source change."""
         buffer, self._buffer = self._buffer, None
@@ -91,6 +110,7 @@ class SpeechPlayback(QObject):
         self.player.stop()
         self.player.setSource(QUrl())
         self._pending.clear()
+        self._playback_session_active = False
         self._release_buffer()
 
     def _on_media_status(self, status: QMediaPlayer.MediaStatus) -> None:
@@ -109,7 +129,7 @@ class SpeechPlayback(QObject):
                 # has been detached by the multimedia backend.
                 QTimer.singleShot(0, self._play_next)
             else:
-                self.playback_finished.emit()
+                self._finish_session()
         elif status == QMediaPlayer.MediaStatus.InvalidMedia:
             self.stop()
             self.playback_failed.emit("Qt Multimedia could not decode the synthesized WAV.")
