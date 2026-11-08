@@ -276,6 +276,11 @@ class DesktopRuntimeThread(QThread):
                     self._active_task = None
                 continue
 
+            if command == "interaction_event":
+                service.record_interaction_event(payload)
+                self.interaction_event_received.emit(payload)
+                continue
+
             if command == "speech_stop":
                 service.interrupt_speech()
                 continue
@@ -781,6 +786,9 @@ class DesktopRuntimeThread(QThread):
     @property
     def speech_generation(self) -> int:
         return self._speech_generation
+
+    def record_interaction_event(self, event: InteractionEvent) -> None:
+        self._post("interaction_event", event)
 
     def interrupt_speech(self) -> None:
         self._speech_generation += 1
