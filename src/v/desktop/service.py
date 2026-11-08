@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -714,10 +715,13 @@ class DesktopService:
         on_interaction_event: Callable[[InteractionEvent], None] | None = None,
     ) -> DesktopVoiceTurnResult:
         """Transcribe locally and run the normal streaming chat/speech pipeline."""
+        audio_received_at = datetime.now(timezone.utc)
         transcription = await self.transcribe_voice(wav_data)
-        event = InteractionEvent.now(
+        event = InteractionEvent(
             kind=InteractionEventKind.SPEECH_TRANSCRIPT,
             modality=InteractionModality.AUDIO,
+            occurred_at=audio_received_at,
+            received_at=datetime.now(timezone.utc),
             activation_context="push_to_talk",
             conversation_id=self.conversation.id if self.conversation else None,
             content=transcription,
