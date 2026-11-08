@@ -110,7 +110,7 @@ def appraise_event(
     action_pattern = re.compile(
         r"\b(?:please\s+)?(?:delete|erase|publish|send|purchase|buy|install|execute|overwrite)"
         r"\s+(?:the|my|this|that|all|a|an)?\s*"
-        r"(?:file|files|data|message|email|post|software|package|command|record|account)\b"
+        r"(?:file|files|data|database|databases|message|email|post|article|content|website|software|package|command|script|scripts|config|configuration|record|account|folder|folders|directory|directories|drive|drives|photo|photos|document|documents|product|item|car|money|payment|transaction|settings)\b"
     )
     irreversible_pattern = re.compile(
         r"\b(?:delete|erase|publish|purchase|buy|overwrite)\s+"
