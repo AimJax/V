@@ -15,16 +15,16 @@ The governing product direction is [Product Philosophy](PRODUCT_PHILOSOPHY.md).
 
 The active branch already contains local LM Studio inference, persistent conversations, configurable personality instructions, a substantial SQLite memory system, memory review/backfill and evidence provenance, hybrid retrieval, a Windows desktop application, local Whisper.cpp/VAD speech recognition, Kokoro speech synthesis, and application-level network/offline policy.
 
-The branch documentation identifies gaps including a dedicated persistent identity domain, a complete cognitive/affective architecture, integrated vision, wake-phrase listening, and bounded initiative/background activity. Every phase must begin with a code-level audit; do not duplicate existing functionality.
+The Phase 4 audit confirmed that the existing push-to-talk, local STT/TTS, streaming speech, and playback pipeline should be reused. Its missing layer is a shared modality/provenance contract and integration of typed, spoken, and visual observations into one lifecycle.
 
 ## Phase sequence
 
 | Phase | Name | Status | Outcome |
-|---|---|---|
+|---|---|---|---|
 | 1 | [Persistent Identity](PHASE_1_PERSISTENT_IDENTITY.md) | In progress | Versioned identity independent of prompts, models, sessions, and memory |
 | 2 | [Memory and Continuity](PHASE_2_MEMORY_AND_CONTINUITY.md) | Verified | Evidence-linked autobiographical continuity and contextual recall |
 | 3 | [Cognitive and Affective Architecture](PHASE_3_COGNITIVE_AFFECTIVE_ARCHITECTURE.md) | Implemented, unverified | Functional appraisal, affect, motivation, preferences, and reflection |
-| 4 | [Integrated Multimodal Interaction](PHASE_4_MULTIMODAL_INTERACTION.md) | Planned | Text, voice, and vision as one consent-based interaction system |
+| 4 | [Integrated Multimodal Interaction](PHASE_4_MULTIMODAL_INTERACTION.md) | In progress | Text, voice, and vision as one consent-based interaction system |
 | 5 | [Initiative and Bounded Autonomy](PHASE_5_INITIATIVE_AND_AUTONOMY.md) | Planned | Contextual proactive conversation and safe background work |
 
 The sequence reflects dependencies. Later phases must not bypass contracts established by earlier phases.
