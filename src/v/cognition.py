@@ -605,7 +605,7 @@ class CognitiveStore:
                     (memory_id, _clamp(previous + increment), hits + 1, rationale, current),
                 )
 
-    def prioritize_memories(self, memories: list[Any]) -> list[Any]:
+    def prioritize_memories(self, memories: list[Any], *, now: datetime | None = None) -> list[Any]:
         """Apply a small salience tie-break while preserving retrieval relevance."""
         if len(memories) < 2:
             return list(memories)
@@ -618,12 +618,12 @@ class CognitiveStore:
                 ids,
             ).fetchall()
         scores = {}
-        now = _now()
+        current = now or _now()
         for row in rows:
             try:
                 elapsed = max(
                     0.0,
-                    (now - datetime.fromisoformat(row["updated_at"])).total_seconds(),
+                    (current - datetime.fromisoformat(row["updated_at"])).total_seconds(),
                 )
             except ValueError:
                 elapsed = 0.0
