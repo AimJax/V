@@ -520,6 +520,7 @@ class DesktopService:
                 response,
                 conversation_id=self.conversation.id,
             )
+            self.cognitive_store.reflect()
 
         if self.extraction_queue is not None:
             self.extraction_queue.enqueue(
