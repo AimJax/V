@@ -607,7 +607,22 @@ class DesktopService:
         )
 
     def _configured_vision_model(self) -> str:
-        vision_model = self._configured_vision_model()
+        vision_model = str(self.settings.get("vision", {}).get("model", "")).strip()
+        if not vision_model:
+            raise RuntimeError(
+                "Image analysis is disabled. Select a local vision model in Settings "
+                "and restart V."
+            )
+        if vision_model != self.model:
+            raise RuntimeError(
+                "For VRAM safety, image analysis currently requires the vision model "
+                "to be the same as V's chat model. Select the chat model in Vision settings."
+            )
+        if vision_model not in self.available_models:
+            raise RuntimeError(
+                f"The configured vision model '{vision_model}' is not currently "
+                "loaded in LM Studio."
+            )
         return vision_model
 
     async def send_image_message(
@@ -656,22 +671,7 @@ class DesktopService:
         """Analyze transient image bytes locally, preserving modality provenance."""
         from v.vision.lm_studio import LMStudioVisionProvider
 
-        vision_model = str(self.settings.get("vision", {}).get("model", "")).strip()
-        if not vision_model:
-            raise RuntimeError(
-                "Image analysis is disabled. Select a local vision model in Settings "
-                "and restart V."
-            )
-        if vision_model != self.model:
-            raise RuntimeError(
-                "For VRAM safety, image analysis currently requires the vision model "
-                "to be the same as V's chat model. Select the chat model in Vision settings."
-            )
-        if vision_model not in self.available_models:
-            raise RuntimeError(
-                f"The configured vision model '{vision_model}' is not currently "
-                "loaded in LM Studio."
-            )
+        vision_model = self._configured_vision_model()
         if self.provider is None or self.conversation is None:
             raise RuntimeError("Desktop service is not ready.")
         if not isinstance(user_prompt, str) or not user_prompt.strip():
