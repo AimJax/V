@@ -197,14 +197,17 @@ class DesktopWindowTests(unittest.TestCase):
         object.__setattr__(snapshot, "vision_settings", {"model": "gemma-chat"})
         self.window._apply_snapshot(snapshot)
         image_data = b"\xff\xd8camera-frame"
+        from datetime import datetime, timezone
+        captured_at = datetime.now(timezone.utc)
 
         with patch.object(self.window, "_stop_speech"), patch.object(
             self.window.runtime, "send_camera_turn"
         ) as send_camera:
-            self.window._send_camera_image(image_data)
+            self.window._send_camera_image(image_data, captured_at)
 
         send_camera.assert_called_once()
         self.assertEqual(send_camera.call_args.args[0], image_data)
+        self.assertEqual(send_camera.call_args.args[2], captured_at)
         self.assertIn("camera snapshot", send_camera.call_args.args[1].casefold())
         self.assertTrue(self.window._busy)
 
