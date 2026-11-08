@@ -173,6 +173,15 @@ class DesktopWindowTests(unittest.TestCase):
         self.assertTrue(self.window.voice_button.isEnabled())
         self.assertFalse(self.window._voice_recorder.is_recording)
 
+    def test_image_attachment_is_enabled_only_when_vision_is_configured(self):
+        snapshot = self._snapshot()
+        object.__setattr__(snapshot, "vision_settings", {"model": "local-chat-model"})
+
+        self.window._apply_snapshot(snapshot)
+        self.application.processEvents()
+
+        self.assertTrue(self.window.attach_image_button.isEnabled())
+
     def test_stop_speaking_button_interrupts_runtime_and_disables_itself(self):
         class FakePlayer:
             def __init__(self):
