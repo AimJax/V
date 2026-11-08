@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -8,6 +9,12 @@ from v.cognition import CognitiveStore, appraise_event
 
 
 class CognitiveStoreTests(unittest.TestCase):
+    def test_action_risk_cues_are_specific_not_incidental(self):
+        ordinary = appraise_event("Can you send me an example?")
+        destructive = appraise_event("Please delete my files.")
+        self.assertLess(ordinary.risk, destructive.risk)
+        self.assertLess(destructive.reversibility, ordinary.reversibility)
+
     def test_appraisal_is_deterministic_and_explainable(self):
         first = appraise_event("Why is this broken again?")
         second = appraise_event("Why is this broken again?")
@@ -174,13 +181,34 @@ class CognitiveStoreTests(unittest.TestCase):
                 "This is relevant to the project. Why?",
                 active_goal_titles=("project",),
             )
-            store.record_memory_salience(("memory-a",), appraisal)
+            store.record_memory_salience(
+                ("memory-a",), appraisal, now=now
+            )
             restored = CognitiveStore(path)
-            score = restored.memory_salience("memory-a")
-            later = restored.memory_salience("memory-a")
+            score = restored.memory_salience("memory-a", now=now)
+            later = restored.memory_salience(
+                "memory-a", now=now + timedelta(hours=6)
+            )
         self.assertGreater(score, 0)
         self.assertLessEqual(score, 1)
         self.assertGreaterEqual(later, 0)
+        self.assertAlmostEqual(later, score * 0.5, places=5)
+
+    def test_salience_only_advances_an_existing_retrieval_result(self):
+        with temporary_directory() as temp:
+            store = CognitiveStore(Path(temp) / "cognition.sqlite3")
+            now = datetime(2026, 11, 8, tzinfo=timezone.utc)
+            appraisal = appraise_event("Why is the project blocked?")
+            for _ in range(3):
+                store.record_memory_salience(("memory-b",), appraisal, now=now)
+            memories = [
+                SimpleNamespace(id="memory-a"),
+                SimpleNamespace(id="memory-b"),
+                SimpleNamespace(id="memory-c"),
+            ]
+            ordered = store.prioritize_memories(memories)
+        self.assertEqual([item.id for item in ordered][0], "memory-b")
+        self.assertEqual({item.id for item in ordered}, {"memory-a", "memory-b", "memory-c"})
 
     def test_context_is_compact_and_disclaims_subjective_feeling(self):
         with temporary_directory() as temp:
