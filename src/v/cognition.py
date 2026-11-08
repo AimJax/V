@@ -701,6 +701,7 @@ class CognitiveStore:
                 continue
         if not appraisals:
             return None
+        state_snapshot = asdict(self.get_state(now=current))
         with closing(self._connect()) as connection, connection as db:
             row = db.execute(
                 "SELECT value FROM cognitive_meta WHERE key='last_reflection_at'"
@@ -728,7 +729,7 @@ class CognitiveStore:
                 (id,conversation_id,event_type,appraisal_json,state_json,created_at)
                 VALUES(?,NULL,'reflection',?,?,?)""",
                 (uuid.uuid4().hex, json.dumps({"summary": summary}),
-                 json.dumps(asdict(self.get_state(now=current))), _timestamp(current)),
+                 json.dumps(state_snapshot), _timestamp(current)),
             )
             db.execute(
                 """INSERT INTO cognitive_meta(key,value) VALUES('last_reflection_at',?)
