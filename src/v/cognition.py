@@ -23,7 +23,7 @@ SCHEMA_VERSION = 2
 DIMENSIONS = ("valence", "activation", "frustration", "curiosity", "confidence")
 OBSTRUCTION_TERMS = {
     "failed", "failure", "broken", "stuck", "error", "blocked", "doesn't work",
-    "does not work", "can't", "cannot", "issue", "problem", "again",
+    "does not work", "can't", "cannot", "issue", "problem",
 }
 PROGRESS_TERMS = {
     "fixed", "works", "working", "completed", "finished", "passed", "success",
