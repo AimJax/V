@@ -647,6 +647,7 @@ class DesktopService:
     ) -> DesktopTurnResult:
         """Normalize a user-selected file, then analyze it through the local vision path."""
         self._configured_vision_model()
+        uploaded_at = datetime.now(timezone.utc)
         from v.vision.image import prepare_image_file
 
         image_data, mime_type = await asyncio.to_thread(
@@ -662,6 +663,7 @@ class DesktopService:
             on_speech_error,
             modality=InteractionModality.IMAGE,
             activation_context="user_upload",
+            occurred_at=uploaded_at,
             on_interaction_event=on_interaction_event,
         )
 
@@ -676,12 +678,14 @@ class DesktopService:
         *,
         modality: InteractionModality = InteractionModality.IMAGE,
         activation_context: str = "user_upload",
+        occurred_at: datetime | None = None,
         on_interaction_event: Callable[[InteractionEvent], None] | None = None,
     ) -> DesktopTurnResult:
         """Analyze transient image bytes locally, preserving modality provenance."""
         from v.vision.lm_studio import LMStudioVisionProvider
 
         vision_model = self._configured_vision_model()
+        event_time = occurred_at or datetime.now(timezone.utc)
         if self.provider is None or self.conversation is None:
             raise RuntimeError("Desktop service is not ready.")
         if not isinstance(user_prompt, str) or not user_prompt.strip():
@@ -699,9 +703,12 @@ class DesktopService:
             prompt=user_prompt.strip(),
         )
 
-        user_event = InteractionEvent.now(
+        received_at = datetime.now(timezone.utc)
+        user_event = InteractionEvent(
             kind=InteractionEventKind.USER_MESSAGE,
             modality=modality,
+            occurred_at=event_time,
+            received_at=received_at,
             activation_context=activation_context,
             conversation_id=self.conversation.id,
             content=user_prompt.strip(),
@@ -712,9 +719,11 @@ class DesktopService:
             if modality == InteractionModality.CAMERA
             else InteractionEventKind.IMAGE_OBSERVATION
         )
-        observation_event = InteractionEvent.now(
+        observation_event = InteractionEvent(
             kind=observation_kind,
             modality=modality,
+            occurred_at=event_time,
+            received_at=received_at,
             activation_context="local_vision_model",
             conversation_id=self.conversation.id,
             content=description,
