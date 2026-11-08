@@ -25,6 +25,7 @@ from v.memory.store import MemoryStore
 from v.memory.worker import MemoryWorker
 from v.identity import IdentityStore
 from v.identity_evolution import IdentityEvolution
+from v.cognition import CognitiveStore
 from v.providers.base import ChatMessage
 from v.providers.errors import ProviderError
 from v.providers.lm_studio import LMStudioProvider
@@ -358,11 +359,15 @@ async def run_chat() -> int:
     memory_worker = None
     identity_store = None
     identity_evolution = None
+    cognitive_store = None
 
     try:
         personality = load_personality(settings)
         identity_store = IdentityStore(_configured_data_path(settings, "identity_db"))
         identity_context = identity_store.render_context()
+        cognitive_store = CognitiveStore(
+            _configured_data_path(settings, "cognition_db")
+        )
 
         conversation_store = ConversationStore(
             _configured_data_path(settings, "conversation_db")
@@ -533,6 +538,7 @@ async def run_chat() -> int:
         print(f"Network policy: {network_policy.mode_label}")
         print(f"Conversation database: {conversation_store.database_path}")
         print(f"Identity database: {identity_store.database_path}")
+        print(f"Cognitive database: {cognitive_store.database_path}")
 
         if memory_store is not None:
             print(f"Memory database: {memory_store.database_path}")
@@ -587,6 +593,9 @@ async def run_chat() -> int:
                 print("  /identity accept ID   - Accept a proposed trait")
                 print("  /identity reject ID   - Reject a proposed trait")
                 print("  /identity defer ID    - Defer a proposed trait")
+                print("  /goals                - List active cognitive goals")
+                print("  /goal add TITLE       - Add a user-requested goal")
+                print("  /goal ID STATUS       - Update goal: active/deferred/completed/abandoned")
                 print("  /exit                 - Exit V\n")
                 continue
 
@@ -663,6 +672,32 @@ async def run_chat() -> int:
                     continue
 
                 print("Unknown identity command. Use /identity or /help.\n")
+                continue
+
+            if command == "/goals":
+                for goal in cognitive_store.list_goals(status="all"):
+                    print(f"[{goal.status}; {goal.priority:.2f}; {goal.origin}] {goal.id} — {goal.title}")
+                if not cognitive_store.list_goals(status="all"):
+                    print("No cognitive goals.")
+                print()
+                continue
+
+            if command.startswith("/goal "):
+                parts = user_input.split(maxsplit=2)
+                try:
+                    if len(parts) >= 3 and parts[1].casefold() == "add":
+                        goal = cognitive_store.create_goal(
+                            parts[2], origin="user_requested",
+                            rationale="Explicitly added by the user.",
+                        )
+                        print(f"Goal added: {goal.id}\n")
+                    elif len(parts) == 3:
+                        goal = cognitive_store.update_goal(parts[1], parts[2].casefold())
+                        print(f"Goal status: {goal.status}\n")
+                    else:
+                        print("Usage: /goal add TITLE or /goal ID STATUS\n")
+                except (KeyError, ValueError) as error:
+                    print(f"Goal update failed: {error}\n")
                 continue
 
             if command == "/memory" or command == "/memory list":
@@ -853,6 +888,7 @@ async def run_chat() -> int:
                 history_limit,
                 memory_context=memory_context,
                 identity_context=identity_context,
+                cognition_context=cognitive_store.render_context(),
             )
 
             messages.append(
@@ -894,6 +930,11 @@ async def run_chat() -> int:
                     conversation.id,
                     "assistant",
                     response,
+                )
+                cognitive_store.process_turn(
+                    user_input,
+                    response,
+                    conversation_id=conversation.id,
                 )
 
                 if identity_evolution is not None:
