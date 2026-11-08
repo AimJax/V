@@ -1,25 +1,35 @@
 # Phase 4 — Integrated Multimodal Interaction
 
-**Status:** Planned  
+**Status:** In progress  
 **Objective:** Make text, voice, and visual input parts of one coherent interaction system, with shared conversation state, natural turn-taking, explicit sensor controls, and local processing.
 
 ## 1. Intended result
 
 V should communicate through text and local speech, listen when authorized, interrupt or be interrupted naturally, and interpret user-authorized visual observations. These modalities must share identity, memory, and functional state rather than behave like separate assistants.
 
-## 2. Existing foundation to reuse
+## 2. Existing foundation and code audit
 
-The active branch already documents and implements a PySide6 desktop application, dedicated runtime thread, local Whisper.cpp speech recognition with Silero VAD, local Kokoro ONNX synthesis, explicit push-to-talk, audio playback queueing, streaming text segmentation, interruption of stale speech, and user-triggered audio device discovery.
+The active branch already implements a PySide6 desktop application, a dedicated runtime thread with an asyncio event loop, local LM Studio chat, local Whisper.cpp speech recognition with Silero VAD, local Kokoro ONNX synthesis, explicit push-to-talk capture, in-memory audio handling, queued playback, streamed text segmentation, stale speech interruption on new turns/conversation changes, and user-triggered audio device discovery.
 
-The current desktop documentation identifies wake-phrase/continuous listening, automatic barge-in while V speaks, voice audition, and webcam/vision as gaps. Verify current code and tests before implementation; do not duplicate working voice components.
+The audit confirms these components should be reused rather than replaced. The current interaction lifecycle is still split across the desktop service, Qt runtime thread, recorder, speech synthesizer, and player. Voice transcripts are passed into the ordinary chat method as text, but there is no shared typed event/provenance object connecting the source modality, capture time, receipt time, consent path, and derived transcript.
+
+The documented and inspected gaps remain wake-phrase/continuous listening, automatic barge-in while V speaks, voice audition, and webcam/vision. The existing push-to-talk recorder opens the microphone only after an explicit user action and stores captured audio in memory. Preserve that privacy baseline.
 
 ## 3. Shared multimodal interaction model
 
-Define a common event interface for typed messages, transcribed speech, audio playback/synthesis events, user-provided images, camera snapshots, interruptions, cancellations, timeouts, and sensor state changes.
+A modality-neutral event contract is now introduced in `src/v/interaction/events.py`.
 
-Each input must include modality, capture/source time, receipt time, session/conversation association, consent/activation context, and confidence where meaningful. Keep raw media retention separate from derived text/observations.
+The immutable `InteractionEvent` records:
+- Event kind and source modality.
+- Timezone-aware source/capture time and runtime receipt time.
+- Conversation association when applicable.
+- Explicit activation/consent context.
+- Derived text separately from an optional source reference.
+- Optional confidence and non-sensitive string metadata.
 
-A transcript is not the original audio. A generated visual description is not the image. Preserve these distinctions in provenance.
+The event contract never stores raw audio or image bytes. A transcript is not the original audio. A generated visual description is not the image. Preserve these distinctions in provenance.
+
+Initial event kinds cover typed messages, speech transcripts, visual observations, camera snapshots, playback lifecycle, interruption, cancellation, timeout, and sensor-state changes. Unit tests validate timestamp ordering, timezone awareness, confidence bounds, immutability, and unique event IDs.
 
 ## 4. Voice interaction
 
@@ -82,8 +92,8 @@ All STT, TTS, and vision inference remains local. No audio, images, or transcrip
 
 ## 9. Implementation milestones
 
-1. Audit voice pipeline, event loop, desktop UI, and cancellation behavior.
-2. Define modality-neutral event and provenance contracts.
+1. **Audit existing runtime and media components — completed.** Reuse the current local voice stack; no replacement STT/TTS pipeline is planned.
+2. **Define modality-neutral event and provenance contracts — initial implementation added.** The shared immutable event model and unit tests exist; integration into the runtime remains in progress.
 3. Integrate typed and spoken turns through one conversation lifecycle.
 4. Add optional wake phrase and reliable barge-in with visible controls.
 5. Add local vision provider abstraction and resource arbitration.
