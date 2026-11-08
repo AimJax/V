@@ -154,7 +154,10 @@ def validate_desktop_settings(
         raise ValueError(
             f"Vision model '{normalized['vision_model']}' is not loaded in LM Studio."
         )
-    if normalized["vision_model"] and normalized["vision_model"] != normalized["model"]:
+    if (
+        normalized["vision_model"]
+        and normalized["vision_model"] != normalized["model"]
+    ):
         raise ValueError(
             "For VRAM safety, the vision model must be the selected chat model. "
             "V does not load a second model automatically."
