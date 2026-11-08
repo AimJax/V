@@ -477,7 +477,7 @@ class CognitiveStore:
         title = title.strip()
         if not title or len(title) > 200:
             raise ValueError("Goal title must contain 1-200 characters.")
-        if origin not in {"user_requested", "v_candidate"}:
+        if origin != "user_requested":
             raise ValueError("Unsupported goal origin.")
         if not math.isfinite(priority) or not 0 <= priority <= 1:
             raise ValueError("Goal priority must be between 0 and 1.")
