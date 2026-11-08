@@ -160,7 +160,7 @@ class SettingsDialogTests(unittest.TestCase):
 
         self.assertEqual(
             [self.dialog.tabs.tabText(index) for index in range(self.dialog.tabs.count())],
-            ["General", "Personality", "Memory", "Voice", "Privacy"],
+            ["General", "Vision", "Personality", "Memory", "Voice", "Privacy"],
         )
         for index in range(self.dialog.tabs.count()):
             page = self.dialog.tabs.widget(index)
