@@ -115,7 +115,7 @@ def appraise_event(
     irreversible_pattern = re.compile(
         r"\b(?:delete|erase|publish|purchase|buy|overwrite)\s+"
         r"(?:the|my|this|that|all|a|an)?\s*"
-        r"(?:file|files|data|message|email|post|software|package|record|account)?\b"
+        r"(?:file|files|data|message|email|post|software|package|record|account)\b"
     )
     risk = 0.8 if action_pattern.search(user_signal) else (
         0.55 if any(term in user_signal for term in ("dangerous", "unsafe")) else 0.05
