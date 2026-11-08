@@ -34,6 +34,7 @@ from v.cognition import CognitiveStore
 from v.chat import _configured_data_path
 from v.core.config import load_settings
 from v.desktop.thread import DesktopRuntimeThread
+from v.desktop.camera_capture import CameraCaptureDialog
 from v.providers.base import ChatMessage
 from v.voice.recorder import PushToTalkRecorder
 
@@ -415,6 +416,15 @@ class DesktopWindow(QMainWindow):
         )
         self.attach_image_button.clicked.connect(self._attach_image)
 
+        self.camera_button = QPushButton("Camera snapshot")
+        self.camera_button.setFixedHeight(48)
+        self.camera_button.setEnabled(False)
+        self.camera_button.setToolTip(
+            "Open a visible local camera preview and capture one still frame. "
+            "The camera stops when the capture dialog closes."
+        )
+        self.camera_button.clicked.connect(self._capture_camera)
+
         self.voice_button = QPushButton("Hold to talk")
         self.voice_button.setFixedHeight(48)
         self.voice_button.setEnabled(False)
@@ -427,6 +437,7 @@ class DesktopWindow(QMainWindow):
         composer_row.addWidget(self.message_input, 1)
         composer_row.addWidget(self.stop_speech_button)
         composer_row.addWidget(self.attach_image_button)
+        composer_row.addWidget(self.camera_button)
         composer_row.addWidget(self.voice_button)
         composer_row.addWidget(self.send_button)
         layout.addLayout(composer_row)
@@ -485,6 +496,7 @@ class DesktopWindow(QMainWindow):
         self._last_snapshot = snapshot
         self._vision_enabled = bool(snapshot.vision_settings.get("model", ""))
         self.attach_image_button.setEnabled(self._vision_enabled)
+        self.camera_button.setEnabled(self._vision_enabled)
         self._ready = True
 
         self.conversation_title.setText(snapshot.conversation.title)
@@ -544,6 +556,8 @@ class DesktopWindow(QMainWindow):
         self.identity_button.setEnabled(False)
         self.settings_button.setEnabled(False)
         self.voice_button.setEnabled(False)
+        self.attach_image_button.setEnabled(False)
+        self.camera_button.setEnabled(False)
         self.connection_label.setText("NOT CONNECTED")
         self.connection_label.setStyleSheet(
             "color: #ffc0b4; background: #382521; "
@@ -847,6 +861,33 @@ class DesktopWindow(QMainWindow):
         )
         self.runtime.send_image_turn(image_path, user_prompt)
 
+    def _capture_camera(self) -> None:
+        if not self._ready or self._busy or not self._vision_enabled:
+            return
+        try:
+            dialog = CameraCaptureDialog(self)
+            dialog.image_captured.connect(self._send_camera_image)
+            dialog.exec()
+        except Exception as error:
+            self.statusBar().showMessage(f"Camera unavailable: {error}")
+
+    def _send_camera_image(self, image_data: bytes) -> None:
+        if not self._ready or self._busy or not self._vision_enabled:
+            return
+        self._stop_speech()
+        user_prompt = (
+            "Please analyze the camera snapshot I just captured. Describe the "
+            "visible content and clearly state uncertainty."
+        )
+        self._append_bubble("You", "One camera snapshot captured for local analysis.")
+        self._assistant_bubble = self._append_bubble("V")
+        self._assistant_text = ""
+        self._set_busy(True)
+        self.statusBar().showMessage(
+            "Analyzing the camera snapshot with the local vision model…"
+        )
+        self.runtime.send_camera_turn(image_data, user_prompt)
+
     def _send_message(self) -> None:
         if not self._ready or self._busy:
             return
@@ -1133,6 +1174,9 @@ class DesktopWindow(QMainWindow):
             self._ready and self._voice_enabled and not busy
         )
         self.attach_image_button.setEnabled(
+            self._ready and self._vision_enabled and not busy
+        )
+        self.camera_button.setEnabled(
             self._ready and self._vision_enabled and not busy
         )
         self.conversation_list.setEnabled(self._ready and not busy)
