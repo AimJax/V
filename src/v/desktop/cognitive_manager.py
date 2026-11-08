@@ -124,8 +124,13 @@ class CognitiveManagerDialog(QDialog):
             self.goal_proposals.addItem(row)
         self.preferences.clear()
         for preference in self.store.list_preferences(status="pending"):
+            origin_label = (
+                "V stance" if preference["origin"] == "v_candidate"
+                else "User preference"
+            )
             row = QListWidgetItem(
-                f"{preference['statement']} (confidence {preference['confidence']:.2f})"
+                f"[{origin_label}] {preference['statement']} "
+                f"(confidence {preference['confidence']:.2f})"
             )
             row.setData(256, preference["id"])
             row.setToolTip(
