@@ -299,7 +299,11 @@ class CognitiveStore:
             "Functional cognitive state (computational signals, not subjective feelings): "
             f"valence={state.valence:.2f}, activation={state.activation:.2f}, "
             f"frustration={state.frustration:.2f}, curiosity={state.curiosity:.2f}, "
-            f"confidence={state.confidence:.2f}. {status}."
+            f"confidence={state.confidence:.2f}. {status}. "
+            "Use these signals only to calibrate attention, tone, and uncertainty; "
+            "do not claim to feel them, pressure the user, or treat them as permissions. "
+            "When frustration is elevated, identify the obstacle and propose a concrete "
+            "next step; when curiosity is elevated, ask only relevant questions."
         )
         if goal_text:
             result += f" Active goals: {goal_text}."
