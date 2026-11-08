@@ -15,6 +15,9 @@ class CognitiveStoreTests(unittest.TestCase):
         self.assertEqual(first.obstruction, 1.0)
         self.assertEqual(first.novelty, 0.35)
         self.assertTrue(first.rationale)
+        self.assertGreater(first.risk, 0)
+        self.assertGreaterEqual(first.reversibility, 0)
+        self.assertLessEqual(first.expected_utility, 1)
 
     def test_state_transition_is_bounded_and_persistent(self):
         with temporary_directory() as temp:
@@ -89,6 +92,24 @@ class CognitiveStoreTests(unittest.TestCase):
             self.assertEqual(store.list_preferences()[0]["status"], "pending")
             store.review_preference(identifier, accept=True)
             self.assertEqual(store.list_preferences(status="accepted")[0]["id"], identifier)
+
+    def test_goal_ranking_and_bounded_reflection(self):
+        with temporary_directory() as temp:
+            store = CognitiveStore(Path(temp) / "cognition.sqlite3")
+            goal = store.create_goal("Fix desktop UI", priority=0.6)
+            store.create_goal("Study astronomy", priority=0.9)
+            now = datetime(2026, 11, 8, tzinfo=timezone.utc)
+            store.process_turn(
+                "The desktop UI is broken again.",
+                "Let's fix the layout.",
+                now=now,
+            )
+            ranked = store.rank_goals("desktop UI")
+            summary = store.reflect(now=now + timedelta(hours=1))
+            throttled = store.reflect(now=now + timedelta(hours=1, minutes=1))
+        self.assertEqual(ranked[0][0].id, goal.id)
+        self.assertIn("obstacle cue", summary)
+        self.assertIsNone(throttled)
 
     def test_context_is_compact_and_disclaims_subjective_feeling(self):
         with temporary_directory() as temp:
