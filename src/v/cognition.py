@@ -301,7 +301,7 @@ class CognitiveStore:
             )
         return appraisal, state
 
-    def render_context(self, *, max_characters: int = 700) -> str:
+    def render_context(self, *, max_characters: int = 700, query: str = "") -> str:
         """Render only compact functional summaries, never private reasoning."""
         state = self.get_state()
         labels = []
@@ -312,8 +312,12 @@ class CognitiveStore:
         if state.activation >= 0.65:
             labels.append("interaction activation is elevated")
         status = "; ".join(labels) if labels else "no strong transient state"
-        goals = self.list_goals(status="active", limit=3)
-        goal_text = "; ".join(goal.title for goal in goals)
+        ranked = (
+            self.rank_goals(query, limit=3)
+            if query.strip()
+            else [(goal, 0.0) for goal in self.list_goals(status="active", limit=3)]
+        )
+        goal_text = "; ".join(goal.title for goal, _score in ranked)
         result = (
             "Functional cognitive state (computational signals, not subjective feelings): "
             f"valence={state.valence:.2f}, activation={state.activation:.2f}, "
