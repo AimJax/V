@@ -423,7 +423,7 @@ class CognitiveStore:
 
     def rank_goals(self, context: str, *, limit: int = 5) -> list[tuple[Goal, float]]:
         """Rank existing goals for attention; ranking never executes a goal."""
-        terms = {word for word in context.casefold().split() if len(word) > 2}
+        terms = {word for word in context.casefold().split() if len(word) >= 2}
         ranked = []
         for goal in self.list_goals(status="active", limit=200):
             goal_terms = {word for word in goal.title.casefold().split() if len(word) > 2}
