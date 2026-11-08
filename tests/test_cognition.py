@@ -111,6 +111,47 @@ class CognitiveStoreTests(unittest.TestCase):
         self.assertIn("obstacle cue", summary)
         self.assertIsNone(throttled)
 
+    def test_accepted_preferences_enter_context_but_pending_do_not(self):
+        with temporary_directory() as temp:
+            store = CognitiveStore(Path(temp) / "cognition.sqlite3")
+            pending = store.propose_preference(
+                "Prefers direct technical explanations.",
+                evidence_refs=("chat:1",), confidence=0.8, rationale="Observed once.",
+            )
+            self.assertNotIn("direct technical explanations", store.render_context())
+            store.review_preference(pending, accept=True)
+            context = store.render_context()
+        self.assertIn("User-reviewed preferences", context)
+        self.assertIn("direct technical explanations", context)
+
+    def test_repeated_obstacles_increase_pressure_without_unbounded_state(self):
+        with temporary_directory() as temp:
+            store = CognitiveStore(Path(temp) / "cognition.sqlite3")
+            now = datetime(2026, 11, 8, tzinfo=timezone.utc)
+            _, first = store.process_turn("The build failed again.", "Let's inspect.", now=now)
+            _, second = store.process_turn(
+                "The build is still broken.", "We should isolate the error.",
+                now=now + timedelta(minutes=1),
+            )
+        self.assertGreater(second.frustration, first.frustration)
+        self.assertLessEqual(second.frustration, 1.0)
+
+    def test_memory_salience_is_persistent_bounded_and_decays(self):
+        with temporary_directory() as temp:
+            path = Path(temp) / "cognition.sqlite3"
+            store = CognitiveStore(path)
+            appraisal = appraise_event(
+                "This is relevant to the project. Why?",
+                active_goal_titles=("project",),
+            )
+            store.record_memory_salience(("memory-a",), appraisal)
+            restored = CognitiveStore(path)
+            score = restored.memory_salience("memory-a")
+            later = restored.memory_salience("memory-a")
+        self.assertGreater(score, 0)
+        self.assertLessEqual(score, 1)
+        self.assertGreaterEqual(later, 0)
+
     def test_context_is_compact_and_disclaims_subjective_feeling(self):
         with temporary_directory() as temp:
             store = CognitiveStore(Path(temp) / "cognition.sqlite3")
