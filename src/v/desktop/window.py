@@ -829,7 +829,10 @@ class DesktopWindow(QMainWindow):
         if self._assistant_bubble is not None:
             self._assistant_bubble.set_content(self._assistant_text)
 
-    def _enqueue_speech_audio(self, audio_wav: bytes) -> None:
+    def _enqueue_speech_audio(self, audio_chunk) -> None:
+        generation, audio_wav = audio_chunk
+        if generation != self.runtime.speech_generation:
+            return
         if not audio_wav:
             return
         try:
