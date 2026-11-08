@@ -47,7 +47,7 @@ class CameraCaptureDialog(QDialog):
         layout.addWidget(self.preview, 1)
 
         self.status = QLabel(
-            "CAMERA ACTIVE — preview is local. Press Capture once to send a still image to V."
+            "Starting local camera preview. Capture is available only while this dialog is open."
         )
         self.status.setWordWrap(True)
         self.status.setStyleSheet(
@@ -76,10 +76,22 @@ class CameraCaptureDialog(QDialog):
         self.capture.readyForCaptureChanged.connect(
             self.capture_button.setEnabled
         )
+        self.camera.activeChanged.connect(self._on_camera_active)
         self.capture.imageCaptured.connect(self._on_image_captured)
         self.capture.errorOccurred.connect(self._on_capture_error)
         self.camera.errorOccurred.connect(self._on_camera_error)
         self.camera.start()
+
+    def _on_camera_active(self, active: bool) -> None:
+        if active:
+            self.status.setText(
+                "CAMERA ACTIVE — preview is local. Press Capture once to send a still image to V."
+            )
+        elif self.camera.error() == QCamera.Error.NoError:
+            self.status.setText("Camera preview is inactive.")
+        self.capture_button.setEnabled(
+            active and self.capture.isReadyForCapture()
+        )
 
     def _capture_once(self) -> None:
         if not self.capture.isReadyForCapture():
