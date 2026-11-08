@@ -546,13 +546,52 @@ class ContinuityStore:
                 "SELECT * FROM memory_commitments WHERE id=?", (item_id,)
             ).fetchone())
 
-    def update_commitment(self, commitment_id: str, state: str) -> dict[str, Any]:
-        if not isinstance(state, str) or state not in COMMITMENT_STATES:
+    def update_commitment(
+        self,
+        commitment_id: str,
+        state: str | None = None,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        due_at: str | None = None,
+    ) -> dict[str, Any]:
+        """Update commitment status and/or editable details atomically."""
+        if state is not None and (
+            not isinstance(state, str) or state not in COMMITMENT_STATES
+        ):
             raise ValueError(f"Unsupported commitment state: {state}")
+        if title is not None and (
+            not isinstance(title, str) or not 1 <= len(title.strip()) <= 240
+        ):
+            raise ValueError("title must contain between 1 and 240 characters.")
+        if description is not None and (
+            not isinstance(description, str) or len(description) > 4000
+        ):
+            raise ValueError("description must be at most 4000 characters.")
+        due = _timestamp(due_at, "due_at") if due_at is not None else None
+        fields = []
+        values: list[Any] = []
+        if state is not None:
+            fields.append("state=?")
+            values.append(state)
+        if title is not None:
+            fields.append("title=?")
+            values.append(title.strip())
+        if description is not None:
+            fields.append("description=?")
+            values.append(description.strip())
+        if due_at is not None:
+            fields.append("due_at=?")
+            values.append(due)
+        if not fields:
+            raise ValueError("At least one commitment field must be provided.")
+        fields.append("updated_at=?")
+        values.extend((_now(), commitment_id))
         with closing(self._connect()) as db:
-            cursor = db.execute("""
-                UPDATE memory_commitments SET state=?, updated_at=? WHERE id=?
-            """, (state, _now(), commitment_id))
+            cursor = db.execute(
+                f"UPDATE memory_commitments SET {', '.join(fields)} WHERE id=?",
+                values,
+            )
             if cursor.rowcount == 0:
                 raise KeyError(commitment_id)
             db.commit()
