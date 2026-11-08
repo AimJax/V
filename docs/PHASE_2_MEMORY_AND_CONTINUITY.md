@@ -1,11 +1,11 @@
 # Phase 2 — Memory and Continuity
 
-**Status:** In progress  
+**Status:** Implemented, unverified  
 **Objective:** Evolve the existing memory implementation into coherent, time-aware autobiographical continuity without replacing working infrastructure or weakening evidence quality.
 
 ## Implementation status on the active branch
 
-**Status remains In progress.** The current branch now contains the following implementation:
+**Implementation status: complete; target-machine verification pending.** The current branch contains the implementation below, and the full Windows CI suite passes. Phase 2 will become Verified only after the local-model/GPU smoke test in Section 11 passes on the target PC.
 
 - The existing SQLite memory store remains authoritative; temporal and prospective metadata are additive tables in the same database.
 - Temporal records support current, superseded, corrected, disputed, and expired states; timezone-aware validity windows; and explicit replacement references.
@@ -169,7 +169,7 @@ Phase 2 is verified only when all of the following hold:
 - [x] Automated tests cover multiple conversations and sessions, restart persistence, temporal recall, derivation invalidation, backup/restore, schema migration, and embedding-model changes.
 - [ ] The configured local chat and embedding models pass the target-PC evaluation and desktop smoke-test checklist in Section 11 without a cloud fallback or resource failure.
 
-The implementation criteria are covered by automated tests, including editable prospective commitments. The final target-PC criterion remains open; Phase 2 must stay In progress until the local-model/GPU smoke test passes.
+All implementation criteria are covered by automated tests, including editable prospective commitments. The final target-PC criterion remains open; keep Phase 2 at Implemented, unverified until the local-model/GPU smoke test passes.
 
 ## 13. Explicitly out of scope
 
