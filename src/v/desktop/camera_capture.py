@@ -104,13 +104,14 @@ class CameraCaptureDialog(QDialog):
         self.capture.capture()
 
     def _on_image_captured(self, _request_id: int, image) -> None:
+        captured_at = datetime.now(timezone.utc)
         try:
             image_data, _mime_type = prepare_qimage(image)
         except (RuntimeError, ValueError) as error:
             self.status.setText(f"Could not prepare camera image: {error}")
             self.capture_button.setEnabled(self.capture.isReadyForCapture())
             return
-        self.image_captured.emit(image_data, datetime.now(timezone.utc))
+        self.image_captured.emit(image_data, captured_at)
         self.accept()
 
     def _on_capture_error(self, _request_id, _error, message: str) -> None:
