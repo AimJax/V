@@ -34,6 +34,7 @@ from v.cognition import CognitiveStore
 from v.chat import _configured_data_path
 from v.core.config import load_settings
 from v.desktop.thread import DesktopRuntimeThread
+from v.interaction import InteractionEvent, InteractionEventKind, InteractionModality
 from v.desktop.camera_capture import CameraCaptureDialog
 from v.providers.base import ChatMessage
 from v.voice.recorder import PushToTalkRecorder
@@ -936,6 +937,9 @@ class DesktopWindow(QMainWindow):
                 self._speech_player.playback_finished.connect(
                     self._on_speech_finished
                 )
+                self._speech_player.playback_started.connect(
+                    self._on_speech_started
+                )
             self._speech_player.enqueue(audio_wav)
             self.stop_speech_button.setEnabled(True)
             self.statusBar().showMessage("V is speaking…")
@@ -943,6 +947,10 @@ class DesktopWindow(QMainWindow):
             self._on_speech_failed(str(error))
 
     def _on_speech_finished(self) -> None:
+        self._record_audio_event(
+            InteractionEventKind.AUDIO_PLAYBACK_FINISHED,
+            "assistant_tts",
+        )
         self.stop_speech_button.setEnabled(False)
         self.statusBar().showMessage("Speech playback finished.")
 
@@ -953,10 +961,46 @@ class DesktopWindow(QMainWindow):
         )
 
     def _stop_speech(self) -> None:
+        was_active = bool(
+            self.stop_speech_button.isEnabled()
+            or (
+                self._speech_player is not None
+                and getattr(self._speech_player, "is_playing", False)
+            )
+        )
+        if was_active:
+            self._record_audio_event(
+                InteractionEventKind.INTERRUPTION,
+                "user_stop",
+            )
         if self._speech_player is not None:
             self._speech_player.stop()
         self.stop_speech_button.setEnabled(False)
         self.runtime.interrupt_speech()
+
+    def _record_audio_event(
+        self,
+        kind: InteractionEventKind,
+        activation_context: str,
+    ) -> None:
+        if self._last_snapshot is None:
+            return
+        event = InteractionEvent.now(
+            kind=kind,
+            modality=InteractionModality.AUDIO,
+            activation_context=activation_context,
+            conversation_id=self._last_snapshot.conversation.id,
+            content=kind.value.replace("_", " "),
+        )
+        self.runtime.record_interaction_event(event)
+
+    def _on_speech_started(self) -> None:
+        self._record_audio_event(
+            InteractionEventKind.AUDIO_PLAYBACK_STARTED,
+            "assistant_tts",
+        )
+        self.stop_speech_button.setEnabled(True)
+
 
     def _play_speech_response(
         self,
