@@ -264,13 +264,16 @@ class CognitiveStoreTests(unittest.TestCase):
                 connection.close()
             upgraded = CognitiveStore(path)
             after = upgraded.get_state(now=now)
-            with sqlite3.connect(path) as db:
-                version = db.execute(
+            connection = sqlite3.connect(path)
+            try:
+                version = connection.execute(
                     "SELECT value FROM cognitive_meta WHERE key='schema_version'"
                 ).fetchone()[0]
-                salience_table = db.execute(
+                salience_table = connection.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name='cognitive_memory_salience'"
                 ).fetchone()
+            finally:
+                connection.close()
         self.assertEqual(version, "2")
         self.assertIsNotNone(salience_table)
         self.assertEqual(after, before)
