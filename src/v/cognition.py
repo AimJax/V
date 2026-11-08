@@ -98,7 +98,7 @@ def appraise_event(
     """Produce a deterministic appraisal from explicit text and known goals."""
     text = f"{user_text} {assistant_text}".casefold()
     user_signal = user_text.casefold()
-    words = set(re.findall(r"[\\w]+", text, flags=re.UNICODE))
+    words = set(re.findall(r"[\w]+", text, flags=re.UNICODE))
     obstruction = 1.0 if any(term in user_signal for term in OBSTRUCTION_TERMS) else 0.0
     progress = 1.0 if any(term in user_signal for term in PROGRESS_TERMS) else 0.0
     curiosity = 1.0 if any(term in user_signal for term in CURIOSITY_TERMS) or "?" in user_text else 0.0
@@ -108,14 +108,14 @@ def appraise_event(
         if tokens and tokens.intersection(words):
             relevance = max(relevance, len(tokens.intersection(words)) / len(tokens))
     action_pattern = re.compile(
-        r"\\b(?:please\\s+)?(?:delete|erase|publish|send|purchase|buy|install|execute|overwrite)"
-        r"\\s+(?:the|my|this|that|all|a|an)?\\s*"
-        r"(?:file|files|data|message|email|post|software|package|command|record|account)?\\b"
+        r"\b(?:please\s+)?(?:delete|erase|publish|send|purchase|buy|install|execute|overwrite)"
+        r"\s+(?:the|my|this|that|all|a|an)?\s*"
+        r"(?:file|files|data|message|email|post|software|package|command|record|account)?\b"
     )
     irreversible_pattern = re.compile(
-        r"\\b(?:delete|erase|publish|purchase|buy|overwrite)\\s+"
-        r"(?:the|my|this|that|all|a|an)?\\s*"
-        r"(?:file|files|data|message|email|post|software|package|record|account)?\\b"
+        r"\b(?:delete|erase|publish|purchase|buy|overwrite)\s+"
+        r"(?:the|my|this|that|all|a|an)?\s*"
+        r"(?:file|files|data|message|email|post|software|package|record|account)?\b"
     )
     risk = 0.8 if action_pattern.search(user_signal) else (
         0.55 if any(term in user_signal for term in ("dangerous", "unsafe")) else 0.05
