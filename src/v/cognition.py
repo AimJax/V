@@ -58,6 +58,10 @@ class Appraisal:
     obstruction: float
     progress: float
     uncertainty: float
+    risk: float
+    reversibility: float
+    resource_cost: float
+    expected_utility: float
     rationale: tuple[str, ...]
 
 
@@ -101,6 +105,15 @@ def appraise_event(
         tokens = {part for part in title.casefold().split() if len(part) > 2}
         if tokens and tokens.intersection(words):
             relevance = max(relevance, len(tokens.intersection(words)) / len(tokens))
+    risk_terms = {"dangerous", "unsafe", "delete", "erase", "send", "publish", "purchase", "install", "execute"}
+    irreversible_terms = {"delete", "erase", "publish", "send", "purchase", "overwrite"}
+    risk = 0.75 if any(term in text for term in risk_terms) else 0.1
+    reversibility = 0.25 if any(term in text for term in irreversible_terms) else 0.85
+    resource_cost = _clamp(0.05 + len((user_text + assistant_text).split()) / 1000)
+    expected_utility = _clamp(
+        0.35 * relevance + 0.25 * curiosity + 0.25 * progress
+        - 0.35 * risk - 0.15 * resource_cost
+    )
     rationale = []
     if obstruction:
         rationale.append("Text contains an explicit obstacle or failure cue.")
@@ -118,6 +131,10 @@ def appraise_event(
         obstruction=obstruction,
         progress=progress,
         uncertainty=_clamp(0.65 if len(user_text.split()) < 4 else 0.35),
+        risk=risk,
+        reversibility=reversibility,
+        resource_cost=resource_cost,
+        expected_utility=expected_utility,
         rationale=tuple(rationale),
     )
 
