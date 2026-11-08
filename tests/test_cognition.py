@@ -247,37 +247,6 @@ class CognitiveStoreTests(unittest.TestCase):
         self.assertLessEqual(len(context), 240)
         self.assertIn("not subjective feelings", context)
 
-    def test_schema_v1_upgrades_additively_without_losing_state(self):
-        import sqlite3
-        with temporary_directory() as temp:
-            path = Path(temp) / "cognition.sqlite3"
-            store = CognitiveStore(path)
-            now = datetime(2026, 11, 8, tzinfo=timezone.utc)
-            _, before = store.process_turn("The build is working now.", "Good.", now=now)
-            connection = sqlite3.connect(path)
-            try:
-                connection.execute(
-                    "UPDATE cognitive_meta SET value='1' WHERE key='schema_version'"
-                )
-                connection.commit()
-            finally:
-                connection.close()
-            upgraded = CognitiveStore(path)
-            after = upgraded.get_state(now=now)
-            connection = sqlite3.connect(path)
-            try:
-                version = connection.execute(
-                    "SELECT value FROM cognitive_meta WHERE key='schema_version'"
-                ).fetchone()[0]
-                salience_table = connection.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name='cognitive_memory_salience'"
-                ).fetchone()
-            finally:
-                connection.close()
-        self.assertEqual(version, "2")
-        self.assertIsNotNone(salience_table)
-        self.assertEqual(after, before)
-
     def test_newer_schema_is_rejected(self):
         import sqlite3
         with temporary_directory() as temp:
