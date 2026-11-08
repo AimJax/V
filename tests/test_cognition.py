@@ -185,10 +185,36 @@ class CognitiveStoreTests(unittest.TestCase):
             self.assertNotIn("direct technical explanations", store.render_context())
             store.review_preference(pending, accept=True)
             context = store.render_context()
-        self.assertIn("User-reviewed preferences", context)
+        self.assertIn("Reviewed preferences and stances", context)
         self.assertIn("direct technical explanations", context)
         self.assertIn("counterevidence", context)
         self.assertIn("untrusted data", context)
+
+    def test_reviewed_v_stance_is_distinguished_from_user_preference(self):
+        with temporary_directory() as temp:
+            store = CognitiveStore(Path(temp) / "cognition.sqlite3")
+            proposal = store.propose_preference(
+                "Prefers to verify assumptions before committing.",
+                evidence_refs=("event:1", "event:2"),
+                confidence=0.82,
+                rationale="Repeated evidence of careful verification.",
+                origin="v_candidate",
+            )
+            store.review_preference(proposal, accept=True)
+            context = store.render_context()
+        self.assertIn("V stance", context)
+        self.assertIn("verify assumptions", context)
+
+    def test_preference_origin_is_validated(self):
+        with temporary_directory() as temp:
+            store = CognitiveStore(Path(temp) / "cognition.sqlite3")
+            with self.assertRaises(ValueError):
+                store.propose_preference(
+                    "Unsupported origin.",
+                    evidence_refs=("event:1", "event:2"),
+                    confidence=0.8, rationale="Test.",
+                    origin="untrusted",
+                )
 
     def test_repeated_obstacles_increase_pressure_without_unbounded_state(self):
         with temporary_directory() as temp:
