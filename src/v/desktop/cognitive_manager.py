@@ -67,7 +67,7 @@ class CognitiveManagerDialog(QDialog):
         candidate_controls.addWidget(reject_goal)
         layout.addLayout(candidate_controls)
 
-        layout.addWidget(QLabel("Pending evidence-backed preferences"))
+        layout.addWidget(QLabel("Pending evidence-backed preferences and V stances"))
         self.preferences = QListWidget()
         layout.addWidget(self.preferences, 1)
         preference_controls = QHBoxLayout()
@@ -208,6 +208,16 @@ class CognitiveManagerDialog(QDialog):
         )
         if not accepted or not statement.strip():
             return
+        origin_label, accepted = QInputDialog.getItem(
+            self, "Preference origin", "This proposal represents:",
+            ["User preference", "V stance candidate"], 0, False,
+        )
+        if not accepted:
+            return
+        origin = (
+            "v_candidate" if origin_label == "V stance candidate"
+            else "user_observed"
+        )
         evidence, accepted = QInputDialog.getText(
             self, "Preference evidence", "Evidence references (comma-separated):"
         )
@@ -221,7 +231,7 @@ class CognitiveManagerDialog(QDialog):
             return
         try:
             self.store.propose_preference(
-                statement, evidence_refs=refs, confidence=confidence,
+                statement, evidence_refs=refs, confidence=confidence, origin=origin,
                 rationale="Submitted for explicit user review in Cognitive Manager.",
             )
         except ValueError as error:
