@@ -187,6 +187,7 @@ class CognitiveStoreTests(unittest.TestCase):
             context = store.render_context()
         self.assertIn("User-reviewed preferences", context)
         self.assertIn("direct technical explanations", context)
+        self.assertIn("consider counterevidence", context)
 
     def test_repeated_obstacles_increase_pressure_without_unbounded_state(self):
         with temporary_directory() as temp:
