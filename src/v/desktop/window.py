@@ -659,6 +659,9 @@ class DesktopWindow(QMainWindow):
             dialog.commitment_update_requested.connect(
                 self.runtime.update_memory_commitment
             )
+            dialog.commitment_edit_requested.connect(
+                self.runtime.edit_memory_commitment
+            )
             dialog.consolidation_requested.connect(
                 self.runtime.start_memory_consolidation
             )
