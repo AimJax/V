@@ -29,6 +29,8 @@ def prepare_image_file(path: str | Path) -> tuple[bytes, str]:
         raise ValueError("Images larger than 20 MiB are not supported.")
 
     source_bytes = source.read_bytes()
+    if len(source_bytes) > MAX_SOURCE_BYTES:
+        raise ValueError("Images larger than 20 MiB are not supported.")
     buffer = QBuffer()
     buffer.setData(QByteArray(source_bytes))
     if not buffer.open(QIODevice.OpenModeFlag.ReadOnly):
