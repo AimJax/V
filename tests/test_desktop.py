@@ -173,6 +173,31 @@ class DesktopWindowTests(unittest.TestCase):
         self.assertTrue(self.window.voice_button.isEnabled())
         self.assertFalse(self.window._voice_recorder.is_recording)
 
+    def test_stop_speaking_button_interrupts_runtime_and_disables_itself(self):
+        class FakePlayer:
+            def __init__(self):
+                self.stopped = False
+
+            def stop(self):
+                self.stopped = True
+
+        self.window._speech_player = FakePlayer()
+        self.window.stop_speech_button.setEnabled(True)
+
+        with patch.object(self.window.runtime, "interrupt_speech") as interrupt:
+            self.window._stop_speech()
+
+        self.assertTrue(self.window._speech_player.stopped)
+        self.assertFalse(self.window.stop_speech_button.isEnabled())
+        interrupt.assert_called_once_with()
+
+    def test_speech_finished_disables_stop_control(self):
+        self.window.stop_speech_button.setEnabled(True)
+
+        self.window._on_speech_finished()
+
+        self.assertFalse(self.window.stop_speech_button.isEnabled())
+
     def test_settings_button_is_enabled_only_after_runtime_ready(self):
         self.assertFalse(self.window.settings_button.isEnabled())
         self.window._apply_snapshot(self._snapshot())
