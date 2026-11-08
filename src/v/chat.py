@@ -841,6 +841,7 @@ async def run_chat() -> int:
                 await memory_worker.cancel()
 
             memory_context = None
+            salient_memory_ids: tuple[str, ...] = ()
 
             if memory_store is not None and memory_retrieval:
                 try:
@@ -870,6 +871,12 @@ async def run_chat() -> int:
                             else []
                         )
 
+                    relevant_memories = cognitive_store.prioritize_memories(
+                        relevant_memories
+                    )
+                    salient_memory_ids = tuple(
+                        memory.id for memory in relevant_memories
+                    )
                     memory_context = build_memory_context(
                         relevant_memories,
                         max_characters=retrieval_max_characters,
@@ -935,6 +942,7 @@ async def run_chat() -> int:
                     user_input,
                     response,
                     conversation_id=conversation.id,
+                    salient_memory_ids=salient_memory_ids,
                 )
                 cognitive_store.reflect()
 
