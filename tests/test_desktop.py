@@ -192,6 +192,22 @@ class DesktopWindowTests(unittest.TestCase):
         self.assertIn("analyze the image", send_image.call_args.args[1].casefold())
         self.assertTrue(self.window._busy)
 
+    def test_camera_snapshot_button_hands_one_frame_to_runtime(self):
+        snapshot = self._snapshot()
+        object.__setattr__(snapshot, "vision_settings", {"model": "gemma-chat"})
+        self.window._apply_snapshot(snapshot)
+        image_data = b"\xff\xd8camera-frame"
+
+        with patch.object(self.window, "_stop_speech"), patch.object(
+            self.window.runtime, "send_camera_turn"
+        ) as send_camera:
+            self.window._send_camera_image(image_data)
+
+        send_camera.assert_called_once()
+        self.assertEqual(send_camera.call_args.args[0], image_data)
+        self.assertIn("camera snapshot", send_camera.call_args.args[1].casefold())
+        self.assertTrue(self.window._busy)
+
     def test_image_attachment_is_enabled_only_when_vision_is_configured(self):
         snapshot = self._snapshot()
         object.__setattr__(snapshot, "vision_settings", {"model": "local-chat-model"})
@@ -200,6 +216,7 @@ class DesktopWindowTests(unittest.TestCase):
         self.application.processEvents()
 
         self.assertTrue(self.window.attach_image_button.isEnabled())
+        self.assertTrue(self.window.camera_button.isEnabled())
 
     def test_stop_speaking_button_interrupts_runtime_and_disables_itself(self):
         class FakePlayer:
