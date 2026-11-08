@@ -20,7 +20,7 @@ class DesktopRuntimeThread(QThread):
     ready = Signal(object)
     startup_failed = Signal(str)
     token_received = Signal(str)
-    speech_audio_ready = Signal(bytes)
+    speech_audio_ready = Signal(object)
     speech_failed = Signal(str)
     turn_completed = Signal(object)
     voice_turn_completed = Signal(object)
@@ -66,6 +66,7 @@ class DesktopRuntimeThread(QThread):
         self._context_preview_task: asyncio.Task | None = None
         self._shutdown_requested = False
         self._memory_filters = ("", "", "")
+        self._speech_generation = 0
 
     def run(self) -> None:
         loop = asyncio.new_event_loop()
@@ -160,14 +161,17 @@ class DesktopRuntimeThread(QThread):
                 break
 
             if command == "send":
+                user_text, speech_generation = payload
                 await self._cancel_backfill()
                 await self._cancel_consolidation()
                 await self._cancel_context_preview()
                 self._active_task = asyncio.create_task(
                     service.send_message(
-                        payload,
+                        wav_data,
                         self.token_received.emit,
-                        self.speech_audio_ready.emit,
+                        lambda audio: self.speech_audio_ready.emit(
+                            (speech_generation, audio)
+                        ),
                         self.speech_failed.emit,
                         on_interaction_event=self.interaction_event_received.emit,
                     )
@@ -185,6 +189,7 @@ class DesktopRuntimeThread(QThread):
                 continue
 
             if command == "voice_turn":
+                wav_data, speech_generation = payload
                 await self._cancel_backfill()
                 await self._cancel_consolidation()
                 await self._cancel_context_preview()
@@ -693,12 +698,17 @@ class DesktopRuntimeThread(QThread):
         loop.call_soon_threadsafe(enqueue)
 
     def send_message(self, text: str) -> None:
-        self._post("send", text)
+        self._post("send", (text, self._speech_generation))
 
     def send_voice_turn(self, wav_data: bytes) -> None:
-        self._post("voice_turn", wav_data)
+        self._post("voice_turn", (wav_data, self._speech_generation))
+
+    @property
+    def speech_generation(self) -> int:
+        return self._speech_generation
 
     def interrupt_speech(self) -> None:
+        self._speech_generation += 1
         self._post("speech_stop")
 
     def new_conversation(self) -> None:
