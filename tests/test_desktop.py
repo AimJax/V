@@ -191,6 +191,14 @@ class DesktopWindowTests(unittest.TestCase):
         self.assertFalse(self.window.stop_speech_button.isEnabled())
         interrupt.assert_called_once_with()
 
+    def test_stale_speech_chunk_is_discarded_after_interruption(self):
+        self.window.runtime._speech_generation = 3
+
+        self.window._enqueue_speech_audio((2, b"RIFFstale-audio"))
+
+        self.assertIsNone(self.window._speech_player)
+        self.assertFalse(self.window.stop_speech_button.isEnabled())
+
     def test_speech_finished_disables_stop_control(self):
         self.window.stop_speech_button.setEnabled(True)
 
