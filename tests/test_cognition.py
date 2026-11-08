@@ -177,6 +177,7 @@ class CognitiveStoreTests(unittest.TestCase):
         with temporary_directory() as temp:
             path = Path(temp) / "cognition.sqlite3"
             store = CognitiveStore(path)
+            now = datetime(2026, 11, 8, tzinfo=timezone.utc)
             appraisal = appraise_event(
                 "This is relevant to the project. Why?",
                 active_goal_titles=("project",),
@@ -206,7 +207,7 @@ class CognitiveStoreTests(unittest.TestCase):
                 SimpleNamespace(id="memory-b"),
                 SimpleNamespace(id="memory-c"),
             ]
-            ordered = store.prioritize_memories(memories)
+            ordered = store.prioritize_memories(memories, now=now)
         self.assertEqual([item.id for item in ordered][0], "memory-b")
         self.assertEqual({item.id for item in ordered}, {"memory-a", "memory-b", "memory-c"})
 
