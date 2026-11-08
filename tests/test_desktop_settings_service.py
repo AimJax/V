@@ -33,6 +33,7 @@ class DesktopSettingsSnapshotServiceTests(unittest.TestCase):
                     "retrieval_max_characters": 2400,
                 },
                 "privacy": {"offline_mode": True},
+                "vision": {"model": "local-vision"},
                 "paths": {"personality": "config/personality.md"},
             }
             service.available_models = [
@@ -53,6 +54,7 @@ class DesktopSettingsSnapshotServiceTests(unittest.TestCase):
         self.assertEqual(snapshot.max_tokens, 512)
         self.assertEqual(snapshot.history_messages, 24)
         self.assertTrue(snapshot.offline_mode)
+        self.assertEqual(snapshot.vision["model"], "local-vision")
         self.assertTrue(snapshot.memory_enabled)
         self.assertTrue(snapshot.retrieval_enabled)
         self.assertEqual(snapshot.personality, "You are V.")
