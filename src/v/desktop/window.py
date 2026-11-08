@@ -27,6 +27,10 @@ from v.desktop.memory_continuity_dialog import MemoryContinuityDialog
 from v.desktop.memory_context_preview import MemoryContextPreviewDialog
 from v.desktop.memory_backfill_dialog import MemoryBackfillDialog
 from v.desktop.identity_manager import IdentityManagerDialog
+from v.desktop.cognitive_manager import CognitiveManagerDialog
+from v.cognition import CognitiveStore
+from v.chat import _configured_data_path
+from v.core.config import load_settings
 from v.desktop.thread import DesktopRuntimeThread
 from v.providers.base import ChatMessage
 from v.voice.recorder import PushToTalkRecorder
@@ -210,6 +214,8 @@ class DesktopWindow(QMainWindow):
         self.memory_context_preview_dialog: MemoryContextPreviewDialog | None = None
         self.memory_backfill_dialog: MemoryBackfillDialog | None = None
         self.identity_manager_dialog: IdentityManagerDialog | None = None
+        self.cognitive_manager_dialog: CognitiveManagerDialog | None = None
+        self.cognitive_store: CognitiveStore | None = None
         self.settings_dialog: SettingsDialog | None = None
         self._voice_recorder: PushToTalkRecorder | None = None
         self._speech_player = None
@@ -287,9 +293,14 @@ class DesktopWindow(QMainWindow):
         self.identity_button.clicked.connect(self._open_identity_manager)
         self.identity_button.setEnabled(False)
 
+        self.cognitive_button = QPushButton("Cognitive state")
+        self.cognitive_button.clicked.connect(self._open_cognitive_manager)
+        self.cognitive_button.setEnabled(False)
+
         self.memory_manager_button = QPushButton("Memory manager")
         self.memory_manager_button.clicked.connect(self._open_memory_manager)
         self.memory_manager_button.setEnabled(False)
+        self.cognitive_button.setEnabled(False)
 
         recent_label = QLabel("RECENT CONVERSATIONS")
         recent_label.setObjectName("muted")
@@ -317,6 +328,7 @@ class DesktopWindow(QMainWindow):
         layout.addWidget(self.settings_button)
         layout.addWidget(self.identity_button)
         layout.addWidget(self.memory_manager_button)
+        layout.addWidget(self.cognitive_button)
         layout.addSpacing(14)
         layout.addWidget(recent_label)
         layout.addWidget(self.conversation_list, 1)
@@ -482,6 +494,7 @@ class DesktopWindow(QMainWindow):
 
         self.new_chat_button.setEnabled(True)
         self.memory_manager_button.setEnabled(True)
+        self.cognitive_button.setEnabled(True)
         self.identity_button.setEnabled(True)
         self.settings_button.setEnabled(True)
         self.conversation_list.setEnabled(True)
@@ -546,6 +559,25 @@ class DesktopWindow(QMainWindow):
         self.settings_dialog.raise_()
         self.settings_dialog.activateWindow()
         self.runtime.get_settings()
+
+    def _open_cognitive_manager(self) -> None:
+        if not self._ready or self._busy:
+            return
+
+        if self.cognitive_manager_dialog is None:
+            if self.cognitive_store is None:
+                settings = load_settings()
+                self.cognitive_store = CognitiveStore(
+                    _configured_data_path(settings, "cognition_db")
+                )
+            self.cognitive_manager_dialog = CognitiveManagerDialog(
+                self.cognitive_store, self
+            )
+
+        self.cognitive_manager_dialog.refresh()
+        self.cognitive_manager_dialog.show()
+        self.cognitive_manager_dialog.raise_()
+        self.cognitive_manager_dialog.activateWindow()
 
     def _open_identity_manager(self) -> None:
         if not self._ready or self._busy:
