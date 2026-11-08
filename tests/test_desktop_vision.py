@@ -216,6 +216,37 @@ class DesktopVisionTurnTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(observation_event.modality, InteractionModality.CAMERA)
         self.assertEqual(observation_event.source_ref, user_event.event_id)
 
+    async def test_runtime_interaction_buffer_is_bounded_and_conversation_scoped(self):
+        service = DesktopService()
+        conversation_id = "d" * 32
+        service.conversation = SimpleNamespace(id=conversation_id)
+
+        recorded = []
+        for index in range(105):
+            event = InteractionEvent.now(
+                kind=InteractionEventKind.AUDIO_PLAYBACK_STARTED,
+                modality=InteractionModality.AUDIO,
+                activation_context="assistant_tts",
+                conversation_id=conversation_id,
+                content=f"playback {index}",
+            )
+            recorded.append(event)
+            service.record_interaction_event(event)
+
+        unrelated = InteractionEvent.now(
+            kind=InteractionEventKind.INTERRUPTION,
+            modality=InteractionModality.AUDIO,
+            activation_context="user_stop",
+            conversation_id="e" * 32,
+            content="unrelated conversation interruption",
+        )
+        service.record_interaction_event(unrelated)
+
+        self.assertEqual(len(service.interaction_events), 100)
+        self.assertEqual(service.interaction_events[0], recorded[5])
+        self.assertEqual(service.interaction_events[-1], recorded[-1])
+        self.assertNotIn(unrelated, service.interaction_events)
+
     async def test_image_analysis_requires_selected_chat_model_to_protect_vram(self):
         service = DesktopService()
         service.settings = {"vision": {"model": "separate-vision-model"}}
