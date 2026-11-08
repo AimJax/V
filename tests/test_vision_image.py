@@ -6,7 +6,7 @@ from pathlib import Path
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice
 from PySide6.QtGui import QImage
 
-from v.vision.image import prepare_image_file
+from v.vision.image import prepare_image_file, prepare_qimage
 
 
 class VisionImagePreparationTests(unittest.TestCase):
@@ -26,6 +26,15 @@ class VisionImagePreparationTests(unittest.TestCase):
             self.assertEqual(mime_type, "image/jpeg")
             self.assertTrue(data.startswith(b"\xff\xd8"))
             self.assertEqual(path.read_bytes(), original)
+
+    def test_normalizes_camera_qimage_without_disk_io(self):
+        image = QImage(64, 48, QImage.Format.Format_RGB32)
+        image.fill(0x336699)
+
+        data, mime_type = prepare_qimage(image)
+
+        self.assertEqual(mime_type, "image/jpeg")
+        self.assertTrue(data.startswith(b"\xff\xd8"))
 
     def test_rejects_non_image_file(self):
         with tempfile.TemporaryDirectory() as temporary:
