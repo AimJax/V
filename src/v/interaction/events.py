@@ -45,7 +45,7 @@ class InteractionEvent:
     """A provenance record for one interaction or modality lifecycle event.
 
     `occurred_at` is when the source event/capture happened; `received_at`
-    is when V's runtime received it. `activation_context` records the user
+    is when local processing delivered the derived interaction into chat. `activation_context` records the user
     consent/activation path (for example, "typed", "push_to_talk", or
     "user_uploaded"). `content` is derived text only, never raw media.
     """
