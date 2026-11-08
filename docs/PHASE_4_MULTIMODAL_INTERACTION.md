@@ -29,6 +29,8 @@ The immutable `InteractionEvent` records:
 
 The event contract never stores raw audio or image bytes. A transcript is not the original audio. A generated visual description is not the image. Preserve these distinctions in provenance.
 
+The desktop service now creates typed-message events and push-to-talk transcript events. Both enter the same `send_message` generation, memory, cognition, and persistence path. The runtime thread emits each event through `interaction_event_received`; the service also retains a bounded in-memory buffer of the latest 100 events. Voice events distinguish when the WAV reached the service from when local transcription completed. No raw WAV bytes are included in events. This is runtime provenance, not yet durable event-history storage.
+
 Initial event kinds cover typed messages, speech transcripts, visual observations, camera snapshots, playback lifecycle, interruption, cancellation, timeout, and sensor-state changes. Unit tests validate timestamp ordering, timezone awareness, confidence bounds, immutability, and unique event IDs.
 
 ## 4. Voice interaction
@@ -93,8 +95,8 @@ All STT, TTS, and vision inference remains local. No audio, images, or transcrip
 ## 9. Implementation milestones
 
 1. **Audit existing runtime and media components — completed.** Reuse the current local voice stack; no replacement STT/TTS pipeline is planned.
-2. **Define modality-neutral event and provenance contracts — initial implementation added.** The shared immutable event model and unit tests exist; integration into the runtime remains in progress.
-3. Integrate typed and spoken turns through one conversation lifecycle.
+2. **Define modality-neutral event and provenance contracts — implemented.** The shared immutable event model and validation tests exist.
+3. **Integrate typed and spoken turns through one conversation lifecycle — initial implementation added.** Typed messages and push-to-talk transcripts now use the same chat pipeline; event provenance is available to the Qt runtime and retained in a bounded in-memory buffer. Automated tests cover modality, activation path, conversation association, and transcript flow. Durable event storage and target-PC runtime verification remain outstanding.
 4. Add optional wake phrase and reliable barge-in with visible controls.
 5. Add local vision provider abstraction and resource arbitration.
 6. Add user-provided image and on-demand camera analysis.
