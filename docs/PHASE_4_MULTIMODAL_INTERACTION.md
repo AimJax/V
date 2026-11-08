@@ -97,7 +97,7 @@ All STT, TTS, and vision inference remains local. No audio, images, or transcrip
 1. **Audit existing runtime and media components — completed.** Reuse the current local voice stack; no replacement STT/TTS pipeline is planned.
 2. **Define modality-neutral event and provenance contracts — implemented.** The shared immutable event model and validation tests exist.
 3. **Integrate typed and spoken turns through one conversation lifecycle — initial implementation added.** Typed messages and push-to-talk transcripts now use the same chat pipeline; event provenance is available to the Qt runtime and retained in a bounded in-memory buffer. Automated tests cover modality, activation path, conversation association, and transcript flow. Durable event storage and target-PC runtime verification remain outstanding.
-4. Add optional wake phrase and reliable barge-in with visible controls.
+4. **Initial barge-in controls and stale-audio rejection — implemented.** The desktop composer now exposes a dedicated Stop speaking control; push-to-talk also interrupts playback before recording. Runtime speech chunks carry a turn-generation token, and the UI discards chunks queued before the latest interruption. The Qt playback queue is stopped and cleared immediately. Automated UI coverage checks stop behavior and stale-chunk rejection. Physical speaker/microphone timing and target-PC barge-in remain to be verified. Optional wake phrase remains separate and is not implemented.
 5. Add local vision provider abstraction and resource arbitration.
 6. Add user-provided image and on-demand camera analysis.
 7. Add optional periodic snapshots only with explicit consent and status.
